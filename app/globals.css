@@ -115,6 +115,7 @@ button, input, select { font: inherit; color: inherit; }
   background: var(--ds-color-chip); color: var(--ds-color-text-strong);
 }
 .chip-hl { background: var(--ds-gradient-highlight); color: var(--ds-color-on-highlight); }
+.chip-ok { background: var(--ds-color-success); color: #fff; }
 
 /* Каталог */
 .product-card { display: block; text-decoration: none; color: inherit; }
@@ -180,6 +181,8 @@ button, input, select { font: inherit; color: inherit; }
 
 /* Шаги редактора */
 .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 12px; }
+@media (min-width: 768px) { .steps { grid-template-columns: repeat(6, 1fr); } }
+.steps button:disabled { opacity: 0.5; cursor: default; }
 .steps button {
   border: 0; border-radius: var(--ds-radius-pill); min-height: 40px; cursor: pointer;
   background: var(--ds-color-bg-muted); color: var(--ds-color-text-secondary); font-size: 14px;
@@ -269,3 +272,34 @@ button, input, select { font: inherit; color: inherit; }
 @media (min-width: 560px) {
   .app { box-shadow: 0 0 0 1px var(--ds-color-border); background: rgb(0 0 0 / 0.0); }
 }
+
+/* S02b: перетаскивание фото (только мышь и клавиатура; на телефоне — кнопки «раньше / позже») */
+.drag-handle {
+  position: absolute; top: 4px; right: 4px; width: 32px; height: 32px; border-radius: 8px; border: 0;
+  background: rgb(255 255 255 / 0.92); color: #2b403d; cursor: grab; display: none;
+  align-items: center; justify-content: center; font-size: 18px; line-height: 1; padding: 0;
+}
+@media (hover: hover) and (pointer: fine) { .drag-handle { display: flex; } }
+.drag-handle:focus-visible { display: flex; outline: 3px solid var(--ds-color-accent); }
+.photo-cell.dragging { opacity: 0.6; z-index: 2; box-shadow: 0 8px 20px rgb(0 0 0 / 0.3); }
+.photo-cell.selected { outline: 3px solid var(--ds-color-accent); outline-offset: -3px; }
+
+/* Ход обработки каждого фото */
+.uploads { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 6px; }
+.uploads li { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 14px; }
+.uploads .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Тестовая галерея */
+.gallery-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 8px 0; }
+@media (min-width: 768px) { .gallery-grid { grid-template-columns: repeat(6, 1fr); } }
+.gallery-grid label { position: relative; display: block; aspect-ratio: 1; border-radius: var(--ds-radius-sm); overflow: hidden; cursor: pointer; }
+.gallery-grid img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.gallery-grid input { position: absolute; top: 4px; left: 4px; width: 22px; height: 22px; accent-color: var(--ds-color-accent); }
+.gallery-grid .tag { position: absolute; left: 0; right: 0; bottom: 0; font-size: 11px; padding: 2px 4px; background: rgb(0 0 0 / 0.6); color: #fff; }
+
+/* Размещение фото (шаг «Правки») */
+.focus-grid { display: grid; grid-template-columns: repeat(3, 44px); gap: 4px; }
+.focus-grid button { width: 44px; height: 44px; border-radius: 8px; border: 1px solid var(--ds-color-border-strong); background: var(--ds-color-bg-field); cursor: pointer; }
+.focus-grid button[aria-pressed="true"] { background: var(--ds-gradient-accent); color: var(--ds-color-on-accent); }
+.place-preview { width: 160px; height: 160px; border-radius: var(--ds-radius-sm); overflow: hidden; background: #fff; border: 1px solid var(--ds-color-border-strong); }
+.place-preview img { width: 100%; height: 100%; display: block; }

@@ -6,6 +6,7 @@ import { useStored, readKey, writeKey, notify } from "../../lib/store";
 import { DELIVERY, calcTotals, findPromo } from "../../lib/delivery";
 import { deliveryRange, money } from "../../lib/price";
 import { createOrder } from "../../lib/orders";
+import { markOrdered, setProjectStatus } from "../../lib/draft";
 import { callApi } from "../../lib/api";
 import { IconImage, IconTrash } from "../../components/icons";
 
@@ -87,6 +88,8 @@ export default function CartPage() {
     });
     writeKey("cart", []);
     writeKey("checkoutKey", null);
+    // Проекты из заказа — в «Заказанные» (S02c переведёт заказ на сервер)
+    await markOrdered(cart.map((c) => c.projectId).filter(Boolean), { orderId: order.id, number: order.id }).catch(console.error);
     router.push("/orders/" + order.id + "?new=1");
     } catch (e) {
       console.error(e);
@@ -111,7 +114,10 @@ export default function CartPage() {
             </div>
             <b>{money(i.price)}</b>
           </div>
-          <button className="icon-btn" aria-label="Убрать из корзины" onClick={() => setCart(cart.filter((c) => c.id !== i.id))}>
+          <button className="icon-btn" aria-label="Убрать из корзины" onClick={() => {
+              setCart(cart.filter((c) => c.id !== i.id));
+              if (i.projectId) setProjectStatus(i.projectId, "draft").catch(console.error);
+            }}>
             <IconTrash size={18} />
           </button>
         </div>
