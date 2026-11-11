@@ -37,31 +37,44 @@ export async function POST(request, { params }) {
     await ctx.audit("photo.add", "project", id, "denied", { reason: "foreign_path" });
     return jsonError(400, "invalid_path", "Неверный путь к фото. Загрузите фото заново.");
   }
+  // Путь уже проверен: это файл этого пользователя в этом проекте — его можно убрать
+  if (project.status === "ordered") {
+    await ctx.admin.storage.from(BUCKET).remove([body.path]).catch(() => {});
+    await ctx.audit("photo.add", "project", id, "denied", { reason: "project_ordered" });
+    return jsonError(409, "project_ordered", "Проект уже в заказе — новые фото добавить нельзя. Создайте новый проект.");
+  }
 
-  // Первые 512 КБ файла: тип и размеры кадра
+  // Начало файла: тип и размеры кадра. Сначала 512 КБ; если у JPEG до блока размеров много служебных данных
+  // (EXIF, превью, данные камеры), дочитываем до 6 МБ.
   const { data: signed, error: e1 } = await ctx.admin.storage.from(BUCKET).createSignedUrl(body.path, 60);
   if (e1) return jsonError(404, "upload_missing", "Фото ещё не загрузилось. Попробуйте загрузить его заново.");
-  let head;
+  let meta = null;
   let total = 0;
   try {
-    const res = await fetch(signed.signedUrl, { headers: { Range: "bytes=0-524287" } });
-    if (!res.ok && res.status !== 206) throw new Error("HTTP " + res.status);
-    head = new Uint8Array(await res.arrayBuffer());
-    const range = res.headers.get("content-range");
-    total = range ? Number(range.split("/")[1]) : Number(res.headers.get("content-length") || head.length);
+    for (const end of [524287, 6 * 1024 * 1024 - 1]) {
+      const res = await fetch(signed.signedUrl, { headers: { Range: `bytes=0-${end}` } });
+      if (!res.ok && res.status !== 206) throw new Error("HTTP " + res.status);
+      const head = new Uint8Array(await res.arrayBuffer());
+      const range = res.headers.get("content-range");
+      total = range ? Number(range.split("/")[1]) : Number(res.headers.get("content-length") || head.length);
+      meta = sniffImage(head);
+      if (!meta || meta.width || head.length >= total) break;
+    }
   } catch (e) {
     console.error(e?.message);
     return serverError("storage_unavailable", "Не получилось прочитать фото из хранилища. Попробуйте ещё раз.");
   }
-  const meta = sniffImage(head);
-  if (!meta || !meta.width || total > MAX_PHOTO_BYTES) {
+  const problem = !meta
+    ? ["unsupported_format", "Это не JPEG и не PNG. Мы печатаем только фото в этих форматах."]
+    : total > MAX_PHOTO_BYTES
+      ? ["file_too_big", "Файл больше 25 МБ. Уменьшите фото или выберите другое."]
+      : !meta.width
+        ? ["unreadable_image", "Не получилось прочитать размеры фото. Откройте его в галерее телефона, сохраните копию и загрузите её."]
+        : null;
+  if (problem) {
     await ctx.admin.storage.from(BUCKET).remove([body.path]);
-    await ctx.audit("photo.add", "project", id, "denied", { reason: meta ? "too_big" : "not_image", bytes: total });
-    return jsonError(
-      400,
-      meta ? "file_too_big" : "unsupported_format",
-      meta ? "Файл больше 25 МБ. Уменьшите фото или выберите другое." : "Это не JPEG и не PNG. Мы печатаем только фото в этих форматах.",
-    );
+    await ctx.audit("photo.add", "project", id, "denied", { reason: problem[0], bytes: total });
+    return jsonError(400, problem[0], problem[1]);
   }
 
   const { data: last } = await ctx.db
@@ -93,6 +106,12 @@ export async function POST(request, { params }) {
     .single();
   if (error) {
     if (error.code === "23505") return jsonError(409, "already_added", "Это фото уже добавлено в проект.");
+    if (error.message === "project_ordered") {
+      // Заказ оформили, пока фото загружалось: страж в базе не пустил фото в заказанный проект
+      await ctx.admin.storage.from(BUCKET).remove([body.path]).catch(() => {});
+      await ctx.audit("photo.add", "project", id, "denied", { reason: "project_ordered" });
+      return jsonError(409, "project_ordered", "Проект уже в заказе — новые фото добавить нельзя. Создайте новый проект.");
+    }
     await ctx.audit("photo.add", "project", id, "error");
     return serverError();
   }

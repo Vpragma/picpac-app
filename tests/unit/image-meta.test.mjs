@@ -19,6 +19,24 @@ test("PNG: размеры из блока IHDR", () => {
   assert.deepEqual(sniffImage(png), { mime: "image/png", width: 3, height: 2 });
 });
 
+test("JPEG с большими служебными данными до блока размеров (640 КБ): размеры читаются, если байтов хватает", () => {
+  // В одном блоке до 64 КБ — делаем 10 блоков APP1 подряд
+  const blocks = [];
+  for (let i = 0; i < 10; i++) {
+    const b = Buffer.alloc(65535 + 2);
+    b[0] = 0xff;
+    b[1] = 0xe1;
+    b[2] = 0xff;
+    b[3] = 0xff;
+    blocks.push(b);
+  }
+  const sof = Buffer.from([0xff, 0xc0, 0x00, 0x11, 0x08, 0x0b, 0xb8, 0x0f, 0xa0]);
+  const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8]), ...blocks, sof, Buffer.alloc(32)]);
+  assert.deepEqual(sniffImage(jpeg), { mime: "image/jpeg", width: 4000, height: 3000 });
+  // Первых 512 КБ не хватает: тип известен, размеров нет — сервер дочитывает файл
+  assert.deepEqual(sniffImage(jpeg.subarray(0, 512 * 1024)), { mime: "image/jpeg", width: 0, height: 0 });
+});
+
 test("не фото (GIF, текст, пустой файл) — null", () => {
   assert.equal(sniffImage(Buffer.from("GIF89a....", "ascii")), null);
   assert.equal(sniffImage(Buffer.from("<html>hello</html>", "ascii")), null);

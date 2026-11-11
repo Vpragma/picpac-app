@@ -128,6 +128,11 @@ export async function POST(request) {
   }));
 
   const { data: rows, error } = await ctx.admin.rpc("create_order", { _user: ctx.userId, _key: key, _order: orderRow, _items: items });
+  if (error?.message === "cart_changed") {
+    // Параллельный заказ уже оформил эти проекты или корзина изменилась, пока считали цену
+    await ctx.audit("order.create", "order", null, "denied", { reason: "cart_changed" });
+    return jsonError(409, "cart_changed", "Корзина изменилась или этот заказ уже оформлен. Обновите страницу и проверьте «Мои заказы».");
+  }
   if (error || !rows?.[0]?.order_id) {
     console.error(error?.message);
     await ctx.audit("order.create", "order", null, "error", { reason: "db_error" });

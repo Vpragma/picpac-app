@@ -101,6 +101,12 @@ test("клиент и модератор → админский журнал →
   assert.equal((await M.client.req("/api/v1/admin/audit")).status, 403);
 });
 
+test("удаление проекта с чужого сайта (Origin) → 403", async () => {
+  const r = await A.client.req(`/api/v1/projects/${NIL}`, { method: "DELETE", headers: { origin: "https://evil.example" } });
+  assert.equal(r.status, 403);
+  assert.equal(r.json.error.code, "bad_origin");
+});
+
 test("модератор не может создавать проекты клиента → 403", async () => {
   const r = await M.client.req("/api/v1/projects", { method: "POST", body: { productSlug: "layflat" } });
   assert.equal(r.status, 403);
@@ -171,6 +177,11 @@ test("загрузка JPEG по подписанной ссылке и фикс
   const second = await uploadPhoto(A, s.project.id);
   assert.equal(second.commit.status, 201);
   s.photo2 = second.commit.json.photo;
+  // Третий файл загружаем, но не фиксируем: попробуем добавить его после заказа
+  const u = await A.client.req(`/api/v1/projects/${s.project.id}/photos/upload-url`, { method: "POST", body: { mime: "image/jpeg", bytes: JPEG.length } });
+  const put = await fetch(u.json.upload.url, { method: "PUT", headers: u.json.upload.headers, body: JPEG });
+  assert.ok(put.ok);
+  s.pendingPath = u.json.upload.path;
 });
 
 test("подделка: текст под видом JPEG отклоняется по первым байтам и удаляется", async () => {
@@ -276,6 +287,30 @@ test("идемпотентность: тот же ключ → тот же за�
   assert.equal(count, 1);
 });
 
+test("заказанный проект менять нельзя: порядок фото и новое фото → 409, в заказе — снимок списка фото", async () => {
+  const reorder = await A.client.req(`/api/v1/projects/${s.project.id}/photos/order`, { method: "PATCH", body: { order: [s.photo.id, s.photo2.id] } });
+  assert.equal(reorder.status, 409);
+  assert.equal(reorder.json.error.code, "project_ordered");
+  const add = await A.client.req(`/api/v1/projects/${s.project.id}/photos`, { method: "POST", body: { path: s.pendingPath } });
+  assert.equal(add.status, 409);
+  assert.equal(add.json.error.code, "project_ordered");
+  const del = await A.client.req(`/api/v1/projects/${s.project.id}/photos/${s.photo.id}`, { method: "DELETE" });
+  assert.equal(del.status, 409);
+  const p = await A.client.req(`/api/v1/projects/${s.project.id}`);
+  assert.equal(p.json.project.photos.length, 2);
+  // Файл, который пытались добавить в заказанный проект, удалён из хранилища
+  const folder = s.pendingPath.split("/").slice(0, 2).join("/");
+  const { data } = await admin.storage.from("photos").list(folder);
+  assert.ok(!(data || []).some((f) => s.pendingPath.endsWith(f.name)));
+  // Снимок заказа: список фото с порядком, как в момент оформления
+  const o = await A.client.req(`/api/v1/orders/${s.order.id}`);
+  assert.deepEqual(o.json.order.items[0].snapshot.photos.map((x) => x.id), [s.photo2.id, s.photo.id]);
+  assert.ok(o.json.order.items[0].snapshot.photos.every((x) => x.path && x.width > 0));
+  // Даже напрямую в базе (сервисным ключом) фото в заказанный проект не добавить — страж в триггере
+  const { error } = await admin.from("project_photos").update({ position: 99 }).eq("id", s.photo.id);
+  assert.match(error?.message || "", /project_ordered/);
+});
+
 test("разные ключи → разные заказы (новый проект Lite с фото)", async () => {
   const p = await A.client.req("/api/v1/projects", { method: "POST", body: { productSlug: "pages-book", options: { size: "20x20", pages: 24 } } });
   assert.equal(p.status, 201);
@@ -285,8 +320,14 @@ test("разные ключи → разные заказы (новый прое
   const empty = await order(A, `${RUN}-empty`);
   assert.equal(empty.status, 409, "корзина пуста после первого заказа");
   await A.client.req("/api/v1/cart", { method: "PUT", body: { items: [{ projectId: s.project2.id, quantity: 2 }] } });
-  const r = await order(A, `${RUN}-2`);
-  assert.equal(r.status, 201, r.text);
+  // Гонка: три параллельных заказа одной корзины с разными ключами → создаётся ровно один
+  const race = await Promise.all([order(A, `${RUN}-2`), order(A, `${RUN}-race-b`), order(A, `${RUN}-race-c`)]);
+  const created = race.filter((x) => x.status === 201);
+  assert.equal(created.length, 1, race.map((x) => x.status).join(","));
+  for (const x of race.filter((y) => y.status !== 201)) assert.equal(x.json.error.code, "cart_changed");
+  const { count: raced } = await admin.from("orders").select("id", { count: "exact", head: true }).like("idempotency_key", `${RUN}-%`).neq("idempotency_key", s.key1);
+  assert.equal(raced, 1);
+  const r = created[0];
   assert.notEqual(r.json.order.number, s.order.number);
   assert.equal(r.json.order.goodsKop, 14000);
   const list = await A.client.req("/api/v1/orders");

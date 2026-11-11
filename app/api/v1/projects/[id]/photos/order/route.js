@@ -19,6 +19,10 @@ export async function PATCH(request, { params }) {
     await ctx.audit("photo.reorder", "project", id, "denied", { reason: "not_found_or_foreign" });
     return notFound("Проект");
   }
+  if (project.status === "ordered") {
+    await ctx.audit("photo.reorder", "project", id, "denied", { reason: "project_ordered" });
+    return jsonError(409, "project_ordered", "Проект уже в заказе — порядок фото менять нельзя.");
+  }
   const photos = await listPhotos(ctx, id);
   const have = new Set(photos.map((p) => p.id));
   const sent = new Set(body.order);
@@ -26,6 +30,7 @@ export async function PATCH(request, { params }) {
     return jsonError(400, "invalid_input", "Порядок фото устарел: список не совпадает с фото проекта. Обновите страницу.");
   }
   const { data, error } = await ctx.admin.rpc("reorder_photos", { _project: id, _ids: body.order });
+  if (error?.message === "project_ordered") return jsonError(409, "project_ordered", "Проект уже в заказе — порядок фото менять нельзя.");
   if (error) {
     await ctx.audit("photo.reorder", "project", id, "error");
     return serverError();

@@ -3,14 +3,14 @@
 // если проект уже изменили с другого устройства — 409); DELETE — удалить проект и его фото.
 import { badId, notFound, parseBody, requireUser, serverError, z } from "@/lib/server/api";
 import { findProduct, loadCatalog, normalizeOptions } from "@/lib/server/catalog";
-import { json, jsonError } from "@/lib/server/http";
+import { json, jsonError, sameOrigin } from "@/lib/server/http";
 import { getOwnProject, listPhotos, optionsSchema, PROJECT_FIELDS, removeFiles, shapeProject } from "@/lib/server/projects";
 
 const patchSchema = z.object({
-  version: z.number({ error: "Нужна версия проекта (version)." }).int().min(1),
+  version: z.number({ error: "Нужна версия проекта: обновите страницу." }).int().min(1),
   title: z.string().trim().max(100, "Название — до 100 символов.").optional(),
   options: optionsSchema.optional(),
-  status: z.enum(["draft", "in_cart"], { error: "Статус — draft или in_cart." }).optional(),
+  status: z.enum(["draft", "in_cart"], { error: "Статус — черновик или в корзине." }).optional(),
 });
 
 export async function GET(request, { params }) {
@@ -76,6 +76,7 @@ export async function DELETE(request, { params }) {
   const { id } = await params;
   const { ctx, response } = await requireUser(request);
   if (response) return response;
+  if (!sameOrigin(request)) return jsonError(403, "bad_origin", "Запрос отклонён: он пришёл с другого сайта.");
   if (badId(id)) return notFound("Проект");
   const project = await getOwnProject(ctx, id);
   if (!project) {

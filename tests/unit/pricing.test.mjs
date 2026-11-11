@@ -62,6 +62,14 @@ test("строка корзины: книга × количество, фото 
   assert.equal(linePrice(classic, { sizeCode: "20x20", pages: 23 }), null);
 });
 
+test("надбавка опций прибавляется к цене единицы (книга и фото)", () => {
+  const withCover = { ...classic, options: { cover: [{ id: "gloss", priceDeltaKop: 0 }, { id: "leather", priceDeltaKop: 1500 }] } };
+  assert.equal(linePrice(withCover, { sizeCode: "20x20", pages: 20, quantity: 2, options: { cover: "leather" } }).lineKop, (8100 + 1500) * 2);
+  assert.equal(linePrice(withCover, { sizeCode: "20x20", pages: 20, options: { cover: "gloss" } }).unitKop, 8100);
+  const glossy = { ...photo, options: { surface: [{ id: "matte", priceDeltaKop: 10 }] } };
+  assert.equal(linePrice(glossy, { sizeCode: "10x15", photoCount: 3, options: { surface: "matte" } }).lineKop, (130 + 10) * 3);
+});
+
 test("промокод TEST10: −10%", () => {
   const r = applyPromo(TEST10, 14100);
   assert.equal(r.ok, true);
