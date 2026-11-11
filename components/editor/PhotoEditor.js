@@ -70,6 +70,7 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, extra 
   const autoProblems = (photo.quality?.problems || []).filter((p) => p === "dark" || p === "bright" || p === "cast" || p === "flat");
 
   function choose(id) {
+    if (live && live.id === photo.id) commit(live.edits); // ползунок двигали, но не отпустили — не теряем
     setSel(id);
     setLive(null);
     setAnswer(null);
