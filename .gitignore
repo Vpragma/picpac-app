@@ -1,0 +1,20 @@
+# Зависимости и результаты сборки
+/node_modules
+/.next/
+/out/
+/build
+
+# Секреты: пароли, токены и ключи храним только здесь, в GitHub они не попадают
+.env
+.env*.local
+
+# Служебные файлы
+.vercel
+.DS_Store
+*.log
+next-env.d.ts
+.env*
+
+# Создаётся Next.js автоматически
+AGENTS.md
+CLAUDE.md
