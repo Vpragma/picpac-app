@@ -225,7 +225,7 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
               </button>
             ))}
           </div>
-          <p className={"small pe-answer" + (answer && !answer.ok ? " warn-text" : "")} role="status" aria-live="polite">
+          <p className="small pe-answer" data-ok={answer ? String(answer.ok) : undefined} role="status" aria-live="polite">
             {answer?.say || ""}
           </p>
         </form>
