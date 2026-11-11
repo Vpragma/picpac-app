@@ -1,6 +1,8 @@
 // /api/v1/me — мой аккаунт.
 // GET — кто я (гостю: { authenticated: false }); PATCH { name } — сменить имя;
-// DELETE { password } — удалить аккаунт навсегда.
+// DELETE { password } — удалить аккаунт навсегда: фото из хранилища, проекты, корзину, адреса, подписки;
+// заказы обезличиваются и остаются для отчётности.
+import { purgeBeforeAccountDelete } from "@/lib/server/account";
 import { clientIp, deleteBlocked, writeAudit } from "@/lib/server/audit";
 import { json, jsonError, readMutation } from "@/lib/server/http";
 import { clearAuthCookies, getAuth } from "@/lib/server/session";
@@ -67,13 +69,24 @@ export async function DELETE(request) {
     return jsonError(400, "wrong_password", "Пароль не подходит. Аккаунт не удалён.", { fields: { password: "Пароль не подходит." } });
   }
 
+  // Сначала файлы фото из хранилища и обезличивание заказов (заказы остаются для отчётности без личных данных).
+  // Проекты, корзина, адреса, уведомления и подписки на пуши удалятся каскадом вместе с пользователем.
+  let purged;
+  try {
+    purged = await purgeBeforeAccountDelete(createSupabaseAdmin(), auth.user.id);
+  } catch (e) {
+    console.error(e?.message);
+    await writeAudit({ ...base, result: "error", details: { reason: "purge_failed" } });
+    return jsonError(500, "delete_failed", "Не получилось удалить фото аккаунта. Аккаунт не удалён, попробуйте ещё раз.");
+  }
+
   const { error } = await createSupabaseAdmin().auth.admin.deleteUser(auth.user.id);
   if (error) {
     await writeAudit({ ...base, result: "error", details: { reason: "delete_failed" } });
     return jsonError(500, "delete_failed", "Не получилось удалить аккаунт. Попробуйте ещё раз.");
   }
-  // Профиль и роли удаляются вместе с пользователем, записи журнала остаются
-  await writeAudit({ ...base, result: "success" });
+  // Профиль, роли, проекты и корзина удаляются вместе с пользователем, записи журнала остаются
+  await writeAudit({ ...base, result: "success", details: { files: purged.files } });
   await clearAuthCookies();
   return json({ ok: true, redirect: "/", userId: auth.user.id });
 }

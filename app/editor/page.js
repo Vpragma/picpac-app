@@ -37,7 +37,7 @@ export default function EditorPage() {
 
   const isBook = product.kind === "book";
   const usable = draft.photos.filter((p) => p.supported).length;
-  const price = isBook ? bookPrice(product, draft.pages) : printPrice(product, draft.sizeId, usable);
+  const price = isBook ? bookPrice(product, draft.pages, draft.sizeId) : printPrice(product, draft.sizeId, usable);
 
   return (
     <div className="has-sticky">

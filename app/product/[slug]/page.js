@@ -42,7 +42,7 @@ function ProductForm({ product: p }) {
   const [busy, setBusy] = useState(false);
 
   const size = p.sizes.find((s) => s.id === sizeId);
-  const price = isBook ? bookPrice(p, pages) : size.unitPrice;
+  const price = isBook ? bookPrice(p, pages, sizeId) : size.unitPrice;
   const step = (d) => setPages((n) => Math.min(p.pages.max, Math.max(p.pages.min, n + d)));
 
   async function create() {
@@ -85,11 +85,6 @@ function ProductForm({ product: p }) {
             </button>
           ))}
         </div>
-        {isBook && sizeId !== p.price.basedOnSize && (
-          <p className="muted small" style={{ marginTop: 8 }}>
-            Цена указана для 20×20 см — цены других размеров уточняем.
-          </p>
-        )}
       </section>
 
       <section className="card">
