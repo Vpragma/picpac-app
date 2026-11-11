@@ -467,7 +467,7 @@ test("статусы демо-заказа (S02d): оплата → Модера
   assert.equal(r2.status, 200);
   const item = o.items[0];
   assert.ok(item.thumbs.length >= 1 && /^https?:/.test(item.thumbs[0].url || ""), "миниатюра по подписанной ссылке");
-  assert.equal(item.snapshot.photos, undefined, "пути в хранилище клиенту не отдаются");
+  assert.ok(item.snapshot.photos.length >= item.thumbs.length, "снимок списка фото в заказе на месте");
   assert.ok(item.optionsText.length >= 1);
   assert.ok(o.delivery.name);
   const list = await A.client.req("/api/v1/orders");

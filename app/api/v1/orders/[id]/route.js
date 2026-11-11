@@ -49,8 +49,6 @@ async function addThumbs(ctx, order) {
     const photos = it.snapshot?.photos || [];
     it.photoCount = it.snapshot?.photoCount ?? photos.length;
     it.thumbs = photos.slice(0, THUMBS_PER_ITEM).map((p) => ({ id: p.id, url: urls[p.path] || null }));
-    // Пути в хранилище клиенту не нужны
-    if (it.snapshot) it.snapshot = { ...it.snapshot, photos: undefined };
   }
 }
 
@@ -71,7 +69,7 @@ async function addLabels(order) {
     const o = it.options || {};
     const size = product?.sizes.find((x) => x.id === o.size || x.code === o.size);
     const parts = [];
-    if (o.size) parts.push(`Размер ${size?.label || String(o.size).replace("x", "×")}`);
+    if (o.size) parts.push(`Размер ${String(o.size).replace("x", "×")}${size?.label ? ` (${size.label.toLowerCase()})` : ""}`);
     if (o.pages) parts.push(`${o.pages} стр.`);
     for (const [g, label] of Object.entries(GROUP_LABELS)) {
       if (o[g] == null) continue;

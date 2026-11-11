@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { callApi } from "../../../lib/api";
+import { getMe } from "../../../lib/me";
 import { notify } from "../../../lib/store";
 import { StatusChip, Timeline, byn, minskDay, minskTime } from "../../../components/OrderBits";
 import { IconChat } from "../../../components/icons";
@@ -27,15 +28,15 @@ export default function OrderPage() {
   const [res, setRes] = useState(null);
   const [isNew, setIsNew] = useState(false);
 
-  const load = useCallback(
-    () =>
-      callApi(`/api/v1/orders/${encodeURIComponent(id)}`, { method: "GET" }).then((r) => {
-        setRes((prev) => (r.status === 0 && prev?.ok ? prev : r));
-        setIsNew(window.location.search.includes("new=1"));
-        return r;
-      }),
-    [id],
-  );
+  const load = useCallback(async () => {
+    const m = await getMe();
+    const r = m?.authenticated
+      ? await callApi(`/api/v1/orders/${encodeURIComponent(id)}`, { method: "GET" })
+      : { status: m?.offline ? 0 : 401, ok: false, error: { message: "Нет связи с сервером. Проверьте интернет и попробуйте ещё раз." } };
+    setRes((prev) => (r.status === 0 && prev?.ok ? prev : r));
+    setIsNew(window.location.search.includes("new=1"));
+    return r;
+  }, [id]);
 
   const done = res?.order?.status === "done";
   useEffect(() => {

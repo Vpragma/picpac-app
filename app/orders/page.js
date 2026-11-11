@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { callApi } from "../../lib/api";
+import { getMe } from "../../lib/me";
 import { StatusChip, byn, minskDay } from "../../components/OrderBits";
 
 const POLL_MS = 15000;
@@ -13,11 +14,13 @@ export default function OrdersPage() {
 
   useEffect(() => {
     let alive = true;
-    const load = () =>
-      callApi("/api/v1/orders", { method: "GET" }).then((r) => {
-        // Без связи оставляем то, что уже показано
-        if (alive) setRes((prev) => (r.status === 0 && prev?.ok ? prev : r));
-      });
+    const load = async () => {
+      // Гостю заказы не запрашиваем (нет лишних 401 в консоли) — сразу предлагаем войти
+      const m = await getMe();
+      const r = m?.authenticated ? await callApi("/api/v1/orders", { method: "GET" }) : { status: m?.offline ? 0 : 401, ok: false, error: { message: "Нет связи с сервером. Проверьте интернет и попробуйте ещё раз." } };
+      // Без связи оставляем то, что уже показано
+      if (alive) setRes((prev) => (r.status === 0 && prev?.ok ? prev : r));
+    };
     load();
     const t = setInterval(load, POLL_MS);
     return () => {
@@ -38,6 +41,21 @@ export default function OrdersPage() {
           </Link>
           <Link href="/" className="btn btn-block">
             В каталог
+          </Link>
+        </div>
+      </div>
+    );
+  if (res.status === 403)
+    return (
+      <div>
+        <h1>Мои заказы</h1>
+        <div className="card stack">
+          <p>Заказы видны в роли «Клиент». Сейчас вы вошли как сотрудник или роль не выбрана.</p>
+          <a href="/login/role" className="btn btn-primary btn-block">
+            Выбрать роль
+          </a>
+          <Link href="/profile" className="btn btn-block">
+            В профиль
           </Link>
         </div>
       </div>

@@ -94,6 +94,7 @@ test("обязательный путь: каталог → проект → 12 
   let order12;
   await test.step("AC-2 перезагрузка: порядок тот же", async () => {
     order12 = await photoNames(page);
+    await page.waitForTimeout(400); // черновик пишется в IndexedDB не позже 0,15 с после изменения
     await page.reload();
     await expect(page.locator(".photo-cell[data-photo]")).toHaveCount(12);
     expect(await photoNames(page)).toEqual(order12);
