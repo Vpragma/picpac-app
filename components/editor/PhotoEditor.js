@@ -51,7 +51,7 @@ async function loadSource(id, thumbUrl) {
   return img;
 }
 
-export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, extra }) {
+export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds, extra }) {
   const usable = draft.photos.filter((p) => p.supported);
   const [sel, setSel] = useState(usable[0]?.id || null);
   const photo = usable.find((p) => p.id === sel) || usable[0];
@@ -155,7 +155,7 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, extra 
     });
   }
 
-  const badges = photoBadges({ ...photo, edits }, { lowDpi: lowDpiIds?.has(photo.id) });
+  const badges = photoBadges({ ...photo, edits }, { lowDpi: lowDpiIds?.has(photo.id), duplicate: dupIds?.has(photo.id) });
   const enhanced = hasAuto(edits);
 
   return (
@@ -163,7 +163,7 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, extra 
       <p className="muted">Скажите, что изменить, или подвигайте ползунки — оригинал не меняется, всё можно вернуть.</p>
       <div className="pe-strip" role="list" aria-label="Фото проекта">
         {usable.map((p, i) => {
-          const b = photoBadges(p, { lowDpi: lowDpiIds?.has(p.id) });
+          const b = photoBadges(p, { lowDpi: lowDpiIds?.has(p.id), duplicate: dupIds?.has(p.id) });
           return (
             <div role="listitem" key={p.id}>
               <button className={"photo-cell" + (p.id === photo.id ? " selected" : "")} onClick={() => choose(p.id)} aria-pressed={p.id === photo.id} aria-label={`Фото ${i + 1}: ${p.name}${b.length ? " — " + b.map((x) => x.label).join(", ") : ""}`} data-edit-photo={p.name}>

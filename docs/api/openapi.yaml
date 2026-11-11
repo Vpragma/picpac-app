@@ -757,7 +757,7 @@ components:
         paper: { type: string }
         print: { type: string }
         surface: { type: string }
-        settings: { type: object, description: Настройки редактора и раскладки (до 50 КБ) }
+        settings: { type: object, description: "Настройки редактора и раскладки (до 50 КБ): quantity, acks (отметки «Продолжить всё равно»), placement {idФото: {fit, focus}}, edits {idФото: {v, auto, autoOff, manual, ops}} — неразрушающие правки ИИ-редактора (S03), оригинал фото не меняется" }
     Project:
       type: object
       properties:

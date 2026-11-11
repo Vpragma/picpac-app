@@ -4,7 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
-import { analyzePixels, problemsFrom, autoParams, ANALYSIS_SIDE } from "../../lib/photo/analyze.js";
+import { analyzePixels, problemsFrom, autoParams, findDuplicates, hashDistance, ANALYSIS_SIDE } from "../../lib/photo/analyze.js";
 import { applyEdits, applyParams, effectiveParams, addManual, hasAuto, hasManual } from "../../lib/photo/adjust.js";
 
 const sharp = createRequire(import.meta.url)("sharp");
@@ -80,6 +80,17 @@ test("размытое dog-blurry.jpg: «Размыто», а резкое dog.j
   assert.ok(!ids(mb).includes("blurry"));
   assert.ok(mb.sharpness > ma.sharpness * 10);
   assert.equal(autoParams(ma), null);
+});
+
+test("дубли (X-2): «Луговая герань — дубль» найден, разные снимки галереи — не дубли", async () => {
+  const photos = [];
+  for (const it of manifest.items.filter((x) => x.problem === null || x.problem === "duplicate")) {
+    const { px, w, h } = await pixels(it.file);
+    photos.push({ id: it.file, quality: { metrics: analyzePixels(px, w, h) } });
+  }
+  assert.deepEqual([...findDuplicates(photos)], ["flowers-2.jpg"]);
+  const a = photos.find((p) => p.id === "flowers.jpg").quality.metrics.hash;
+  assert.equal(hashDistance(a, a), 0);
 });
 
 test("мало точек для печати: значок по dpi", () => {

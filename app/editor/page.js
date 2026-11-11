@@ -30,6 +30,7 @@ import { callApi } from "../../lib/api";
 import DraftError from "../../components/DraftError";
 import { IconAlert, IconCheck, IconLeft, IconRight, IconTrash, IconUpload } from "../../components/icons";
 import { photoBadges } from "../../lib/photo/badges";
+import { ANALYSIS_VERSION, findDuplicates } from "../../lib/photo/analyze";
 
 // ИИ-редактор (шаг «Правки») — отдельный кусок кода, грузится только при открытии шага
 const PhotoEditor = dynamic(() => import("../../components/editor/PhotoEditor"), {
@@ -48,7 +49,7 @@ function useLowDpi(draft, product) {
 
 // Анализ новых фото в воркере (S03a): оценка качества и мягкое автоулучшение плохих
 function useAnalysis(draft) {
-  const need = !!draft && draft.status !== "ordered" && draft.photos.some((p) => p.supported && !p.quality);
+  const need = !!draft && draft.status !== "ordered" && draft.photos.some((p) => p.supported && p.quality?.v !== ANALYSIS_VERSION);
   const id = draft?.id;
   useEffect(() => {
     if (!need || !id) return;
@@ -78,6 +79,7 @@ export default function EditorPage() {
   const [step, setStep] = useState("photos");
   useAnalysis(draft);
   const lowDpi = useLowDpi(draft, product);
+  const dups = useMemo(() => findDuplicates(draft?.photos || []), [draft?.photos]);
 
   if (error) return <DraftError />;
 
@@ -152,10 +154,10 @@ export default function EditorPage() {
           </button>
         ))}
       </nav>
-      {step === "photos" && <PhotosStep draft={draft} thumbs={thumbs} product={product} uploads={uploads} readOnly={ordered} lowDpi={lowDpi} />}
+      {step === "photos" && <PhotosStep draft={draft} thumbs={thumbs} product={product} uploads={uploads} readOnly={ordered} lowDpi={lowDpi} dups={dups} />}
       {step === "layout" && <LayoutStep draft={draft} thumbs={thumbs} product={product} />}
       {step === "edits" && (
-        <PhotoEditor draft={draft} thumbs={thumbs} readOnly={ordered} lowDpiIds={lowDpi} extra={(photo) => <PlacementCard photo={photo} thumb={thumbs[photo.id]} readOnly={ordered} />} />
+        <PhotoEditor draft={draft} thumbs={thumbs} readOnly={ordered} lowDpiIds={lowDpi} dupIds={dups} extra={(photo) => <PlacementCard photo={photo} thumb={thumbs[photo.id]} readOnly={ordered} />} />
       )}
       {step === "check" && <CheckStep draft={draft} thumbs={thumbs} product={product} price={price} goPhotos={() => setStep("photos")} readOnly={ordered} />}
 
@@ -222,7 +224,7 @@ function useAdder() {
 
 const UPLOAD_TEXT = { wait: "ждёт очереди", work: "готовим…", error: "не получилось" };
 
-function PhotosStep({ draft, thumbs, product, uploads, readOnly, lowDpi }) {
+function PhotosStep({ draft, thumbs, product, uploads, readOnly, lowDpi, dups }) {
   const inputRef = useRef(null);
   const [busy, add] = useAdder();
   const [over, setOver] = useState(false);
@@ -337,7 +339,7 @@ function PhotosStep({ draft, thumbs, product, uploads, readOnly, lowDpi }) {
       {n === 0 ? (
         <p className="muted">Пока пусто. Добавьте фото — черновик сохранится сам, даже если закрыть страницу.</p>
       ) : (
-        <SortablePhotos draft={draft} thumbs={thumbs} readOnly={readOnly} lowDpi={lowDpi} />
+        <SortablePhotos draft={draft} thumbs={thumbs} readOnly={readOnly} lowDpi={lowDpi} dups={dups} />
       )}
       {!readOnly && (
         <p className="muted small" style={{ marginTop: 8 }}>
@@ -418,7 +420,7 @@ function GalleryPanel({ busy, onAdd }) {
 }
 
 // Сетка фото: на компьютере — перетаскивание (мышь и клавиатура), на телефоне — кнопки «раньше / позже»
-function SortablePhotos({ draft, thumbs, readOnly, lowDpi }) {
+function SortablePhotos({ draft, thumbs, readOnly, lowDpi, dups }) {
   const sensors = useSensors(useSensor(MouseSensor, { activationConstraint: { distance: 4 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
   const ids = draft.photos.map((p) => p.id);
   const pos = (id) => ids.indexOf(id) + 1;
@@ -440,7 +442,7 @@ function SortablePhotos({ draft, thumbs, readOnly, lowDpi }) {
       <SortableContext items={ids} strategy={rectSortingStrategy} disabled={readOnly}>
         <div className="photo-grid">
           {draft.photos.map((p, i) => (
-            <SortablePhoto key={p.id} p={p} i={i} n={draft.photos.length} thumb={thumbs[p.id]} readOnly={readOnly} badges={photoBadges(p, { lowDpi: lowDpi?.has(p.id) })} />
+            <SortablePhoto key={p.id} p={p} i={i} n={draft.photos.length} thumb={thumbs[p.id]} readOnly={readOnly} badges={photoBadges(p, { lowDpi: lowDpi?.has(p.id), duplicate: dups?.has(p.id) })} />
           ))}
         </div>
       </SortableContext>
