@@ -39,6 +39,12 @@ export default function Shell({ children }) {
   const path = usePathname() || "/";
   const [cart] = useStored("cart", []);
   useDemoTicker();
+  // Старая версия хранила «вход» в localStorage — убираем остатки, вход теперь только на сервере
+  useEffect(() => {
+    try {
+      window.localStorage.removeItem("picpac:session");
+    } catch {}
+  }, []);
   return (
     <div className="app">
       <header className="topbar">
