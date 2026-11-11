@@ -389,6 +389,19 @@ test("RLS: публичный ключ Supabase (anon) не видит ни од
 
 // ───── Журнал ─────
 
+test("«Продолжить всё равно» (S02b): гость → 401, чужой сайт → 403, клиент → 200 и запись в журнале", async () => {
+  const body = { issue: "dpi", title: "Может быть нечётко", productSlug: "layflat", projectId: "local-1" };
+  assert.equal((await guest.req("/api/v1/checks/ack", { method: "POST", body })).status, 401);
+  const evil = await A.client.req("/api/v1/checks/ack", { method: "POST", body, headers: { origin: "https://evil.example" } });
+  assert.equal(evil.status, 403);
+  const bad = await A.client.req("/api/v1/checks/ack", { method: "POST", body: { issue: "" } });
+  assert.equal(bad.status, 400);
+  const r = await A.client.req("/api/v1/checks/ack", { method: "POST", body });
+  assert.equal(r.status, 200, r.text);
+  const { data } = await admin.from("audit_log").select("action, details").eq("user_id", A.id).eq("action", "check.continue_anyway");
+  assert.ok(data.some((x) => x.details?.issue === "dpi" && x.details?.product === "layflat"), "отметка записана в журнал");
+});
+
 test("журнал (ОТ-04): записаны создание проекта, фото, корзина, заказ, оплата, обращение и отказы", async () => {
   const { data } = await admin.from("audit_log").select("action, result, object_id").eq("user_id", A.id);
   const seen = new Set(data.map((r) => `${r.action}:${r.result}`));

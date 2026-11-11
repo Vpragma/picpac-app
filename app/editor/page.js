@@ -631,7 +631,10 @@ function CheckStep({ draft, thumbs, product, price, goPhotos, readOnly }) {
   // «Продолжить всё равно» — осознанное решение: отметка в проекте и запись в журнал (для вошедших)
   const ack = (issue) => {
     updateDraft((d) => ({ ...d, acks: { ...(d.acks || {}), [issue.key]: { at: Date.now(), title: issue.title } } }));
-    callApi("/api/v1/checks/ack", { body: { issue: issue.key.split(":")[0], title: issue.title, productSlug: product.slug, projectId: draft.id } });
+    // Гостю журнал на сервере не пишем (нет аккаунта) — отметка остаётся в проекте на устройстве
+    callApi("/api/v1/me", { method: "GET" }).then((me) => {
+      if (me.authenticated && me.activeRole === "client") callApi("/api/v1/checks/ack", { body: { issue: issue.key.split(":")[0], title: issue.title, productSlug: product.slug, projectId: draft.id } });
+    });
   };
   const fitPages = (n) => updateDraft((d) => ({ ...d, pages: n, acks: {} }));
 
