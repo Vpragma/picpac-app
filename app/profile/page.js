@@ -2,6 +2,7 @@
 import Link from "next/link";
 import AccountPanel from "@/components/auth/AccountPanel";
 import Notifications from "@/components/Notifications";
+import AutoEnhanceSetting from "@/components/AutoEnhanceSetting";
 import { isStaffRole } from "@/lib/roles";
 import { staffMfaRequired } from "@/lib/server/env";
 import { getAuth } from "@/lib/server/session";
@@ -53,6 +54,7 @@ export default async function ProfilePage() {
         </div>
       )}
       <Notifications />
+      <AutoEnhanceSetting />
       <section className="card">
         <h3>Поддержка</h3>
         <p className="small">support@picpac.by · +375 44 539-67-89, ежедневно 9:00–21:00</p>

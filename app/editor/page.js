@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DndContext, KeyboardSensor, MouseSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, rectSortingStrategy, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable";
@@ -28,6 +29,32 @@ import { addToCart as putInCart } from "../../lib/cart";
 import { callApi } from "../../lib/api";
 import DraftError from "../../components/DraftError";
 import { IconAlert, IconCheck, IconLeft, IconRight, IconTrash, IconUpload } from "../../components/icons";
+import { photoBadges } from "../../lib/photo/badges";
+
+// ИИ-редактор (шаг «Правки») — отдельный кусок кода, грузится только при открытии шага
+const PhotoEditor = dynamic(() => import("../../components/editor/PhotoEditor"), {
+  ssr: false,
+  loading: () => <p className="muted">Открываем редактор…</p>,
+});
+
+// Фото с предупреждением о резкости в печати — как в «Проверке» (для значка «Мало точек для печати»)
+function useLowDpi(draft, product) {
+  return useMemo(() => {
+    if (!draft || !product) return new Set();
+    const { issues } = runChecks(draft, product);
+    return new Set(issues.filter((i) => i.key.startsWith("dpi:")).map((i) => i.photoId));
+  }, [draft, product]);
+}
+
+// Анализ новых фото в воркере (S03a): оценка качества и мягкое автоулучшение плохих
+function useAnalysis(draft) {
+  const need = !!draft && draft.status !== "ordered" && draft.photos.some((p) => p.supported && !p.quality);
+  const id = draft?.id;
+  useEffect(() => {
+    if (!need || !id) return;
+    import("../../lib/photo/analysis").then((m) => m.analyzeMissing(id)).catch(console.error);
+  }, [need, id, draft?.photos.length]);
+}
 
 // Шаги как на слайде Фотопринт: Фото · Автомакет · Правки · Проверка · Заказ · Статус
 const STEPS = [
@@ -49,6 +76,8 @@ export default function EditorPage() {
   const { ready, error, draft, thumbs, uploads } = useDraft();
   const { product, loading } = useProduct(draft?.productSlug);
   const [step, setStep] = useState("photos");
+  useAnalysis(draft);
+  const lowDpi = useLowDpi(draft, product);
 
   if (error) return <DraftError />;
 
@@ -123,9 +152,11 @@ export default function EditorPage() {
           </button>
         ))}
       </nav>
-      {step === "photos" && <PhotosStep draft={draft} thumbs={thumbs} product={product} uploads={uploads} readOnly={ordered} />}
+      {step === "photos" && <PhotosStep draft={draft} thumbs={thumbs} product={product} uploads={uploads} readOnly={ordered} lowDpi={lowDpi} />}
       {step === "layout" && <LayoutStep draft={draft} thumbs={thumbs} product={product} />}
-      {step === "edits" && <EditsStep draft={draft} thumbs={thumbs} product={product} readOnly={ordered} />}
+      {step === "edits" && (
+        <PhotoEditor draft={draft} thumbs={thumbs} readOnly={ordered} lowDpiIds={lowDpi} extra={(photo) => <PlacementCard photo={photo} thumb={thumbs[photo.id]} readOnly={ordered} />} />
+      )}
       {step === "check" && <CheckStep draft={draft} thumbs={thumbs} product={product} price={price} goPhotos={() => setStep("photos")} readOnly={ordered} />}
 
       <div className="sticky-bar">
@@ -191,7 +222,7 @@ function useAdder() {
 
 const UPLOAD_TEXT = { wait: "ждёт очереди", work: "готовим…", error: "не получилось" };
 
-function PhotosStep({ draft, thumbs, product, uploads, readOnly }) {
+function PhotosStep({ draft, thumbs, product, uploads, readOnly, lowDpi }) {
   const inputRef = useRef(null);
   const [busy, add] = useAdder();
   const [over, setOver] = useState(false);
@@ -306,7 +337,7 @@ function PhotosStep({ draft, thumbs, product, uploads, readOnly }) {
       {n === 0 ? (
         <p className="muted">Пока пусто. Добавьте фото — черновик сохранится сам, даже если закрыть страницу.</p>
       ) : (
-        <SortablePhotos draft={draft} thumbs={thumbs} readOnly={readOnly} />
+        <SortablePhotos draft={draft} thumbs={thumbs} readOnly={readOnly} lowDpi={lowDpi} />
       )}
       {!readOnly && (
         <p className="muted small" style={{ marginTop: 8 }}>
@@ -387,7 +418,7 @@ function GalleryPanel({ busy, onAdd }) {
 }
 
 // Сетка фото: на компьютере — перетаскивание (мышь и клавиатура), на телефоне — кнопки «раньше / позже»
-function SortablePhotos({ draft, thumbs, readOnly }) {
+function SortablePhotos({ draft, thumbs, readOnly, lowDpi }) {
   const sensors = useSensors(useSensor(MouseSensor, { activationConstraint: { distance: 4 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
   const ids = draft.photos.map((p) => p.id);
   const pos = (id) => ids.indexOf(id) + 1;
@@ -409,7 +440,7 @@ function SortablePhotos({ draft, thumbs, readOnly }) {
       <SortableContext items={ids} strategy={rectSortingStrategy} disabled={readOnly}>
         <div className="photo-grid">
           {draft.photos.map((p, i) => (
-            <SortablePhoto key={p.id} p={p} i={i} n={draft.photos.length} thumb={thumbs[p.id]} readOnly={readOnly} />
+            <SortablePhoto key={p.id} p={p} i={i} n={draft.photos.length} thumb={thumbs[p.id]} readOnly={readOnly} badges={photoBadges(p, { lowDpi: lowDpi?.has(p.id) })} />
           ))}
         </div>
       </SortableContext>
@@ -417,13 +448,22 @@ function SortablePhotos({ draft, thumbs, readOnly }) {
   );
 }
 
-function SortablePhoto({ p, i, n, thumb, readOnly }) {
+function SortablePhoto({ p, i, n, thumb, readOnly, badges }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: p.id, disabled: readOnly });
   const style = { transform: transform ? `translate3d(${Math.round(transform.x)}px, ${Math.round(transform.y)}px, 0)` : undefined, transition };
   return (
     <div ref={setNodeRef} style={style} className={"photo-cell" + (isDragging ? " dragging" : "")} data-photo={p.name}>
       {thumb ? <img src={thumb} alt={p.name} /> : <div className="bad">{p.supported ? "…" : p.tooBig ? "Больше 25 МБ" : "Формат не подходит"}</div>}
       <span className="num">{i + 1}</span>
+      {badges?.length > 0 && (
+        <span className="pe-badges compact" aria-label={"Фото " + (i + 1) + ": " + badges.map((b) => b.label).join(", ")}>
+          {badges.map((b) => (
+            <span key={b.id} className={"pe-badge " + b.tone} data-badge={b.id}>
+              {b.label}
+            </span>
+          ))}
+        </span>
+      )}
       {!readOnly && (
         <>
           <button ref={setActivatorNodeRef} className="drag-handle" {...attributes} {...listeners} aria-label={`Переставить фото ${i + 1}`} title="Перетащите, чтобы переставить">
@@ -566,54 +606,42 @@ const FOCUS = [
   ["0% 100%", "↙", "низ слева"], ["50% 100%", "↓", "низ"], ["100% 100%", "↘", "низ справа"],
 ];
 
-function EditsStep({ draft, thumbs, readOnly }) {
-  const usable = draft.photos.filter((p) => p.supported);
-  const [sel, setSel] = useState(usable[0]?.id || null);
-  const photo = usable.find((p) => p.id === sel) || usable[0];
-  if (!photo) return <p className="muted">Добавьте фото — здесь можно будет выбрать, как каждое ляжет на своё место.</p>;
+// Кадрирование выбранного в редакторе фото: заполнить место или целиком, что важнее оставить в кадре
+function PlacementCard({ photo, thumb, readOnly }) {
   const fit = photo.fit === "contain" ? "contain" : "cover";
   const focus = photo.focus || "50% 50%";
   return (
-    <div>
-      <p className="muted">Кадрирование: выберите фото и решите, как оно ляжет на своё место — заполнит его целиком (края обрежутся) или войдёт полностью, с белыми полями.</p>
-      <div className="photo-grid" style={{ gridTemplateColumns: "repeat(6, 1fr)", gap: 4, marginBottom: 12 }}>
-        {usable.map((p, i) => (
-          <button key={p.id} className={"photo-cell" + (p.id === photo.id ? " selected" : "")} style={{ border: 0, padding: 0, cursor: "pointer" }} onClick={() => setSel(p.id)} aria-pressed={p.id === photo.id} aria-label={`Фото ${i + 1}: ${p.name}`}>
-            {thumbs[p.id] && <img src={thumbs[p.id]} alt="" style={placeStyle(p)} />}
-          </button>
-        ))}
-      </div>
-      <div className="card">
-        <div className="row wrap" style={{ alignItems: "flex-start", gap: 16 }}>
-          <div className="place-preview" aria-hidden="true">{thumbs[photo.id] && <img src={thumbs[photo.id]} alt="" style={placeStyle(photo)} />}</div>
-          <div style={{ flex: 1, minWidth: 180 }}>
-            <b>{photo.name}</b>
-            <div className="options" style={{ marginTop: 8 }}>
-              <button className={"option" + (fit === "cover" ? " selected" : "")} aria-pressed={fit === "cover"} disabled={readOnly} onClick={() => setPhotoPlacement(photo.id, { fit: "cover" })}>
-                <b>Заполнить место</b>
-                <span>края обрежутся</span>
-              </button>
-              <button className={"option" + (fit === "contain" ? " selected" : "")} aria-pressed={fit === "contain"} disabled={readOnly} onClick={() => setPhotoPlacement(photo.id, { fit: "contain" })}>
-                <b>Целиком</b>
-                <span>с белыми полями</span>
-              </button>
-            </div>
-            {fit === "cover" && (
-              <>
-                <p className="small" style={{ margin: "8px 0 4px" }}>Что важнее оставить в кадре:</p>
-                <div className="focus-grid" role="group" aria-label="Что важнее оставить в кадре">
-                  {FOCUS.map(([v, icon, label]) => (
-                    <button key={v} aria-pressed={focus === v} aria-label={label} title={label} disabled={readOnly} onClick={() => setPhotoPlacement(photo.id, { focus: v })}>
-                      {icon}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
+    <div className="card">
+      <h3>Кадрирование</h3>
+      <p className="muted small">Как фото ляжет на своё место — заполнит его целиком (края обрежутся) или войдёт полностью, с белыми полями.</p>
+      <div className="row wrap" style={{ alignItems: "flex-start", gap: 16 }}>
+        <div className="place-preview" aria-hidden="true">{thumb && <img src={thumb} alt="" style={placeStyle(photo)} />}</div>
+        <div style={{ flex: 1, minWidth: 180 }}>
+          <div className="options">
+            <button className={"option" + (fit === "cover" ? " selected" : "")} aria-pressed={fit === "cover"} disabled={readOnly} onClick={() => setPhotoPlacement(photo.id, { fit: "cover" })}>
+              <b>Заполнить место</b>
+              <span>края обрежутся</span>
+            </button>
+            <button className={"option" + (fit === "contain" ? " selected" : "")} aria-pressed={fit === "contain"} disabled={readOnly} onClick={() => setPhotoPlacement(photo.id, { fit: "contain" })}>
+              <b>Целиком</b>
+              <span>с белыми полями</span>
+            </button>
           </div>
+          {fit === "cover" && (
+            <>
+              <p className="small" style={{ margin: "8px 0 4px" }}>Что важнее оставить в кадре:</p>
+              <div className="focus-grid" role="group" aria-label="Что важнее оставить в кадре">
+                {FOCUS.map(([v, icon, label]) => (
+                  <button key={v} aria-pressed={focus === v} aria-label={label} title={label} disabled={readOnly} onClick={() => setPhotoPlacement(photo.id, { focus: v })}>
+                    {icon}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </div>
-      <p className="muted small">Изменения видны в «Автомакете» и сохраняются в черновике.</p>
+      <p className="muted small" style={{ marginTop: 8 }}>Изменения видны в «Автомакете» и сохраняются в черновике.</p>
     </div>
   );
 }
