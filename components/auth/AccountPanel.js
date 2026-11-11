@@ -8,7 +8,7 @@ import { ROLE_LABELS, isStaffRole } from "../../lib/roles";
 import { notify, readKey, writeKey } from "../../lib/store";
 import LogoutButton from "./LogoutButton";
 
-export default function AccountPanel({ name, email, roles, activeRole, isDemo }) {
+export default function AccountPanel({ name, email, roles, activeRole, isDemo, mfa }) {
   return (
     <>
       <div className="card stack">
@@ -28,6 +28,21 @@ export default function AccountPanel({ name, email, roles, activeRole, isDemo })
             ))}
           </div>
         </div>
+        {mfa && (
+          <div>
+            <div className="muted small">Двухфакторный вход для сотрудников</div>
+            {!mfa.required ? (
+              <div className="small">Выключен на этом стенде (флаг REQUIRE_STAFF_MFA) — для входа хватает пароля.</div>
+            ) : mfa.enrolled ? (
+              <div className="small ok-text">Подключён: при входе с ролью сотрудника нужен код из приложения-аутентификатора.</div>
+            ) : (
+              <div className="small">
+                Не подключён.{" "}
+                <Link href={`/login/mfa?role=${mfa.role}&next=/profile`}>Подключить по QR-коду</Link>
+              </div>
+            )}
+          </div>
+        )}
         <div className="row wrap">
           {isStaffRole(activeRole) && (
             <Link href="/admin" className="btn btn-small btn-primary">

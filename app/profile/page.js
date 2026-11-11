@@ -2,6 +2,8 @@
 import Link from "next/link";
 import AccountPanel from "@/components/auth/AccountPanel";
 import Notifications from "@/components/Notifications";
+import { isStaffRole } from "@/lib/roles";
+import { staffMfaRequired } from "@/lib/server/env";
 import { getAuth } from "@/lib/server/session";
 
 export const metadata = { title: "Профиль — PicPac" };
@@ -9,9 +11,16 @@ export const metadata = { title: "Профиль — PicPac" };
 export default async function ProfilePage() {
   const auth = await getAuth();
   let profile = null;
+  let mfa = null;
   if (auth.user) {
     const { data } = await auth.supabase.from("profiles").select("full_name, created_at").eq("id", auth.user.id).maybeSingle();
     profile = data;
+    // Сотрудникам показываем, подключён ли двухфакторный вход
+    const staffRole = auth.roles.find(isStaffRole);
+    if (staffRole) {
+      const { data: factors } = await auth.supabase.auth.mfa.listFactors();
+      mfa = { required: staffMfaRequired(), enrolled: !!factors?.totp?.length, aal: auth.aal, role: staffRole };
+    }
   }
 
   return (
@@ -24,6 +33,7 @@ export default async function ProfilePage() {
           roles={auth.roles}
           activeRole={auth.activeRole}
           isDemo={auth.user.isDemo}
+          mfa={mfa}
         />
       ) : (
         <div className="card stack">
