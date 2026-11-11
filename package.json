@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "db:migrate": "node --env-file-if-exists=.env.local scripts/db-migrate.mjs"
+    "db:migrate": "node --env-file-if-exists=.env.local scripts/db-migrate.mjs",
+    "seed": "node --env-file-if-exists=.env.local scripts/seed.mjs",
+    "test:auth": "node --env-file-if-exists=.env.local scripts/test-auth.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
