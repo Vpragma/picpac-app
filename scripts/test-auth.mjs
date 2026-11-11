@@ -63,6 +63,16 @@ async function main() {
     console.error("Нет SEED_PASSWORD в .env.local — без него не войти под тестовыми аккаунтами.");
     process.exit(1);
   }
+  // Открытый адрес должен отвечать 200. Иначе 401 может прийти от защиты Vercel, а не от нашего сервера,
+  // и проверка 1 прошла бы ложно.
+  const open = await new Client("проверка").req("/api/v1/catalog");
+  if (open.status !== 200 || !open.json?.products) {
+    console.error(
+      `Открытый адрес /api/v1/catalog ответил кодом ${open.status}. Похоже, сайт закрыт защитой Vercel (Deployment Protection) ` +
+        "или не запущен. Проверьте локально (npm start) или задайте VERCEL_AUTOMATION_BYPASS_SECRET."
+    );
+    process.exit(1);
+  }
 
   // 1) Гость
   const guest = new Client("гость");

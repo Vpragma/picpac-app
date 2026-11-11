@@ -69,6 +69,9 @@ let userId = null;
 
 try {
   console.log(`Проверяем двухфакторный вход на ${BASE} (временный аккаунт ${email})\n`);
+  // Открытый адрес должен отвечать 200 — иначе сайт не запущен или закрыт защитой Vercel
+  const open = await new Client().req("/api/v1/catalog");
+  if (open.status !== 200) throw new Error(`открытый адрес /api/v1/catalog ответил кодом ${open.status} — сайт не запущен или закрыт защитой Vercel`);
   const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { full_name: "Временный админ для теста 2FA" } });
   if (error) throw new Error("не удалось создать временного пользователя: " + error.message);
   userId = data.user.id;
