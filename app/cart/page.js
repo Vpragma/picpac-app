@@ -6,6 +6,7 @@ import { useStored, readKey, writeKey, notify } from "../../lib/store";
 import { DELIVERY, calcTotals, findPromo } from "../../lib/delivery";
 import { deliveryRange, money } from "../../lib/price";
 import { createOrder } from "../../lib/orders";
+import { callApi } from "../../lib/api";
 import { IconImage, IconTrash } from "../../components/icons";
 
 export default function CartPage() {
@@ -17,7 +18,13 @@ export default function CartPage() {
   const [promo, setPromo] = useState(null);
   const [promoError, setPromoError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [me, setMe] = useState(null); // null — ещё не знаем, { authenticated } — ответ сервера
   const lock = useRef(false);
+
+  // Кто оформляет заказ: спрашиваем сервер (вход проверяется только там)
+  useEffect(() => {
+    callApi("/api/v1/me", { method: "GET" }).then((res) => setMe(res.status === 200 ? res : null));
+  }, []);
 
   // Ключ оформления: один и тот же для повторных нажатий — второй заказ не создаётся.
   useEffect(() => {
@@ -50,15 +57,29 @@ export default function CartPage() {
     }
   }
 
-  function confirm() {
+  async function confirm() {
     if (lock.current) return;
     lock.current = true;
     setBusy(true);
     try {
+    // Заказ оформляет только вошедший пользователь. Гостя ведём на вход и возвращаем сюда —
+    // корзина и черновик лежат на устройстве и никуда не пропадают.
+    const who = await callApi("/api/v1/me", { method: "GET" });
+    if (who.status !== 200) {
+      notify("Нет связи с сервером. Корзина сохранена — подтвердите заказ, когда появится интернет.", "error");
+      lock.current = false;
+      return;
+    }
+    if (!who.authenticated) {
+      lock.current = false;
+      router.push("/login?reason=checkout&next=" + encodeURIComponent("/cart"));
+      return;
+    }
     const checkoutKey = readKey("checkoutKey", "k" + Date.now());
     const d = DELIVERY.find((x) => x.id === deliveryId);
     const { order } = createOrder({
       checkoutKey,
+      userId: who.user.id,
       items: cart,
       delivery: { id: d.id, name: d.name, note: d.note, eta: d.eta },
       promo: promo?.code || null,
@@ -144,6 +165,10 @@ export default function CartPage() {
         <div className="sum-line"><span>Доставка</span><span>{t.freeDelivery ? "бесплатно" : money(t.delivery)}</span></div>
         <div className="sum-line sum-total"><span>Итого</span><span>{money(t.total)}</span></div>
         <p className="muted small" style={{ marginTop: 8 }}>Платить сейчас не нужно — это тестовый заказ без оплаты.</p>
+        {me && !me.authenticated && (
+          <p className="muted small">Чтобы подтвердить заказ, нужно войти или зарегистрироваться — после входа вернём вас сюда, корзина сохранится.</p>
+        )}
+        {me?.authenticated && <p className="muted small">Заказ оформляется на {me.user.name || me.user.email}.</p>}
         <button className="btn btn-primary btn-block" onClick={confirm} disabled={busy} style={{ marginTop: 8 }}>
           {busy ? "Оформляем…" : "Подтвердить заказ"}
         </button>
