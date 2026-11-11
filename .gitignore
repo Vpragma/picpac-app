@@ -18,3 +18,6 @@ next-env.d.ts
 # Создаётся Next.js автоматически
 AGENTS.md
 CLAUDE.md
+
+# Логи ночной работы
+/.night-logs/
