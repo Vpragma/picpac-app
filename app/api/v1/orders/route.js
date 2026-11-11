@@ -6,6 +6,7 @@ import { calcTotals, etaRange, minskDayStart } from "@/lib/pricing";
 import { parseBody, rateLimited, requireUser, serverError, tooMany, z } from "@/lib/server/api";
 import { findDelivery, findPromo } from "@/lib/server/catalog";
 import { json, jsonError } from "@/lib/server/http";
+import { advanceDemoOrders, loadItemsForFlags } from "@/lib/server/orderFlow";
 import { getOwnOrder, loadOrderFull, ORDER_FIELDS, shapeOrder } from "@/lib/server/orders";
 import { loadCart } from "@/lib/server/projects";
 
@@ -40,14 +41,30 @@ const ADDRESS_LABELS = { city: "город", street: "улицу", house: "до�
 export async function GET(request) {
   const { ctx, response } = await requireUser(request);
   if (response) return response;
-  const { data, error } = await ctx.db
-    .from("orders")
-    .select(`${ORDER_FIELDS}, order_items(count)`)
-    .eq("user_id", ctx.userId)
-    .order("created_at", { ascending: false })
-    .limit(100);
+  const list = () =>
+    ctx.db
+      .from("orders")
+      .select(`${ORDER_FIELDS}, order_items(title, quantity)`)
+      .eq("user_id", ctx.userId)
+      .order("created_at", { ascending: false })
+      .limit(100);
+  let { data, error } = await list();
   if (error) return serverError();
-  return json({ ok: true, items: data.map((o) => ({ ...shapeOrder(o), itemsCount: o.order_items?.[0]?.count || 0 })) });
+  // Демо-заказы: статусы двигаются по таймеру (lib/server/orderFlow.js)
+  const moving = data.filter((o) => o.is_demo && o.status !== "done");
+  if (moving.length) {
+    const items = await loadItemsForFlags(ctx, moving.filter((o) => o.status === "moderation").map((o) => o.id));
+    if (await advanceDemoOrders(ctx, moving, items)) ({ data, error } = await list());
+    if (error) return serverError();
+  }
+  return json({
+    ok: true,
+    items: data.map((o) => ({
+      ...shapeOrder(o),
+      itemsCount: o.order_items?.length || 0,
+      titles: (o.order_items || []).map((i) => i.title),
+    })),
+  });
 }
 
 export async function POST(request) {

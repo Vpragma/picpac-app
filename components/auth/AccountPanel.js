@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { callApi, goTo } from "../../lib/api";
 import { ROLE_LABELS, isStaffRole } from "../../lib/roles";
-import { notify, readKey, writeKey } from "../../lib/store";
+import { wipeDevice } from "../../lib/device";
+import { notify } from "../../lib/store";
 import LogoutButton from "./LogoutButton";
 
 export default function AccountPanel({ name, email, roles, activeRole, isDemo, mfa }) {
@@ -141,9 +142,8 @@ function DeleteAccount({ email, isDemo }) {
       setBusy(false);
       return setError(res.error?.message || "Не получилось удалить аккаунт.");
     }
-    // Заказы этого аккаунта на устройстве тоже убираем
-    const me = res.userId;
-    if (me) writeKey("orders", readKey("orders", []).filter((o) => o.userId !== me));
+    // Данные аккаунта на устройстве тоже стираем (черновики, фото, корзина, кэш)
+    await wipeDevice();
     notify(`Аккаунт ${email} удалён`, "success");
     goTo(res.redirect || "/");
   }

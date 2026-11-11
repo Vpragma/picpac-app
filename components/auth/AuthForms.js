@@ -1,5 +1,6 @@
 "use client";
 // Формы входа и регистрации. Пароль проверяет только сервер; здесь — подсказки по заполнению.
+import Link from "next/link";
 import { useState } from "react";
 import { callApi, goTo } from "../../lib/api";
 import { PASSWORD_MIN } from "../../lib/validate";
@@ -27,8 +28,11 @@ export default function AuthForms({ next = "", reason = "", initialMode = "login
         </div>
         {mode === "login" ? <LoginForm next={next} /> : <RegisterForm next={next} />}
       </div>
+      <Link href={reason === "checkout" ? "/cart" : "/"} className="btn btn-block">
+        Продолжить как гость
+      </Link>
       <p className="muted small" style={{ textAlign: "center" }}>
-        Тестовые аккаунты для проверки перечислены в README проекта.
+        Данные для входа жюри — в README проекта.
       </p>
     </div>
   );
@@ -46,6 +50,7 @@ function PasswordField({ label, value, onChange, autoComplete, error, hint }) {
           autoComplete={autoComplete}
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          aria-label={label}
           aria-invalid={error ? "true" : undefined}
           required
         />

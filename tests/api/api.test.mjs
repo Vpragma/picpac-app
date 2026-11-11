@@ -449,6 +449,33 @@ test("удалить мои фото: фото заказов в работе �
   assert.equal(r.json.request.kind, "delete_photos");
 });
 
+test("статусы демо-заказа (S02d): оплата → Модерация → автоодобрение → … → Завершён без дублей; миниатюры по подписанным ссылкам", async () => {
+  // Как будто с оплаты прошло 5 минут: шаги догоняются по таймеру (30 с на шаг)
+  const past = new Date(Date.now() - 5 * 60_000).toISOString();
+  await admin.from("orders").update({ status_changed_at: past, paid_at: past }).eq("id", s.order.id);
+  const [r, r2] = await Promise.all([A.client.req(`/api/v1/orders/${s.order.id}`), A.client.req(`/api/v1/orders/${s.order.id}`)]);
+  assert.equal(r.status, 200, r.text);
+  const o = (await A.client.req(`/api/v1/orders/${s.order.id}`)).json.order;
+  assert.equal(o.status, "done");
+  assert.deepEqual(
+    o.timeline.map((t) => t.label),
+    ["Принят", "Модерация", "Производство", "Готов / передан в доставку", "Завершён"],
+  );
+  assert.ok(o.timeline.every((t) => t.at), "у каждого шага есть время");
+  assert.ok(o.history.some((h) => h.status === "production" && /Автоодобрение/.test(h.reason || "")));
+  assert.equal(o.history.length, 5, "два одновременных чтения не задвоили ленту: " + o.history.map((h) => h.status).join(","));
+  assert.equal(r2.status, 200);
+  const item = o.items[0];
+  assert.ok(item.thumbs.length >= 1 && /^https?:/.test(item.thumbs[0].url || ""), "миниатюра по подписанной ссылке");
+  assert.equal(item.snapshot.photos, undefined, "пути в хранилище клиенту не отдаются");
+  assert.ok(item.optionsText.length >= 1);
+  assert.ok(o.delivery.name);
+  const list = await A.client.req("/api/v1/orders");
+  const row = list.json.items.find((x) => x.id === s.order.id);
+  assert.equal(row.status, "done");
+  assert.ok(row.titles.length >= 1);
+});
+
 test("удаление аккаунта: файлы удалены, заказы обезличены и остались", async () => {
   const r = await A.client.req("/api/v1/me", { method: "DELETE", body: { password: A.password } });
   assert.equal(r.status, 200, r.text);

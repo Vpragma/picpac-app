@@ -1,12 +1,60 @@
 "use client";
+// История заказов (ТЗ п. 8): список из GET /api/v1/orders. Из списка открывается заказ: состав, сумма, статус, обращения.
+// Демо-заказы двигаются по статусам сами — список обновляется раз в 15 секунд.
 import Link from "next/link";
-import { useStored } from "../../lib/store";
-import { money } from "../../lib/price";
-import { StatusChip } from "../../components/OrderBits";
+import { useEffect, useState } from "react";
+import { callApi } from "../../lib/api";
+import { StatusChip, byn, minskDay } from "../../components/OrderBits";
+
+const POLL_MS = 15000;
 
 export default function OrdersPage() {
-  const [orders, , ready] = useStored("orders", []);
-  if (!ready) return <p className="muted">Загружаем заказы…</p>;
+  const [res, setRes] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    const load = () =>
+      callApi("/api/v1/orders", { method: "GET" }).then((r) => {
+        // Без связи оставляем то, что уже показано
+        if (alive) setRes((prev) => (r.status === 0 && prev?.ok ? prev : r));
+      });
+    load();
+    const t = setInterval(load, POLL_MS);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, []);
+
+  if (!res) return <p className="muted">Загружаем заказы…</p>;
+  if (res.status === 401)
+    return (
+      <div>
+        <h1>Мои заказы</h1>
+        <div className="card stack">
+          <p>Заказы хранятся в аккаунте. Войдите, чтобы увидеть историю и статусы.</p>
+          <Link href="/login?next=/orders" className="btn btn-primary btn-block">
+            Войти
+          </Link>
+          <Link href="/" className="btn btn-block">
+            В каталог
+          </Link>
+        </div>
+      </div>
+    );
+  if (!res.ok)
+    return (
+      <div>
+        <h1>Мои заказы</h1>
+        <div className="card" role="alert">
+          <p>{res.error?.message || "Не получилось загрузить заказы."}</p>
+          <button type="button" className="btn" onClick={() => window.location.reload()}>
+            Повторить
+          </button>
+        </div>
+      </div>
+    );
+  const orders = res.items || [];
   return (
     <div>
       <h1>Мои заказы</h1>
@@ -14,19 +62,26 @@ export default function OrdersPage() {
         <div className="card">
           <p>Заказов пока нет.</p>
           <p className="muted">Ваши фотокниги и фото появятся здесь сразу после оформления.</p>
-          <Link href="/" className="btn btn-primary">В каталог</Link>
+          <Link href="/" className="btn btn-primary">
+            В каталог
+          </Link>
         </div>
       )}
       {orders.map((o) => (
-        <Link key={o.id} href={"/orders/" + o.id} className="card" style={{ display: "block", textDecoration: "none", color: "inherit" }}>
+        <Link key={o.id} href={"/orders/" + o.id} className="card order-row" style={{ display: "block", textDecoration: "none", color: "inherit" }} data-number={o.number}>
           <div className="row between">
-            <b style={{ color: "var(--ds-color-text-strong)" }}>№ {o.id}</b>
+            <b style={{ color: "var(--ds-color-text-strong)" }}>№ {o.number}</b>
             <StatusChip status={o.status} />
           </div>
           <div className="muted small">
-            {o.items.map((i) => i.name).join(", ")} · {new Date(o.createdAt).toLocaleDateString("ru-RU")}
+            {(o.titles || []).join(", ") || `Позиций: ${o.itemsCount}`} · от {minskDay(o.createdAt)}
           </div>
-          <b>{money(o.totals.total)}</b>
+          <div className="row between">
+            <b>{byn(o.totalKop)}</b>
+            <span className="small" style={{ color: "var(--ds-color-link, inherit)" }}>
+              Открыть заказ →
+            </span>
+          </div>
         </Link>
       ))}
     </div>

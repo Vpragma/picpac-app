@@ -21,3 +21,7 @@ CLAUDE.md
 
 # Логи ночной работы
 /.night-logs/
+
+# Playwright
+/test-results/
+/playwright-report/

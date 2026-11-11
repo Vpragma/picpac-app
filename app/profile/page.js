@@ -44,6 +44,12 @@ export default async function ProfilePage() {
           <Link href="/login?mode=register" className="btn btn-block">
             Зарегистрироваться
           </Link>
+          <Link href="/" className="btn btn-block">
+            Назад к каталогу
+          </Link>
+          <p className="muted small" style={{ margin: 0 }}>
+            После входа проекты, корзина и заказы хранятся в аккаунте и видны на любом устройстве.
+          </p>
         </div>
       )}
       <Notifications />

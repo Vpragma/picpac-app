@@ -4,7 +4,6 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { IconBook, IconCart, IconGrid, IconPackage, IconUser } from "./icons";
 import { cartCount, useCart } from "../lib/cart";
-import { useDemoTicker } from "../lib/orders";
 import { startSync } from "../lib/sync";
 
 const TABS = [
@@ -39,7 +38,6 @@ function Toasts() {
 export default function Shell({ children }) {
   const path = usePathname() || "/";
   const count = cartCount(useCart());
-  useDemoTicker();
   // Проекты вошедшего клиента синхронизируются с аккаунтом (гость работает только на устройстве)
   useEffect(() => {
     startSync();
