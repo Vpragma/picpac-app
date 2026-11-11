@@ -12,7 +12,8 @@
     "test:mfa": "node --env-file-if-exists=.env.local scripts/test-mfa.mjs",
     "env:sync": "node scripts/env-sync.mjs",
     "env:night-secrets": "node --env-file-if-exists=.env.local scripts/night-secrets.mjs",
-    "db:backup": "node --env-file-if-exists=.env.local scripts/db-backup.mjs"
+    "db:backup": "node --env-file-if-exists=.env.local scripts/db-backup.mjs",
+    "seed:catalog": "node --env-file-if-exists=.env.local scripts/seed-catalog.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
