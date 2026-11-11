@@ -324,7 +324,11 @@ test("разные ключи → разные заказы (новый прое
   const race = await Promise.all([order(A, `${RUN}-2`), order(A, `${RUN}-race-b`), order(A, `${RUN}-race-c`)]);
   const created = race.filter((x) => x.status === 201);
   assert.equal(created.length, 1, race.map((x) => x.status).join(","));
-  for (const x of race.filter((y) => y.status !== 201)) assert.equal(x.json.error.code, "cart_changed");
+  // Проигравшие получают 409: «корзина изменилась» (ждали блокировку) или «корзина пуста» (пришли после первого заказа)
+  for (const x of race.filter((y) => y.status !== 201)) {
+    assert.equal(x.status, 409);
+    assert.ok(["cart_changed", "cart_empty"].includes(x.json.error.code), x.json.error.code);
+  }
   const { count: raced } = await admin.from("orders").select("id", { count: "exact", head: true }).like("idempotency_key", `${RUN}-%`).neq("idempotency_key", s.key1);
   assert.equal(raced, 1);
   const r = created[0];
