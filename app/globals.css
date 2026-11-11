@@ -118,7 +118,7 @@ button, input, select { font: inherit; color: inherit; }
 /* Каталог */
 .product-card { display: block; text-decoration: none; color: inherit; }
 .product-cover {
-  height: 120px; border-radius: var(--ds-radius-md); margin-bottom: 12px;
+  height: 88px; border-radius: var(--ds-radius-md); margin-bottom: 12px;
   display: flex; align-items: center; justify-content: center;
   background: var(--ds-gradient-promo); color: var(--ds-color-promo-text);
 }
