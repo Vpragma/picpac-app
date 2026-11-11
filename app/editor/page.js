@@ -458,8 +458,8 @@ function SortablePhoto({ p, i, n, thumb, readOnly, badges }) {
       {badges?.length > 0 && (
         <span className="pe-badges compact" aria-label={"Фото " + (i + 1) + ": " + badges.map((b) => b.label).join(", ")}>
           {badges.map((b) => (
-            <span key={b.id} className={"pe-badge " + b.tone} data-badge={b.id}>
-              {b.label}
+            <span key={b.id} className={"pe-badge " + b.tone} data-badge={b.id} title={b.label}>
+              {b.short || b.label}
             </span>
           ))}
         </span>

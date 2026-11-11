@@ -97,14 +97,14 @@ test("правки неразрушающие: исходные пиксели �
   assert.deepEqual(applyEdits(src, new Uint8ClampedArray(src.length), {}), copy);
 });
 
-test("отмена автоулучшения и ручные шаги складываются в пределах ±100", () => {
+test("отмена автоулучшения; ручные шаги складываются в пределах ±100", () => {
   let e = { auto: { exposure: 50 }, manual: {} };
   assert.ok(hasAuto(e));
   assert.equal(effectiveParams({ ...e, autoOff: true }).exposure, 0);
   e = addManual(e, { exposure: 20 });
   e = addManual(e, { exposure: 90 });
   assert.equal(e.manual.exposure, 100);
-  assert.equal(effectiveParams(e).exposure, 100);
+  assert.equal(effectiveParams(e).exposure, 150, "«ярче» действует и поверх сильного автоулучшения");
   assert.ok(hasManual(e));
   assert.ok(!hasManual(addManual(e, { exposure: -100 })));
 });

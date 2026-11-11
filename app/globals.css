@@ -353,3 +353,4 @@ button, input, select { font: inherit; color: inherit; }
 .pe-actions { gap: 8px; margin-top: 8px; }
 .pe-switch { gap: 12px; cursor: pointer; }
 .pe-switch input { width: 44px; height: 24px; accent-color: var(--ds-color-success); flex: none; }
+.pe-badges.compact .pe-badge { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

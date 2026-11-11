@@ -165,7 +165,7 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, extra 
           const b = photoBadges(p, { lowDpi: lowDpiIds?.has(p.id) });
           return (
             <div role="listitem" key={p.id}>
-              <button className={"photo-cell" + (p.id === photo.id ? " selected" : "")} onClick={() => choose(p.id)} aria-pressed={p.id === photo.id} aria-label={`Фото ${i + 1}: ${p.name}${b.length ? " — " + b.map((x) => x.label).join(", ") : ""}`} data-photo={p.name}>
+              <button className={"photo-cell" + (p.id === photo.id ? " selected" : "")} onClick={() => choose(p.id)} aria-pressed={p.id === photo.id} aria-label={`Фото ${i + 1}: ${p.name}${b.length ? " — " + b.map((x) => x.label).join(", ") : ""}`} data-edit-photo={p.name}>
                 {thumbs[p.id] && <img src={thumbs[p.id]} alt="" />}
                 <Badges list={b} compact />
               </button>
@@ -307,8 +307,8 @@ export function Badges({ list, compact }) {
   return (
     <span className={"pe-badges" + (compact ? " compact" : "")}>
       {list.map((b) => (
-        <span key={b.id} className={"pe-badge " + b.tone} data-badge={b.id}>
-          {b.label}
+        <span key={b.id} className={"pe-badge " + b.tone} data-badge={b.id} title={b.label}>
+          {compact && b.short ? b.short : b.label}
         </span>
       ))}
     </span>
