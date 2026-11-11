@@ -3,8 +3,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { IconBook, IconCart, IconGrid, IconPackage, IconUser } from "./icons";
-import { useStored } from "../lib/store";
+import { cartCount, useCart } from "../lib/cart";
 import { useDemoTicker } from "../lib/orders";
+import { startSync } from "../lib/sync";
 
 const TABS = [
   { href: "/", label: "Каталог", icon: IconGrid, match: (p) => p === "/" || p.startsWith("/product") },
@@ -37,8 +38,12 @@ function Toasts() {
 
 export default function Shell({ children }) {
   const path = usePathname() || "/";
-  const [cart] = useStored("cart", []);
+  const count = cartCount(useCart());
   useDemoTicker();
+  // Проекты вошедшего клиента синхронизируются с аккаунтом (гость работает только на устройстве)
+  useEffect(() => {
+    startSync();
+  }, []);
   // Старая версия хранила «вход» в localStorage — убираем остатки, вход теперь только на сервере
   useEffect(() => {
     try {
@@ -51,9 +56,13 @@ export default function Shell({ children }) {
         <Link href="/" className="logo" aria-label="PicPac — на главную">
           <img src="/logo.svg" alt="PicPac" width="72" height="40" />
         </Link>
-        <Link href="/cart" className="cart-btn" aria-label={"Корзина, товаров: " + cart.length}>
+        <Link href="/cart" className="cart-btn" aria-label={"Корзина, позиций: " + count}>
           <IconCart />
-          {cart.length > 0 && <span className="badge">{cart.length}</span>}
+          {count > 0 && (
+            <span className="badge badge-bump" key={count}>
+              {count}
+            </span>
+          )}
         </Link>
       </header>
       <main className="content">{children}</main>

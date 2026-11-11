@@ -52,7 +52,17 @@ export async function POST(request) {
   return json({
     ok: true,
     message: result.message,
-    promo: { code: result.code, kind: result.kind, label: result.label },
+    // Условия кода — чтобы экран сразу пересчитывал скидку при изменении корзины (заказ всё равно пересчитает сервер)
+    promo: {
+      code: result.code,
+      kind: result.kind,
+      label: result.label,
+      value: promo.value,
+      minTotalKop: promo.minTotalKop || 0,
+      validFrom: promo.validFrom,
+      validTo: promo.validTo,
+      active: true,
+    },
     goodsKop,
     discountKop: result.discountKop,
     discount: result.discountKop / 100,

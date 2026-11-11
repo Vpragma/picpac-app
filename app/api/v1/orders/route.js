@@ -21,6 +21,8 @@ const schema = z.object({
         flat: text(20, "Квартира — до 20 символов.").optional(),
         postcode: z.string().trim().regex(/^\d{6}$/, "Индекс — 6 цифр.").optional(),
         pickup_point: text(120, "Пункт выдачи — до 120 символов.").optional(),
+        // Курьер: день доставки (YYYY-MM-DD)
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Дата доставки — в формате ГГГГ-ММ-ДД.").optional(),
       })
       .default({}),
   }),
@@ -101,6 +103,16 @@ export async function POST(request) {
   const printDays = Math.max(...cart.items.map((i) => i.product?.printDays || 0));
   const eta = etaRange(now, printDays, method.minDays, method.maxDays);
   const address = Object.fromEntries(method.addressFields.map((f) => [f, body.delivery.address[f]]));
+  if (method.code.startsWith("courier")) {
+    // Курьер приезжает в выбранный день: не раньше, чем книга будет готова и доедет, и не позже чем через 60 дней
+    const date = body.delivery.address.date;
+    const last = etaRange(now, 60, 0, 0).from;
+    if (!date || date < eta.from || date > last) {
+      const msg = !date ? "Выберите дату доставки." : `Выберите дату с ${eta.from.split("-").reverse().join(".")} по ${last.split("-").reverse().join(".")}.`;
+      return jsonError(400, "invalid_input", msg, { fields: { "delivery.address.date": msg } });
+    }
+    address.date = date;
+  }
   const orderRow = {
     recipient: { name: body.recipient.name, phone: body.recipient.phone, email: body.recipient.email || ctx.email },
     delivery_code: method.code,

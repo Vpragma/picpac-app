@@ -16,7 +16,6 @@ import {
   replacePhoto,
   retryUpload,
   setPhotoPlacement,
-  setProjectStatus,
   updateDraft,
   useDraft,
 } from "../../lib/draft";
@@ -24,7 +23,8 @@ import { useProduct } from "../../lib/useCatalog";
 import { bookPrice, money, photoHint, printPrice } from "../../lib/price";
 import { daysWord, etaFromDay, formatEtaRange, minskDate } from "../../lib/pricing";
 import { runChecks } from "../../lib/checks";
-import { readKey, writeKey, notify } from "../../lib/store";
+import { notify } from "../../lib/store";
+import { addToCart as putInCart } from "../../lib/cart";
 import { callApi } from "../../lib/api";
 import DraftError from "../../components/DraftError";
 import { IconAlert, IconCheck, IconLeft, IconRight, IconTrash, IconUpload } from "../../components/icons";
@@ -674,12 +674,17 @@ function CheckStep({ draft, thumbs, product, price, goPhotos, readOnly }) {
         printDays: product.printDays,
         cover,
       };
-      // Черновик: в корзине одна позиция на черновик — повторное добавление заменяет её.
-      const cart = readKey("cart", []).filter((c) => c.fromDraft !== draft.createdAt && c.projectId !== draft.id);
-      writeKey("cart", [...cart, { ...item, fromDraft: draft.createdAt }]);
-      setProjectStatus(draft.id, "in_cart");
-      notify("Добавлено в корзину", "success");
-      router.push("/cart");
+      // Черновик: в корзине одна позиция на проект — повторное добавление заменяет её.
+      // Вошедшему клиенту позиция уходит в корзину на сервере (lib/cart.js), гостю — остаётся на устройстве.
+      putInCart({ ...item, fromDraft: draft.createdAt })
+        .then(() => {
+          notify("Добавлено в корзину", "success");
+          router.push("/cart");
+        })
+        .catch((e) => {
+          console.error(e);
+          notify("Не получилось добавить в корзину. Попробуйте ещё раз.", "error");
+        });
     };
     if (!firstThumb) return finish(null);
     const img = new Image();

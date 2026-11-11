@@ -347,7 +347,9 @@ paths:
           description: Промокод применён
           content:
             application/json:
-              example: { ok: true, message: "Промокод применён", promo: { code: TEST10, kind: percent, label: "−10% на заказ" }, discountKop: 810, freeDelivery: false }
+              # promo — условия кода (S02c): экран корзины пересчитывает скидку сразу при изменении количества и доставки
+              # по lib/pricing.js; при оформлении заказа сервер считает всё заново
+              example: { ok: true, message: "Промокод применён", promo: { code: TEST10, kind: percent, label: "−10% на заказ", value: 10, minTotalKop: 0, validFrom: null, validTo: null, active: true }, discountKop: 810, freeDelivery: false }
         "422":
           description: Не подходит / Истёк / не набрана сумма
           content:
@@ -387,7 +389,9 @@ paths:
                   required: [code]
                   properties:
                     code: { type: string, example: belpost }
-                    address: { type: object, description: "Поля из addressFields способа доставки: city, street, house, flat, postcode, pickup_point" }
+                    address:
+                      type: object
+                      description: "Поля из addressFields способа доставки: city, street, house, flat, postcode, pickup_point. Для курьера (courier-*) ещё date — день доставки YYYY-MM-DD, не раньше ориентировочного срока и не позже чем через 60 дней (иначе 400 с полем delivery.address.date)"
                 recipient:
                   type: object
                   required: [name, phone]
