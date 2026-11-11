@@ -71,7 +71,8 @@ export async function proxy(request) {
 
   if (!claims?.sub) return deny(401, "no_session");
 
-  const { data: rows, error } = await supabase.from("user_roles").select("role");
+  // Строго свои роли: админу правило RLS показывает роли всех пользователей
+  const { data: rows, error } = await supabase.from("user_roles").select("role").eq("user_id", claims.sub);
   if (error) {
     const out = isApi ? NextResponse.json({ ok: false, error: MESSAGES[503] }, { status: 503 }) : NextResponse.rewrite(new URL("/denied/403", request.url));
     return withCookies(response, out);

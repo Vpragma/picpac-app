@@ -121,6 +121,12 @@ async function main() {
   const mp = await mod.req("/admin");
   report(ml.status === 200 && m.status === 403 && mp.status === 200, "модератор: журнал закрыт (403), раздел заказов открыт (200)", `вход ${ml.status}, журнал ${m.status}, /admin ${mp.status}`);
 
+  // Админ видит в базе роли всех пользователей — но своими у него должны быть только client и admin
+  const adminMe = await admin.req("/api/v1/me");
+  const adminRoles = (adminMe.json?.roles || []).join("+");
+  const notMod = await admin.req("/api/v1/auth/role", { method: "POST", body: { role: "moderator" } });
+  report(adminRoles === "client+admin" && notMod.status === 403, "у админа ровно свои роли (client+admin), чужую роль moderator выбрать нельзя", `роли: ${adminRoles}, выбор moderator: ${notMod.status}`);
+
   const asClient = await admin.req("/api/v1/auth/role", { method: "POST", body: { role: "client" } });
   const ac = await admin.req(AUDIT);
   report(asClient.status === 200 && ac.status === 403, "админ, переключившийся на роль клиента → журнал", `код ${ac.status}, ожидали 403`);

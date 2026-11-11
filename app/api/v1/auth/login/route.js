@@ -42,7 +42,8 @@ export async function POST(request) {
   }
 
   const user = data.user;
-  const { data: rows, error: rolesError } = await supabase.from("user_roles").select("role");
+  // Строго свои роли: админу правило RLS показывает роли всех пользователей
+  const { data: rows, error: rolesError } = await supabase.from("user_roles").select("role").eq("user_id", user.id);
   if (rolesError) {
     await writeAudit({ userId: user.id, action: "auth.login", objectType: "user", objectId: user.id, result: "error", email, details: { reason: "roles_unavailable" }, ip });
     await supabase.auth.signOut({ scope: "local" });
