@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { useStored, readKey, writeKey } from "../../lib/store";
+import { useStored, readKey, writeKey, notify } from "../../lib/store";
 import { DELIVERY, calcTotals, findPromo } from "../../lib/delivery";
 import { deliveryRange, money } from "../../lib/price";
 import { createOrder } from "../../lib/orders";
@@ -54,6 +54,7 @@ export default function CartPage() {
     if (lock.current) return;
     lock.current = true;
     setBusy(true);
+    try {
     const checkoutKey = readKey("checkoutKey", "k" + Date.now());
     const d = DELIVERY.find((x) => x.id === deliveryId);
     const { order } = createOrder({
@@ -66,6 +67,13 @@ export default function CartPage() {
     writeKey("cart", []);
     writeKey("checkoutKey", null);
     router.push("/orders/" + order.id + "?new=1");
+    } catch (e) {
+      console.error(e);
+      notify("Не получилось оформить заказ. Попробуйте ещё раз.", "error");
+      lock.current = false; // после успеха замок не снимаем: второй заказ не создаётся
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (

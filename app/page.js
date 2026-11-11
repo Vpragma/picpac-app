@@ -11,7 +11,7 @@ function fromPrice(p) {
 }
 
 export default function CatalogPage() {
-  const { data, error, loading } = useCatalog();
+  const { data, error, loading, retry } = useCatalog();
   return (
     <div>
       <h1>Что напечатать?</h1>
@@ -21,7 +21,10 @@ export default function CatalogPage() {
       {error && (
         <div className="card">
           <b className="err-text">Не удалось загрузить каталог.</b>
-          <p className="muted">Проверьте интернет и обновите страницу.</p>
+          <p className="muted">Проверьте интернет и попробуйте ещё раз.</p>
+          <button className="btn btn-primary" onClick={retry}>
+            Повторить
+          </button>
         </div>
       )}
       {data && (

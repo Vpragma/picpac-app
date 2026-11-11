@@ -5,12 +5,22 @@ import Link from "next/link";
 import { useProduct } from "../../../lib/useCatalog";
 import { bookPrice, deliveryRange, money, pagesForPhotos, photoHint } from "../../../lib/price";
 import { startDraft } from "../../../lib/draft";
+import { notify } from "../../../lib/store";
 
 export default function ProductPage() {
   const { slug } = useParams();
-  const { product, loading, error } = useProduct(slug);
+  const { product, loading, error, retry } = useProduct(slug);
   if (loading) return <p className="muted">Загружаем…</p>;
-  if (error) return <p className="err-text">Не удалось загрузить продукт. Проверьте интернет.</p>;
+  if (error)
+    return (
+      <div className="card">
+        <b className="err-text">Не удалось загрузить продукт.</b>
+        <p className="muted">Проверьте интернет и попробуйте ещё раз.</p>
+        <button className="btn btn-primary" onClick={retry}>
+          Повторить
+        </button>
+      </div>
+    );
   if (!product)
     return (
       <div className="card">
@@ -37,13 +47,22 @@ function ProductForm({ product: p }) {
 
   async function create() {
     setBusy(true);
-    await startDraft({ productSlug: p.slug, sizeId, optionId, pages });
-    router.push("/editor");
+    let ok = false;
+    try {
+      await startDraft({ productSlug: p.slug, sizeId, optionId, pages });
+      ok = true;
+    } catch (e) {
+      console.error(e);
+      notify("Не получилось открыть черновик. Попробуйте ещё раз.", "error");
+    } finally {
+      setBusy(false);
+    }
+    if (ok) router.push("/editor");
   }
 
   return (
     <div className="has-sticky">
-      <Link href="/" className="muted small" style={{ textDecoration: "none" }}>
+      <Link href="/" className="back-link">
         ← Каталог
       </Link>
       <h1 style={{ marginTop: 8 }}>

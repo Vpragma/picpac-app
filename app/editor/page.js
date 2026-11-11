@@ -7,6 +7,7 @@ import { useProduct } from "../../lib/useCatalog";
 import { bookPrice, deliveryRange, money, photoHint, printPrice } from "../../lib/price";
 import { runChecks } from "../../lib/checks";
 import { readKey, writeKey, notify } from "../../lib/store";
+import DraftError from "../../components/DraftError";
 import { IconAlert, IconCheck, IconLeft, IconRight, IconTrash, IconUpload } from "../../components/icons";
 
 const STEPS = [
@@ -16,9 +17,11 @@ const STEPS = [
 ];
 
 export default function EditorPage() {
-  const { ready, draft, thumbs } = useDraft();
+  const { ready, error, draft, thumbs } = useDraft();
   const { product, loading } = useProduct(draft?.productSlug);
   const [step, setStep] = useState("photos");
+
+  if (error) return <DraftError />;
 
   if (!ready || (draft && loading)) return <p className="muted">Открываем черновик…</p>;
   if (!draft || !product)
@@ -94,8 +97,9 @@ function useAdder() {
     } catch (e) {
       console.error(e);
       notify("Не удалось добавить фото. Попробуйте ещё раз.", "error");
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   }
   return [busy, add];
 }
@@ -330,9 +334,15 @@ function CheckStep({ draft, thumbs, product, price, goPhotos }) {
     const f = e.target.files?.[0];
     e.target.value = "";
     if (!f || !replaceId) return;
-    await replacePhoto(replaceId, f);
-    notify("Фото заменено", "success");
-    setReplaceId(null);
+    try {
+      await replacePhoto(replaceId, f);
+      notify("Фото заменено", "success");
+    } catch (err) {
+      console.error(err);
+      notify("Не удалось заменить фото. Попробуйте ещё раз.", "error");
+    } finally {
+      setReplaceId(null);
+    }
   }
 
   function addToCart() {

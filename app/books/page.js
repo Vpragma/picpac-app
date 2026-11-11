@@ -1,11 +1,13 @@
 "use client";
 import Link from "next/link";
 import { deleteDraft, useDraft } from "../../lib/draft";
+import DraftError from "../../components/DraftError";
 import { useProduct } from "../../lib/useCatalog";
 
 export default function BooksPage() {
-  const { ready, draft, thumbs } = useDraft();
+  const { ready, error, draft, thumbs } = useDraft();
   const { product } = useProduct(draft?.productSlug);
+  if (error) return <DraftError />;
   if (!ready) return <p className="muted">Загружаем…</p>;
   return (
     <div>

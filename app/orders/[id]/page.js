@@ -26,7 +26,7 @@ export default function OrderPage() {
   const printDays = Math.max(...o.items.map((i) => i.printDays || 3));
   return (
     <div>
-      <Link href="/orders" className="muted small" style={{ textDecoration: "none" }}>
+      <Link href="/orders" className="back-link">
         ← Мои заказы
       </Link>
       {isNew && (
