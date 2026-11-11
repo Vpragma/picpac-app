@@ -64,7 +64,8 @@ test("каталог: ≥ 5 продуктов с размерами, ценам
   }
   assert.equal(r.json.products.find((p) => p.slug === "layflat").price.base, 81);
   assert.ok(r.json.delivery.length >= 5);
-  assert.match(r.headers.get("cache-control") || "", /s-maxage/);
+  // Публичный кэш: локально видно s-maxage, на Vercel CDN забирает s-maxage себе и отдаёт браузеру max-age
+  assert.match(r.headers.get("cache-control") || "", /public.*max-age|s-maxage/);
 });
 
 // ───── Гость: 401 ─────
