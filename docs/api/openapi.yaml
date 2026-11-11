@@ -302,6 +302,35 @@ paths:
         "400": { $ref: "#/components/responses/Invalid" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  /api/v1/checks/ack:
+    post:
+      tags: [Проекты]
+      summary: "«Продолжить всё равно» на шаге «Проверка» — запись осознанного решения в журнал (S02b)"
+      description: "Клиент оставил фото или страницы с предупреждением (размыто, формат, пустые страницы). Гость хранит отметку только в проекте на устройстве. Лимит — 60 отметок в минуту."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [issue]
+              properties:
+                issue: { type: string, maxLength: 80, description: "вид предупреждения: dpi, fmt, big, empty, overflow" }
+                title: { type: string, maxLength: 120 }
+                productSlug: { type: string }
+                projectId: { type: string, maxLength: 64, description: "id проекта на устройстве" }
+            example: { issue: dpi, title: "Может быть нечётко", productSlug: layflat, projectId: "m3x1k2abc" }
+      responses:
+        "200":
+          description: "Записано в журнал (action check.continue_anyway)"
+          content:
+            application/json:
+              example: { ok: true }
+        "400": { $ref: "#/components/responses/Invalid" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooMany" }
+
   /api/v1/promo/validate:
     post:
       tags: [Корзина]
