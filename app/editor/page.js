@@ -30,7 +30,8 @@ import { runChecks } from "../../lib/checks";
 import { notify } from "../../lib/store";
 import { addToCart as putInCart } from "../../lib/cart";
 import { callApi } from "../../lib/api";
-import { whenInitialSync } from "../../lib/sync";
+import { useSyncState, whenInitialSync } from "../../lib/sync";
+import { useOnline } from "../../components/Pwa";
 import DraftError from "../../components/DraftError";
 import { IconAlert, IconCheck, IconLeft, IconRight, IconTrash, IconUpload } from "../../components/icons";
 import { photoBadges } from "../../lib/photo/badges";
@@ -469,6 +470,8 @@ function GalleryPanel({ busy, onAdd }) {
 
 // Сетка фото: на компьютере — перетаскивание (мышь и клавиатура), на телефоне — кнопки «раньше / позже»
 function SortablePhotos({ draft, thumbs, readOnly, lowDpi, dups }) {
+  const sync = useSyncState();
+  const online = useOnline();
   const sensors = useSensors(useSensor(MouseSensor, { activationConstraint: { distance: 4 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
   const ids = draft.photos.map((p) => p.id);
   const pos = (id) => ids.indexOf(id) + 1;
@@ -490,7 +493,16 @@ function SortablePhotos({ draft, thumbs, readOnly, lowDpi, dups }) {
       <SortableContext items={ids} strategy={rectSortingStrategy} disabled={readOnly}>
         <div className="photo-grid">
           {draft.photos.map((p, i) => (
-            <SortablePhoto key={p.id} p={p} i={i} n={draft.photos.length} thumb={thumbs[p.id]} readOnly={readOnly} badges={photoBadges(p, { lowDpi: lowDpi?.has(p.id), duplicate: dups?.has(p.id) })} />
+            <SortablePhoto
+              key={p.id}
+              p={p}
+              i={i}
+              n={draft.photos.length}
+              thumb={thumbs[p.id]}
+              readOnly={readOnly}
+              badges={photoBadges(p, { lowDpi: lowDpi?.has(p.id), duplicate: dups?.has(p.id) })}
+              upload={sync.enabled && p.supported && draft.status !== "ordered" ? (p.serverId ? "done" : online ? "sending" : "waiting") : null}
+            />
           ))}
         </div>
       </SortableContext>
@@ -498,13 +510,21 @@ function SortablePhotos({ draft, thumbs, readOnly, lowDpi, dups }) {
   );
 }
 
-function SortablePhoto({ p, i, n, thumb, readOnly, badges }) {
+// Загрузка фото в аккаунт (X-5, только у вошедшего клиента): «Загружено», «Загружается», «Ждёт сети»
+const UPLOAD_LABELS = { done: "Загружено", sending: "Загружается", waiting: "Ждёт сети" };
+
+function SortablePhoto({ p, i, n, thumb, readOnly, badges, upload }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: p.id, disabled: readOnly });
   const style = { transform: transform ? `translate3d(${Math.round(transform.x)}px, ${Math.round(transform.y)}px, 0)` : undefined, transition };
   return (
     <div ref={setNodeRef} style={style} className={"photo-cell" + (isDragging ? " dragging" : "")} data-photo={p.name}>
       {thumb ? <img src={thumb} alt={p.name} /> : <div className="bad">{p.supported ? "…" : p.tooBig ? "Больше 25 МБ" : "Формат не подходит"}</div>}
       <span className="num">{i + 1}</span>
+      {upload && (
+        <span className={"photo-upload photo-upload-" + upload} data-upload={upload}>
+          {UPLOAD_LABELS[upload]}
+        </span>
+      )}
       {badges?.length > 0 && (
         <span className="pe-badges compact" aria-label={"Фото " + (i + 1) + ": " + badges.map((b) => b.label).join(", ")}>
           {badges.map((b) => (

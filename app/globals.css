@@ -372,3 +372,9 @@ button, input, select { font: inherit; color: inherit; }
 .pwa-install h2 { font-size: 18px; font-weight: 500; margin: 0 0 6px; }
 .pwa-ios-steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
 .pwa-install-note { margin-top: 16px; font-size: 14px; }
+.photo-upload {
+  position: absolute; left: 4px; bottom: 4px; z-index: 2; font-size: 11px; line-height: 1; padding: 4px 6px; border-radius: 999px;
+  background: rgb(255 255 255 / 0.92); color: #2b403d; pointer-events: none;
+}
+.photo-upload-waiting { background: var(--ds-color-warning-bg); color: #8a3f22; border: 1px solid var(--ds-color-warning); }
+.photo-upload-done { color: #1f5c43; }

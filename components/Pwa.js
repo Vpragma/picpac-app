@@ -113,7 +113,22 @@ export default function Pwa() {
       if (wantReload.current) window.location.reload();
     };
     sw.addEventListener("controllerchange", onController);
+    // Регистрируем после загрузки страницы и в простое: предзагрузка оболочки не спорит за сеть с первым показом
     const version = process.env.NEXT_PUBLIC_APP_VERSION || "dev";
+    let idleId = null;
+    const start = () => {
+      idleId = "requestIdleCallback" in window ? window.requestIdleCallback(register, { timeout: 4000 }) : window.setTimeout(register, 1500);
+    };
+    if (document.readyState === "complete") start();
+    else window.addEventListener("load", start, { once: true });
+    return () => {
+      sw.removeEventListener("controllerchange", onController);
+      window.removeEventListener("load", start);
+      if (idleId === null) return;
+      if ("cancelIdleCallback" in window) window.cancelIdleCallback(idleId);
+      else window.clearTimeout(idleId);
+    };
+    function register() {
     sw.register("/sw.js?v=" + encodeURIComponent(version), { scope: "/", updateViaCache: "none" })
       .then((reg) => {
         const track = (w) =>
@@ -134,7 +149,7 @@ export default function Pwa() {
         reg?.active?.postMessage({ type: "CACHE_URLS", urls });
       })
       .catch((e) => console.warn("Сервис-воркер не зарегистрирован:", e?.message || e));
-    return () => sw.removeEventListener("controllerchange", onController);
+    }
   }, []);
 
   const update = () => {
