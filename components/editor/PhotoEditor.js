@@ -28,6 +28,7 @@ import { UPSCALE_MAX_SIDE, stopUpscale, upscaleBlob, upscaleKey } from "../../li
 import { setAutoEnhance, useAutoEnhance } from "../../lib/photo/settings";
 import AiPrefetch, { useAiOffline } from "./AiPrefetch";
 import { notify } from "../../lib/store";
+import { useSyncState } from "../../lib/sync";
 import { track } from "@/lib/analytics";
 
 const PREVIEW_SIDE = 1280;
@@ -231,6 +232,7 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
   const [pendingErase, setPendingErase] = useState(null); // { photoId, opId } — «Убрать», нажатое в этом сеансе
   const aiOk = aiSupport().ok; // выделение касанием на этом устройстве возможно (иначе — честные ответы)
   const offline = useAiOffline(ai.status + ":" + (answer?.say || "")); // модели ИИ уже на устройстве — работает без интернета
+  const account = useSyncState().enabled; // вошедший клиент: проект и фото — в аккаунте (lib/sync.js)
   const fresh = useRef(null); // id открытого фото — для долгих операций (поиск предмета словом)
 
   // Память воркеров ИИ освобождаем, когда редактор закрыт
@@ -666,19 +668,24 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
 
   const badges = photoBadges({ ...photo, edits }, { lowDpi: lowDpiIds?.has(photo.id), duplicate: dupIds?.has(photo.id) });
   const enhanced = hasAuto(edits);
+  // N7: правки по выделению сделаны на другом устройстве — сюда они не приходят (маски не покидают телефон)
+  const localElsewhere = photo.localElsewhere > 0 && !(saved.ops || []).length;
 
   return (
     <div className="pe">
-      {/* N3: ИИ только на устройстве. Честно: в хранилище фото уходят только при сохранении в аккаунт и заказе — для печати */}
-      <div className="pe-note small" role="note" data-local-ai style={{ marginBottom: 8 }}>
-        <b>ИИ работает на вашем телефоне — для правок фото никуда не отправляются.</b>{" "}
+      {/* N3: ИИ только на устройстве. N7: честно, где хранятся сами фото — у вошедшего клиента в аккаунте (сразу после
+          добавления: проект на всех устройствах и готов к печати), у гостя — на устройстве до заказа */}
+      <div className="pe-note small" role="note" data-local-ai data-storage={account ? "account" : "device"} style={{ marginBottom: 8 }}>
+        <b>ИИ работает на вашем телефоне — фото и команды для правок никуда не отправляются.</b>{" "}
         {offline && (
           <span className="ok-text" data-offline-ready>
             Работает без интернета.
           </span>
         )}
         <span className="muted" style={{ display: "block" }}>
-          Команды, стили, поиск предметов, выделение и ластик считаются на этом устройстве. Фото попадают в наше хранилище, только когда вы сохраняете проект в аккаунте или оформляете заказ — для печати.
+          {account
+            ? "Сами фото хранятся в вашем аккаунте PicPac, в нашем защищённом хранилище, — так проект есть на всех ваших устройствах и его можно напечатать. Правки по выделению остаются на этом телефоне."
+            : "Пока вы не вошли, фото остаются на этом устройстве — к нам они попадут только с заказом, для печати."}
         </span>
       </div>
       <p className="muted">Скажите, что изменить, или подвигайте ползунки — оригинал не меняется, всё можно вернуть.</p>
@@ -729,6 +736,12 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
           // Память освобождается при смене фото и при закрытии редактора
           onDone={() => setAi(AI_OFF)}
         />
+
+        {localElsewhere && (
+          <p className="small pe-note" role="note" data-local-elsewhere>
+            Правки по выделению к этому фото остались на устройстве, где их сделали, — они его не покидают. Чтобы напечатать фото с ними, оформите заказ оттуда.
+          </p>
+        )}
 
         {(lowDpiIds?.has(photo.id) || saved.upscale === 2) && (
           <UpscaleCard photo={photo} edits={saved} up={up?.photoId === photo.id ? up : null} readOnly={readOnly} onRun={runUpscale} onCancel={() => stopUpscale()} onRemove={removeUpscale} />
