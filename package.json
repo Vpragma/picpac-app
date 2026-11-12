@@ -53,7 +53,10 @@
     "node": "26.x"
   },
   "overrides": {
-    "@babel/generator": "7.29.13"
+    "@babel/generator": "7.29.13",
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "^11.0.1"
+    }
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",
