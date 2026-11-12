@@ -143,7 +143,7 @@ function ProductForm({ product: p, delivery, serverToday }) {
                   <b>{o.label}</b>
                   <span>
                     {o.note}
-                    {o.priceDeltaKop ? ` · +${formatByn(o.priceDeltaKop)}` : ""}
+                    {o.priceDeltaKop ? ` · +${formatByn(o.priceDeltaKop)}` : " · без доплаты"}
                   </span>
                 </button>
               ))}

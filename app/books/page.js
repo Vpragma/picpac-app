@@ -5,6 +5,8 @@ import { copyProject, deleteProject, openProject, useDraft } from "../../lib/dra
 import DraftError from "../../components/DraftError";
 import { useCatalog } from "../../lib/useCatalog";
 import { notify } from "../../lib/store";
+import { isClient, useMe } from "../../lib/me";
+import { useSyncState } from "../../lib/sync";
 
 const STATUS = {
   draft: { label: "Черновик", chip: "" },
@@ -15,16 +17,29 @@ const STATUS = {
 export default function BooksPage() {
   const { ready, error, projects, thumbs } = useDraft();
   const { data: catalog } = useCatalog();
+  const me = useMe();
+  const sync = useSyncState();
   if (error) return <DraftError />;
   if (!ready) return <p className="muted">Загружаем…</p>;
   const list = Object.values(projects).sort((a, b) => b.updatedAt - a.updatedAt);
   const active = list.filter((p) => p.status !== "ordered");
   const ordered = list.filter((p) => p.status === "ordered");
   const productOf = (p) => catalog?.products.find((x) => x.slug === p.productSlug);
+  // Вошедший клиент: пока не пришёл список проектов аккаунта, «Черновиков пока нет» не показываем
+  const accountLoading = me === null || (isClient(me) && !sync.listLoaded);
   return (
     <div>
       <h1>Мои книги и фото</h1>
-      {active.length === 0 ? (
+      {sync.photosLeft > 0 && (
+        <p className="muted small" role="status" data-testid="photos-loading">
+          Загружаем фото из аккаунта… {sync.photosTotal - sync.photosLeft} из {sync.photosTotal}
+        </p>
+      )}
+      {active.length === 0 && accountLoading ? (
+        <p className="muted" role="status" data-testid="account-loading">
+          Загружаем проекты из аккаунта…
+        </p>
+      ) : active.length === 0 ? (
         <div className="card">
           <p>Черновиков пока нет.</p>
           <p className="muted">Соберите книгу — история семьи, путешествие или просто тёплые дни.</p>

@@ -147,12 +147,12 @@ export default function CartPage() {
     })
       .then(async (res) => ({ status: res.status, ...(await res.json().catch(() => ({}))) }))
       .catch(() => ({ status: 0 }));
-    if (r.ok) {
+    if (r.ok && r.valid !== false) {
       update({ promo: r.promo });
       setPromoInput("");
       setPromoMsg({ ok: true, text: `${r.message}: ${r.promo.code}${r.promo.label ? " — " + r.promo.label : ""}` });
     } else {
-      setPromoMsg({ ok: false, text: r.status === 0 ? "Нет связи с сервером. Попробуйте ещё раз." : r.error?.message || "Не подходит." });
+      setPromoMsg({ ok: false, text: r.status === 0 ? "Нет связи с сервером. Попробуйте ещё раз." : r.message || r.error?.message || "Не подходит." });
     }
   }
 

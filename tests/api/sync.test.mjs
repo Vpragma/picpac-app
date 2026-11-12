@@ -98,8 +98,9 @@ test("промокод: ответ содержит условия кода дл
   assert.equal(b.status, 200, b.text);
   assert.equal(b.json.promo.minTotalKop, 5000);
   const c = await guest.req("/api/v1/promo/validate", { method: "POST", body: { code: "PICPAC5", subtotal: 10 } });
-  assert.equal(c.status, 422);
-  assert.match(c.json.error.message, /^Не подходит/);
+  assert.equal(c.status, 200);
+  assert.equal(c.json.valid, false);
+  assert.match(c.json.message, /^Не подходит/);
 });
 
 test("курьер: без даты и с датой раньше срока → 400 с полем; с верной датой → заказ, дата сохранена", async () => {

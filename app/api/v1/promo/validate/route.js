@@ -5,7 +5,7 @@ import { applyPromo, formatByn } from "@/lib/pricing";
 import { clientIp, writeAudit } from "@/lib/server/audit";
 import { parseBody, rateLimited, tooMany, z } from "@/lib/server/api";
 import { findPromo } from "@/lib/server/catalog";
-import { json, jsonError } from "@/lib/server/http";
+import { json } from "@/lib/server/http";
 import { loadCart } from "@/lib/server/projects";
 import { getAuth } from "@/lib/server/session";
 
@@ -48,9 +48,11 @@ export async function POST(request) {
     details: { reason: result.reason || null, source },
     ip,
   });
-  if (!result.ok) return jsonError(422, CODES[result.reason] || "promo_invalid", result.message);
+  // Неподходящий код — обычный ответ 200 с valid: false (не ошибка запроса): консоль браузера остаётся чистой
+  if (!result.ok) return json({ ok: true, valid: false, code: CODES[result.reason] || "promo_invalid", reason: result.reason, message: result.message });
   return json({
     ok: true,
+    valid: true,
     message: result.message,
     // Условия кода — чтобы экран сразу пересчитывал скидку при изменении корзины (заказ всё равно пересчитает сервер)
     promo: {

@@ -230,18 +230,23 @@ test("корзина: B не может положить проект A (404); A
 test("промокоды: TEST10 применён, неизвестный — «Не подходит», истёкший — «Истёк», мин. сумма PICPAC5", async () => {
   const ok = await A.client.req("/api/v1/promo/validate", { method: "POST", body: { code: "test10" } });
   assert.equal(ok.status, 200);
+  assert.equal(ok.json.valid, true);
   assert.equal(ok.json.message, "Промокод применён");
   assert.equal(ok.json.discountKop, 810);
   const none = await A.client.req("/api/v1/promo/validate", { method: "POST", body: { code: "NOPE42" } });
-  assert.equal(none.status, 422);
-  assert.match(none.json.error.message, /^Не подходит/);
+  // Неподходящий код — 200 и valid: false (консоль браузера без ошибок), текст для экрана в message
+  assert.equal(none.status, 200);
+  assert.equal(none.json.valid, false);
+  assert.match(none.json.message, /^Не подходит/);
   const old = await A.client.req("/api/v1/promo/validate", { method: "POST", body: { code: "OLD2025" } });
-  assert.equal(old.status, 422);
-  assert.equal(old.json.error.code, "promo_expired");
-  assert.match(old.json.error.message, /^Истёк/);
+  assert.equal(old.status, 200);
+  assert.equal(old.json.valid, false);
+  assert.equal(old.json.code, "promo_expired");
+  assert.match(old.json.message, /^Истёк/);
   const low = await guest.req("/api/v1/promo/validate", { method: "POST", body: { code: "PICPAC5", subtotal: 40 } });
-  assert.equal(low.status, 422);
-  assert.equal(low.json.error.code, "promo_min_total");
+  assert.equal(low.status, 200);
+  assert.equal(low.json.valid, false);
+  assert.equal(low.json.code, "promo_min_total");
   const enough = await A.client.req("/api/v1/promo/validate", { method: "POST", body: { code: "PICPAC5" } });
   assert.equal(enough.json.discountKop, 500);
 });

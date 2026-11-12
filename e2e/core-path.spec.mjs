@@ -235,8 +235,13 @@ test("обязательный путь: каталог → проект → 12 
     await page.waitForURL((u) => !u.pathname.startsWith("/login"));
     await page.goto("/books");
     const mineBefore = before.projects.find((p) => p.status === "ordered");
+    // Карточка проекта из аккаунта видна сразу (по метаданным), фото докачиваются в фоне
+    const t0 = Date.now();
+    await expect(page.getByRole("heading", { name: "Заказанные" })).toBeVisible({ timeout: 10_000 });
+    expect(Date.now() - t0).toBeLessThan(10_000);
+    await expect(page.getByTestId("account-loading")).toHaveCount(0);
     await expect
-      .poll(async () => (await localProjects(page)).projects.find((p) => p.serverId === mineBefore.serverId)?.photos.join(","), { timeout: 120_000 })
+      .poll(async () => (await localProjects(page)).projects.find((p) => p.serverId === mineBefore.serverId)?.photos.join(","), { timeout: 15_000 })
       .toBe(mineBefore.photos.join(","));
     await page.goto("/orders");
     await expect(page.locator(`a[data-number="${number}"]`)).toBeVisible();

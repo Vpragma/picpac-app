@@ -13,7 +13,8 @@ const TABS = [
   { href: "/profile", label: "Профиль", icon: IconUser, match: (p) => p.startsWith("/profile") || p.startsWith("/login") || p.startsWith("/admin") },
 ];
 
-function Toasts() {
+// hidden — на экране входа тосты не показываем: они закрывали бы текст «Войдите или зарегистрируйтесь…» на телефоне
+function Toasts({ hidden = false }) {
   const [items, setItems] = useState([]);
   useEffect(() => {
     const on = (e) => {
@@ -26,7 +27,8 @@ function Toasts() {
   }, []);
   return (
     <div className="toasts" role="status" aria-live="polite">
-      {items.map((t) => (
+      {!hidden &&
+        items.map((t) => (
         <div key={t.id} className={"toast toast-" + t.kind}>
           {t.text}
         </div>
@@ -76,7 +78,7 @@ export default function Shell({ children }) {
           );
         })}
       </nav>
-      <Toasts />
+      <Toasts hidden={path.startsWith("/login")} />
     </div>
   );
 }

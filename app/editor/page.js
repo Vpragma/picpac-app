@@ -666,6 +666,18 @@ function CheckStep({ draft, thumbs, product, price, goPhotos, readOnly }) {
       if (me.authenticated && me.activeRole === "client") callApi("/api/v1/checks/ack", { body: { issue: issue.key.split(":")[0], title: issue.title, productSlug: product.slug, projectId: draft.id } });
     });
   };
+  // «Продолжить всё равно для всех» — одно решение по всем открытым предупреждениям, одна запись в журнал
+  const openAckable = open.filter((i) => !i.blocking);
+  const ackAll = () => {
+    if (!openAckable.length) return;
+    const at = Date.now();
+    updateDraft((d) => ({ ...d, acks: { ...(d.acks || {}), ...Object.fromEntries(openAckable.map((i) => [i.key, { at, title: i.title }])) } }));
+    const titles = [...new Set(openAckable.map((i) => i.title))].join(", ");
+    callApi("/api/v1/me", { method: "GET" }).then((me) => {
+      if (me.authenticated && me.activeRole === "client")
+        callApi("/api/v1/checks/ack", { body: { issue: "all", title: `Для всех (${openAckable.length}): ${titles}`.slice(0, 120), productSlug: product.slug, projectId: draft.id } });
+    });
+  };
   const fitPages = (n) => updateDraft((d) => ({ ...d, pages: n, acks: {} }));
 
   async function onReplace(e) {
@@ -743,6 +755,11 @@ function CheckStep({ draft, thumbs, product, price, goPhotos, readOnly }) {
         <p className="muted">
           Нашли моментов: {issues.length}. Исправьте или нажмите «Продолжить всё равно» — решать вам.
         </p>
+      )}
+      {openAckable.length > 1 && !readOnly && (
+        <button className="btn btn-block" style={{ marginBottom: 12 }} onClick={ackAll}>
+          Продолжить всё равно для всех ({openAckable.length})
+        </button>
       )}
       {issues.map((i) => {
         const done = !!acks[i.key];

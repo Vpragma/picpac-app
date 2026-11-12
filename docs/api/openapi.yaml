@@ -344,20 +344,14 @@ paths:
             example: { code: TEST10 }
       responses:
         "200":
-          description: Промокод применён
-          content:
-            application/json:
-              # promo — условия кода (S02c): экран корзины пересчитывает скидку сразу при изменении количества и доставки
-              # по lib/pricing.js; при оформлении заказа сервер считает всё заново
-              example: { ok: true, message: "Промокод применён", promo: { code: TEST10, kind: percent, label: "−10% на заказ", value: 10, minTotalKop: 0, validFrom: null, validTo: null, active: true }, discountKop: 810, freeDelivery: false }
-        "422":
-          description: Не подходит / Истёк / не набрана сумма
+          description: "Ответ 200 и для неподходящего кода (это не ошибка запроса — консоль браузера остаётся чистой). valid true — применён, promo — условия кода для пересчёта на экране; valid false — code promo_not_found | promo_expired | promo_not_started | promo_min_total, текст для экрана в message"
           content:
             application/json:
               examples:
-                notFound: { value: { ok: false, error: { code: promo_not_found, message: "Не подходит: такого промокода нет.", requestId: "…" } } }
-                expired: { value: { ok: false, error: { code: promo_expired, message: "Истёк: срок действия промокода закончился.", requestId: "…" } } }
-                minTotal: { value: { ok: false, error: { code: promo_min_total, message: "Не подходит: промокод действует при заказе от 50,00 руб.", requestId: "…" } } }
+                applied: { value: { ok: true, valid: true, message: "Промокод применён", promo: { code: TEST10, kind: percent, label: "−10% на заказ", value: 10, minTotalKop: 0, validFrom: null, validTo: null, active: true }, discountKop: 810, freeDelivery: false } }
+                notFound: { value: { ok: true, valid: false, code: promo_not_found, reason: not_found, message: "Не подходит: такого промокода нет." } }
+                expired: { value: { ok: true, valid: false, code: promo_expired, reason: expired, message: "Истёк: срок действия промокода закончился." } }
+                minTotal: { value: { ok: true, valid: false, code: promo_min_total, reason: min_total, message: "Не подходит: промокод действует при заказе от 50,00 руб." } }
         "429": { $ref: "#/components/responses/TooMany" }
 
   /api/v1/orders:
