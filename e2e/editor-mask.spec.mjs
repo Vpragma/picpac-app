@@ -6,6 +6,24 @@
 // Пользователь e2e-…@example.com создаётся и удаляется тестом. Консоль без ошибок.
 import { expect, test } from "@playwright/test";
 import { createTestUser, deleteTestUser, supabaseAdmin } from "../tests/helpers/client.mjs";
+import { fileURLToPath } from "node:url";
+import { MIGAN_FILE, ORT_MJS, ORT_WASM, SAM_FILES } from "../lib/photo/modelFiles.js";
+
+// Превью (удалённый BASE_URL) по сети площадки ~1,4 Мбит/с: 57 МБ моделей и wasm качались бы минутами в каждом тесте.
+// Это те же файлы из public/ — на превью подставляем их с диска; сервис-воркер на время теста выключен, чтобы запросы
+// шли через подстановку. Что превью само отдаёт эти файлы, проверяет тест «превью отдаёт модели» в конце файла.
+const BASE = (process.env.BASE_URL || "http://127.0.0.1:3000").replace(/\/$/, "");
+const REMOTE = !/^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(BASE);
+const TYPES = { ".wasm": "application/wasm", ".mjs": "text/javascript", ".js": "text/javascript", ".json": "application/json" };
+if (REMOTE) test.use({ serviceWorkers: "block" });
+test.beforeEach(async ({ context }) => {
+  if (!REMOTE) return;
+  await context.route(/\/(models|ort)\/[^?#]+/, (route) => {
+    const path = decodeURIComponent(new URL(route.request().url()).pathname);
+    const ext = path.slice(path.lastIndexOf("."));
+    return route.fulfill({ path: fileURLToPath(new URL("../public" + path, import.meta.url)), contentType: TYPES[ext] || "application/octet-stream" });
+  });
+});
 
 let admin;
 let user;
@@ -426,3 +444,11 @@ test("fix1: правки фото больше предела — честный
   await expect(page.getByRole("button", { name: "Выделить касанием" })).toBeVisible({ timeout: 30_000 });
 });
 
+// На превью модели подставлены с диска (см. начало файла) — здесь проверяем, что сам сайт их отдаёт
+test("превью отдаёт модели и wasm", async ({ request }) => {
+  test.skip(!REMOTE, "локально модели отдаёт свой сервер в тестах выше");
+  for (const url of [...SAM_FILES.map((f) => f.url), MIGAN_FILE.url, ORT_WASM.url, ORT_MJS]) {
+    const r = await request.head(BASE + url);
+    expect(r.status(), url).toBe(200);
+  }
+});
