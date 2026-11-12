@@ -41,6 +41,9 @@ const nextConfig = {
           { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=(), usb=()" },
           { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+          // N6: наши файлы и ответы API не встраиваются чужими сайтами; Flash/PDF-политики кросс-доменного доступа — нет
+          { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
+          { key: "X-Permitted-Cross-Domain-Policies", value: "none" },
         ],
       },
       // Воркеры (ИИ-редактор, ластик, резкость, печать, анализ фото): у воркера своя политика CSP из ответа на его
