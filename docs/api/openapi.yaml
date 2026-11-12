@@ -16,8 +16,8 @@ info:
     * **Роли**: `client`, `moderator`, `admin`. Права проверяются на сервере в каждом запросе; чужие объекты — `404` (IDOR).
     * **Деньги** — целые копейки (`*Kop`) и валюта `BYN`; для показа дублируются в рублях.
     * **Даты** — ISO 8601 с часовым поясом (UTC); показываются по Минску (`Europe/Minsk`).
-    * **Изменяющие запросы** — только `Content-Type: application/json`; браузерный `Origin` должен совпадать с сайтом (защита от CSRF).
-    * **Лимиты частоты** — `429` с заголовком `Retry-After`.
+    * **Изменяющие запросы** — только `Content-Type: application/json`; браузерный `Origin` (а если его нет — `Referer`) должен совпадать с сайтом (защита от CSRF). Лишние поля в теле → `400 invalid_input`.
+    * **Лимиты частоты** — `429` с заголовком `Retry-After` на всех изменяющих маршрутах (S12: проекты, фото, порядок, корзина, перенос корзины, тестовая оплата, роль, выход, «Удалить мои фото», профиль — по пользователю), на входе и регистрации.
     * Все действия пишутся в журнал (кто, когда, что, над чем, результат).
 servers:
   - url: http://localhost:3000
@@ -288,7 +288,7 @@ paths:
           content:
             application/json:
               example: { ok: true, print: { path: "9b1…/print/7d0…/0f3….jpg", width: 1600, height: 1200, bytes: 325900, at: "2026-11-12T00:47:00Z" } }
-        "400": { description: "invalid_path (чужой путь), unsupported_format (не JPEG), size_mismatch (другой размер кадра), file_too_big" }
+        "400": { description: "invalid_path (чужой путь), unsupported_format (не JPEG), size_mismatch (другой размер кадра), file_too_big, too_many_pixels (кадр больше 100 мегапикселей — файл удаляется)" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { description: "Запрос с другого сайта (bad_origin)" }
         "404": { $ref: "#/components/responses/NotFound" }
