@@ -32,6 +32,7 @@ async function waitReady(url, ms = 60_000) {
 run("lint", "npm", ["run", "lint"]);
 const built = external ? true : run("build", "npm", ["run", "build"]);
 run("test:unit", "npm", ["run", "test:unit"]);
+run("licenses:check", "npm", ["run", "licenses:check"]); // SEC-24: нет GPL/AGPL и пакетов без лицензии
 
 let server = null;
 if (!external && built) {
