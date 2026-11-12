@@ -1,12 +1,16 @@
 openapi: 3.1.0
 info:
   title: PicPac API
-  version: "1.1.0"
+  version: "1.2.0"
   summary: API мобильного приложения PicPac (трек 2 хакатона «Великий камень» × «Фотопринт»)
   description: |
     Все ответы — JSON. Успех: `{ "ok": true, ... }`. Ошибка — единый формат:
     `{ "ok": false, "error": { "code", "message", "requestId", "fields"? } }`, `message` — по-русски и понятно человеку,
-    `requestId` также в заголовке `X-Request-Id`.
+    `requestId` также в заголовке `X-Request-Id`. Так же отвечают и отказы `proxy.js` (401/403/503),
+    неизвестный адрес `/api/…` (`404 not_found`) и неверный метод (`405 method_not_allowed`, заголовок `Allow`).
+
+    * **Строгий ввод** — лишние поля в теле запроса не отбрасываются молча, а дают `400 invalid_input`
+      (все схемы `additionalProperties: false`).
 
     * **Вход** — cookies сессии Supabase (httpOnly), их ставит `POST /api/v1/auth/login`.
     * **Роли**: `client`, `moderator`, `admin`. Права проверяются на сервере в каждом запросе; чужие объекты — `404` (IDOR).

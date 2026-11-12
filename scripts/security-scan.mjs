@@ -10,7 +10,8 @@ const ROOT = new URL("..", import.meta.url).pathname;
 const PATTERNS = [
   ["ключ Supabase sb_secret_", /sb_secret_[A-Za-z0-9_-]{10,}/g],
   ["JWT (eyJhbGci…)", /eyJhbGciOi[A-Za-z0-9_-]{8,}\.([A-Za-z0-9_-]{8,})\.[A-Za-z0-9_-]{8,}/g],
-  ["адрес Postgres с паролем", /postgres(?:ql)?:\/\/[^:\s"'`/]+:[^@\s"'`]{6,}@/g],
+  // Пароль в адресе — только ASCII (настоящие пароли такие); описания вроде «postgres://…:пароль@» в документах не считаются
+  ["адрес Postgres с паролем", /postgres(?:ql)?:\/\/[A-Za-z0-9._%-]+:[A-Za-z0-9._~%!$&*+,;=-]{6,}@/g],
   ["закрытый ключ -----BEGIN", /-----BEGIN [A-Z ]*PRIVATE KEY-----/g],
   ["VAPID_PRIVATE_KEY=значение", /VAPID_PRIVATE_KEY\s*[=:]\s*["']?[A-Za-z0-9_-]{20,}/g],
   ["CLOUDFLARE_API_TOKEN=значение", /CLOUDFLARE_API_TOKEN\s*[=:]\s*["']?[A-Za-z0-9_-]{20,}/g],
