@@ -20,7 +20,11 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const candidates = [process.argv[2], join(here, ".."), join(here, "..", "..", "..", "picpac-app")].filter(Boolean).map((p) => resolve(p));
+// --check — режим проверки (SEC-24): не печатает таблицу, код выхода 1, если у рабочей (не dev) зависимости
+// лицензия GPL/AGPL или лицензия не указана. Вызывается из npm run licenses:check и test:all.
+const CHECK = process.argv.includes("--check");
+const args = process.argv.slice(2).filter((a) => !a.startsWith("--"));
+const candidates = [args[0], join(here, ".."), join(here, "..", "..", "..", "picpac-app")].filter(Boolean).map((p) => resolve(p));
 const root = candidates.find((p) => existsSync(join(p, "package.json"))) || candidates[0];
 
 const readJson = (file) => {
@@ -114,10 +118,13 @@ out.push("");
 out.push(`Всего прямых: ${direct.length}. Вне списка (MIT, Apache-2.0, ISC, BSD, MPL-2.0, OFL): ${flagged.length}${flagged.length ? " — " + flagged.map((r) => `${r.name} (${r.license})`).join(", ") : ""}.`);
 
 // Все установленные пакеты по package-lock.json
+const blocked = [];
+let checked = false;
 const lock = readJson(join(root, "package-lock.json"));
 if (lock?.packages) {
   const counts = new Map();
   const odd = [];
+  checked = true;
   let total = 0;
   for (const [key, p] of Object.entries(lock.packages)) {
     if (!key.startsWith("node_modules/")) continue;
@@ -125,6 +132,8 @@ if (lock?.packages) {
     const name = key.replace(/^.*node_modules\//, "");
     const license = normalize(p) || "не указана";
     counts.set(license, (counts.get(license) || 0) + 1);
+    // Рабочая зависимость с GPL/AGPL (не LGPL) или без лицензии — недопустима
+    if (!p.dev && (/(^|[\s(])A?GPL/i.test(license) || license === "не указана")) blocked.push(`${name}@${p.version || "?"} (${license})`);
     if (!isAllowed(license)) {
       const flags = [p.dev ? "разработка" : "рабочая", p.optional ? "необязательная" : "", p.peer ? "peer" : ""].filter(Boolean).join(", ");
       odd.push({ name, version: p.version || "?", license, flags });
@@ -167,4 +176,16 @@ if (lock?.packages) {
   out.push("`package-lock.json` не найден — сводка по вложенным пакетам не собрана.");
 }
 
+if (CHECK) {
+  if (!checked) {
+    console.error("✖ package-lock.json не найден — проверить лицензии нельзя");
+    process.exit(1);
+  }
+  if (blocked.length) {
+    console.error(`✖ Лицензии: недопустимо для рабочих зависимостей (GPL/AGPL или не указана): ${blocked.join(", ")}`);
+    process.exit(1);
+  }
+  console.log(`✔ Лицензии: рабочих зависимостей с GPL/AGPL или без лицензии нет (прямых: ${direct.length}).`);
+  process.exit(0);
+}
 console.log(out.join("\n"));

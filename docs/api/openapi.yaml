@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: PicPac API
-  version: "1.4.0"
+  version: "1.5.0"
   summary: API мобильного приложения PicPac (трек 2 хакатона «Великий камень» × «Фотопринт»)
   description: |
     Все ответы — JSON. Успех: `{ "ok": true, ... }`. Ошибка — единый формат:
@@ -34,6 +34,10 @@ tags:
   - name: Аккаунт
   - name: Админ
   - name: Статистика
+  - name: ERP (мок)
+  - name: Уведомления
+  - name: Поддержка (оператор)
+  - name: Модерация
   - name: ИИ
 security:
   - session: []
@@ -693,12 +697,96 @@ paths:
   /api/v1/admin/audit:
     get:
       tags: [Админ]
-      summary: Журнал действий (только admin)
-      parameters: [{ name: limit, in: query, schema: { type: integer, maximum: 100 } }]
+      summary: Журнал действий с фильтрами (только admin, SEC-15)
+      description: Без параметров — последние 100 записей. Лишний параметр → 400. Даты — по Минску (UTC+3), `to` включительно. Почту в адресе передавать нельзя — для неё POST.
+      parameters:
+        - { name: action, in: query, description: "действие (order.create) или группа (auth.*)", schema: { type: string, maxLength: 64 } }
+        - { name: result, in: query, schema: { type: string, enum: [success, denied, error] } }
+        - { name: user, in: query, description: "полный uuid или первые 8 знаков", schema: { type: string } }
+        - { name: objectType, in: query, schema: { type: string } }
+        - { name: objectId, in: query, schema: { type: string, maxLength: 200 } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: before, in: query, description: "курсор «Показать ещё» — значение next из прошлого ответа", schema: { type: integer } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
       responses:
-        "200": { description: Записи журнала }
+        "200":
+          description: Записи журнала
+          content:
+            application/json:
+              example: { ok: true, timezone: Europe/Minsk, items: [{ id: 9393, at: "2026-11-12T09:31:37Z", action: auth.login, result: success, user_id: "…", details: { email: "…" } }], next: 9343 }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Админ]
+      summary: Поиск в журнале по почте (почта — только в теле)
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false, required: [email], properties: { email: { type: string, format: email }, before: { type: integer }, limit: { type: integer } } }
+      responses:
+        "200": { description: "Записи с details.email = почта (как GET)" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/admin/cart-reminders:
+    get:
+      tags: [Админ]
+      summary: Задержка напоминания о забытой корзине (только admin)
+      responses:
+        "200": { description: "{ ok, afterMinutes, choices: [5, 60, 1440] }" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Админ]
+      summary: «Отправить напоминания сейчас» — правила расписания (тихие часы, одно на корзину) + пуши по новым важным уведомлениям
+      requestBody: { content: { application/json: { schema: { type: object, additionalProperties: false } } } }
+      responses:
+        "200":
+          description: Итог
+          content: { application/json: { example: { ok: true, due: 1, created: 1, pushed: 1, quiet: 0, afterMin: 1440, source: admin } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { description: Слишком часто }
+    put:
+      tags: [Админ]
+      summary: Задержка напоминания
+      requestBody: { content: { application/json: { schema: { type: object, additionalProperties: false, required: [afterMinutes], properties: { afterMinutes: { type: integer, enum: [5, 60, 1440] } } } } } }
+      responses:
+        "200": { description: "{ ok, afterMinutes }" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/cron/cart-reminders:
+    post:
+      tags: [Расписание]
+      summary: Напоминания о забытой корзине и пуши (pg_cron / pg_net каждые 15 минут)
+      description: "Заголовок Authorization: Bearer <CRON_SECRET>. Без него или с неверным — 401. GET — то же (для Vercel Cron)."
+      responses:
+        "200": { description: "{ ok, due, created, pushed, quiet, afterMin, source: cron }" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/v1/push/subscriptions:
+    post:
+      tags: [Пуши]
+      summary: Сохранить пуш-подписку этого устройства (вошедший пользователь)
+      description: Тело — PushSubscription.toJSON(). Адрес — только push-сервисы (fcm.googleapis.com, *.push.services.mozilla.com, *.notify.windows.com, *.push.apple.com) по https; иначе 400. Подписка привязывается к пользователю и сессии входа; при выходе удаляется.
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false, required: [endpoint, keys], properties: { endpoint: { type: string, format: uri }, expirationTime: { type: [number, "null"] }, keys: { type: object, additionalProperties: false, properties: { p256dh: { type: string }, auth: { type: string } } } } }
+      responses:
+        "200": { description: "{ ok: true }" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Запрос с чужого сайта }
+    delete:
+      tags: [Пуши]
+      summary: Удалить свою подписку (чужую — нельзя, removed = 0)
+      requestBody: { content: { application/json: { schema: { type: object, additionalProperties: false, required: [endpoint], properties: { endpoint: { type: string, format: uri } } } } } }
+      responses:
+        "200": { description: "{ ok: true, removed: 1 }" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
 
   /api/v1/admin/stats:
     get:
@@ -772,6 +860,200 @@ paths:
         "403": { description: Запрос с чужого сайта }
         "429": { description: Слишком часто, заголовок Retry-After }
 
+  /api/v1/erp/events:
+    post:
+      tags: [ERP (мок)]
+      summary: Событие производства от ERP (по секрету, без входа)
+      description: |
+        Заголовок `Authorization: Bearer <ERP_SECRET>`, сравнение в постоянное время. Нет секрета на сервере — `503`.
+        Порядок: `moderation_passed` (из «Модерации») → `print_started` → `printed` → `bound` (можно пропустить) → `packed` →
+        `handed_to_delivery` (→ «Готов / передан в доставку») → `delivered` (→ «Завершён»). Назад и повтор подэтапа — `409`.
+        Идемпотентность по `eventId`: повтор → `200 replayed: true`; тот же `eventId` с другим заказом или типом → `409 idempotency_conflict`.
+        Отказы `409` не сохраняются как события — только в журнале (`erp.event`), их можно повторить с тем же `eventId`.
+      security: [{ erpBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [eventId, type]
+              properties:
+                eventId: { type: string, pattern: "^[A-Za-z0-9_.:-]{8,100}$" }
+                type: { type: string, enum: [moderation_passed, print_started, printed, bound, packed, handed_to_delivery, delivered] }
+                orderNumber: { type: string, example: PP-261112-10056, description: "Ровно одно из orderNumber и orderId" }
+                orderId: { type: string, format: uuid }
+                occurredAt: { type: string, format: date-time }
+                comment: { type: string, maxLength: 200 }
+            example: { eventId: erp-20261112-000123, type: print_started, orderNumber: PP-261112-10056, occurredAt: "2026-11-12T10:15:00+03:00", comment: "Цех 2" }
+      responses:
+        "200":
+          description: Применено (или повтор того же события)
+          content:
+            application/json:
+              example: { ok: true, applied: true, replayed: false, order: { id: "…", number: PP-261112-10056, status: production, statusLabel: Производство, stage: print_started, substatus: Печать, progress: 45 } }
+        "400": { $ref: "#/components/responses/Invalid" }
+        "401":
+          description: Нет или неверный секрет
+          content: { application/json: { example: { ok: false, error: { code: unauthorized, message: "Нужен заголовок Authorization: Bearer <секрет ERP>.", requestId: "…" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: invalid_transition | moderation_pending | idempotency_conflict
+          content: { application/json: { example: { ok: false, error: { code: invalid_transition, message: "Событие «Напечатано» недопустимо: заказ PP-261112-10056 в статусе «Модерация».", requestId: "…", status: moderation } } } }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503":
+          description: ERP_SECRET не задан на сервере
+          content: { application/json: { example: { ok: false, error: { code: erp_not_configured, message: "Приём событий ERP не настроен на сервере (нет ERP_SECRET).", requestId: "…" } } } }
+  /api/v1/notifications:
+    get:
+      tags: [Уведомления]
+      summary: Центр уведомлений клиента (только важное), заодно продвигает мои демо-заказы
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 30 } }
+      responses:
+        "200":
+          description: Список и число непрочитанных
+          content:
+            application/json:
+              example: { ok: true, unread: 1, items: [{ id: "…", kind: order_shipped, title: "Заказ готов и передан в доставку", body: "Заказ PP-… напечатан, упакован и передан в доставку.", link: "/orders/…", orderId: "…", category: orders, read: false, createdAt: "2026-11-12T09:32:00Z" }] }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/notifications/read:
+    post:
+      tags: [Уведомления]
+      summary: Отметить прочитанными — все или по списку (чужие id молча не трогаются)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                all: { type: boolean, enum: [true] }
+                ids: { type: array, maxItems: 100, items: { type: string, format: uuid } }
+            example: { all: true }
+      responses:
+        "200": { description: Готово, content: { application/json: { example: { ok: true, marked: 3, unread: 0 } } } }
+        "400": { $ref: "#/components/responses/Invalid" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/TooMany" }
+  /api/v1/admin/notifications:
+    get:
+      tags: [Админ]
+      summary: Лента сотрудника — админ видит все заказы и обращения, модератор только модерацию
+      responses:
+        "200": { description: Лента, content: { application/json: { example: { ok: true, unread: 2, items: [{ id: 1, kind: order_new, audience: admin, title: "Новый заказ PP-…", body: "Заказ создан", link: "/admin/orders/…", unread: true }] } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Админ]
+      summary: «Прочитать все» (тело — пустой объект)
+      requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: false }, example: {} } } }
+      responses:
+        "200": { description: Готово, content: { application/json: { example: { ok: true, unread: 0 } } } }
+        "400": { $ref: "#/components/responses/Invalid" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooMany" }
+  /api/v1/admin/orders/{id}/status:
+    post:
+      tags: [Админ]
+      summary: Ручная смена статуса (только админ, причина обязательна)
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [status, reason]
+              properties:
+                status: { type: string, enum: [accepted, moderation, production, shipped, done] }
+                reason: { type: string, minLength: 5, maxLength: 300 }
+            example: { status: shipped, reason: "ERP не прислал событие, проверили в цехе" }
+      responses:
+        "200": { description: Статус изменён, content: { application/json: { example: { ok: true, order: { id: "…", number: PP-…, status: shipped, statusLabel: "Готов / передан в доставку", substatus: "Передан в доставку" } } } } }
+        "400":
+          description: Нет причины или она короче 5 символов
+          content: { application/json: { example: { ok: false, error: { code: invalid_input, message: "Проверьте данные: одно из полей — Укажите причину — от 5 символов.", requestId: "…", fields: { reason: "Укажите причину — от 5 символов." } } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Тот же статус (same_status)
+          content: { application/json: { example: { ok: false, error: { code: same_status, message: "Заказ PP-… уже в статусе «Модерация».", requestId: "…" } } } }
+        "429": { $ref: "#/components/responses/TooMany" }
+  /api/v1/admin/interactions/{id}:
+    get:
+      tags: [Поддержка (оператор)]
+      summary: Обращение для оператора (админ) — переписка и маскированные данные клиента
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { description: Обращение, content: { application/json: { example: { ok: true, interaction: { id: "…", topic: "Изменить доставку", status: open }, order: { id: "…", number: PP-…, status: production, client: { name: "Тест Т.", phone: "+375 ••••••• 67", email: "t•••@example.com", address: "Пункт выдачи (скрыт)" } }, messages: [{ id: 1, author: client, body: "…", createdAt: "…" }] } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Поддержка (оператор)]
+      summary: Ответ оператора (клиент получит уведомление «Ответ поддержки»)
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false, required: [body], properties: { body: { type: string, minLength: 2, maxLength: 2000 }, close: { type: boolean } } }
+            example: { body: "Здравствуйте! Заказ уже передан в доставку.", close: false }
+      responses:
+        "201": { description: Ответ отправлен, content: { application/json: { example: { ok: true, status: answered, message: { id: 3, author: operator, body: "…", createdAt: "…" } } } } }
+        "400": { $ref: "#/components/responses/Invalid" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Обращение закрыто
+          content: { application/json: { example: { ok: false, error: { code: interaction_closed, message: "Обращение закрыто — ответить в нём нельзя.", requestId: "…" } } } }
+        "429": { $ref: "#/components/responses/TooMany" }
+  /api/v1/admin/moderation:
+    get:
+      tags: [Модерация]
+      summary: Очередь модерации (модератор и админ) — фото с флагом цензуры, клиент только инициалами
+      responses:
+        "200": { description: Очередь, content: { application/json: { example: { ok: true, items: [{ id: "…", orderId: "…", orderNumber: PP-…, photoIndex: 0, url: "https://…(10 минут)", scores: { porn: 0.81, hentai: 0.02, sexy: 0.1 }, client: { name: "Т. Т.", phone: "+375 ••••••• 21", email: "t•••@example.com" }, createdAt: "…" }] } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/admin/moderation/{id}:
+    post:
+      tags: [Модерация]
+      summary: Решение модератора — «Одобрить» или «Вернуть на замену» (причина из списка обязательна)
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [approve, return] }
+                reason: { type: string, enum: [explicit, violence, personal_data, rights, quality, other] }
+                comment: { type: string, maxLength: 500 }
+            example: { decision: return, reason: quality, comment: "Фото слишком тёмное" }
+      responses:
+        "200": { description: Решение принято, content: { application/json: { example: { ok: true, decision: approved, orderStatus: production, waiting: false } } } }
+        "400":
+          description: Нет причины возврата
+          content: { application/json: { example: { ok: false, error: { code: invalid_input, message: "Проверьте данные: …", requestId: "…", fields: { reason: "Выберите причину возврата." } } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: already_decided | not_in_moderation
+          content: { application/json: { example: { ok: false, error: { code: already_decided, message: "Решение по этому фото уже принято.", requestId: "…" } } } }
+        "429": { $ref: "#/components/responses/TooMany" }
   /api/v1/ai/cloud:
     get:
       tags: [ИИ]
@@ -872,6 +1154,10 @@ paths:
 
 components:
   securitySchemes:
+    erpBearer:
+      type: http
+      scheme: bearer
+      description: Секрет мока ERP (ERP_SECRET), только для POST /api/v1/erp/events
     session:
       type: apiKey
       in: cookie
@@ -896,6 +1182,12 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
           example: { ok: false, error: { code: forbidden, message: "Недостаточно прав для этого действия.", requestId: "…" } }
+    BadRequest:
+      description: Неверные данные или лишнее поле
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { ok: false, error: { code: bad_request, message: "Неверный фильтр журнала.", requestId: "…" } }
     NotFound:
       description: Нет такого объекта или он чужой (не подсказываем, что он существует)
       content:

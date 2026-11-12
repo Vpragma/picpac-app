@@ -89,7 +89,7 @@ function NameEditor({ initial }) {
       <div className="row between">
         <div>
           <div className="muted small">Имя</div>
-          <b style={{ color: "var(--ds-color-text-strong)", fontSize: 20 }}>{name || "Без имени"}</b>
+          <b className="sum-strong">{name || "Без имени"}</b>
         </div>
         <button
           type="button"

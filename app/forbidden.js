@@ -5,6 +5,7 @@ import NextLink from "../components/auth/NextLink";
 export default function Forbidden() {
   return (
     <div className="card stack" style={{ textAlign: "center", marginTop: 24 }}>
+      <title>Нет доступа — PicPac</title>
       <div>
         <span className="chip">Ошибка 403</span>
       </div>

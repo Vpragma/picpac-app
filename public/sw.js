@@ -16,7 +16,7 @@ const PAGES = "picpac-pages-" + VERSION;
 const DATA = "picpac-data-" + VERSION;
 const MODELS = "picpac-models-v1";
 const OFFLINE = "/offline.html";
-const SHELL = ["/", "/books", "/editor", "/cart"];
+const SHELL = ["/", "/books", "/editor", "/cart", "/help"]; // /help — телефон поддержки доступен и без сети
 const SHELL_ASSETS = [OFFLINE, "/manifest.webmanifest", "/logo.svg", "/icon.svg", "/favicon.ico", "/icons/icon-192.png", "/icons/icon-512.png"];
 const NET_TIMEOUT = 4000;
 
@@ -165,4 +165,53 @@ self.addEventListener("fetch", (event) => {
     return;
   }
   if (path === "/manifest.webmanifest" || path === OFFLINE) event.respondWith(staleWhileRevalidate(request, STATIC));
+});
+
+// ---------- Пуши (D5) ----------
+// В пуше нет персональных данных: заголовок, короткий текст, путь своего экрана, тег.
+// Уведомление показываем всегда, даже если данные не разобрались: Safari/iOS отзывает подписку,
+// если пуш пришёл, а уведомления не было.
+function ownPath(u) {
+  try {
+    const x = new URL(u || "/", self.location.origin);
+    return x.origin === self.location.origin ? x.pathname + x.search + x.hash : "/";
+  } catch {
+    return "/";
+  }
+}
+
+self.addEventListener("push", (event) => {
+  let d = {};
+  try {
+    d = event.data ? event.data.json() : {};
+  } catch {
+    d = {};
+  }
+  event.waitUntil(
+    self.registration.showNotification(String(d.title || "PicPac").slice(0, 60), {
+      body: String(d.body || "Есть новости в приложении PicPac").slice(0, 140),
+      icon: "/icons/icon-192.png",
+      badge: "/icons/badge-96.png",
+      tag: d.tag ? String(d.tag).slice(0, 32) : undefined, // одинаковый тег заменяет прошлое уведомление
+      lang: "ru",
+      data: { url: ownPath(d.url) },
+    }),
+  );
+});
+
+// Нажатие на уведомление: открытая вкладка переходит на экран, иначе открываем приложение (deep link)
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = new URL(ownPath(event.notification.data && event.notification.data.url), self.location.origin).href;
+  event.waitUntil(
+    (async () => {
+      const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      for (const w of wins) {
+        if (!w.url.startsWith(self.location.origin)) continue;
+        await w.focus().catch(() => {});
+        if ("navigate" in w && (await w.navigate(target).catch(() => null))) return;
+      }
+      await self.clients.openWindow(target);
+    })(),
+  );
 });

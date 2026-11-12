@@ -492,6 +492,7 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
           return (
             <div role="listitem" key={p.id}>
               <button className={"photo-cell" + (p.id === photo.id ? " selected" : "")} onClick={() => choose(p.id)} aria-pressed={p.id === photo.id} aria-label={`Фото ${i + 1}: ${p.name}${b.length ? " — " + b.map((x) => x.label).join(", ") : ""}`} data-edit-photo={p.name}>
+                {/* eslint-disable-next-line @next/next/no-img-element -- фото клиента с устройства (blob:/data:): next/image их не оптимизирует, оптимизатор Vercel для фото клиентов не используем */}
                 {thumbs[p.id] && <img src={thumbs[p.id]} alt="" />}
                 <Badges list={b} compact />
               </button>

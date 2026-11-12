@@ -99,7 +99,10 @@ function ProjectCard({ p, product, thumbs }) {
       <div className="photo-grid" style={{ gridTemplateColumns: "repeat(6, 1fr)", gap: 4, margin: "12px 0" }}>
         {p.photos.slice(0, 6).map((ph) => (
           <div key={ph.id} className="photo-cell">
-            {thumbs[ph.id] && <img src={thumbs[ph.id]} alt="" />}
+            {thumbs[ph.id] && (
+              // eslint-disable-next-line @next/next/no-img-element -- миниатюра с устройства (blob: из IndexedDB): next/image её не оптимизирует, оптимизатор Vercel для фото клиентов не используем
+              <img src={thumbs[ph.id]} alt="" />
+            )}
           </div>
         ))}
       </div>

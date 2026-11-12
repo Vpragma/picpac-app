@@ -1,23 +1,24 @@
 # Лицензии (ОТ-08)
 
-Все внешние библиотеки, модели, шрифты, фото и данные, которые использует PicPac App, — с лицензиями. Состояние на 12.11.2026 (ветка `night`).
+Все внешние библиотеки, модели, шрифты, фото и данные, которые использует PicPac App, — с лицензиями. Состояние на 12.11.2026 (этап D7, после D1: модели на устройстве).
 
 Главное:
 
 - Библиотеки — MIT, Apache-2.0, ISC, BSD, MPL-2.0 и несколько разрешительных (Unlicense, CC0, Blue Oak, Python-2.0, CC BY 4.0 у данных `caniuse-lite`). **GPL и AGPL нет.** LGPL — только у бинарной библиотеки `libvips` внутри `sharp` (необязательная зависимость Next.js, работает на сервере, в код для браузера не попадает).
-- **Нейросетевые модели сейчас не используются** (подробно — раздел 2 и [ai.md](ai.md)).
+- Модели ИИ на устройстве (с этапа D1): SlimSAM-77 (Apache-2.0), MI-GAN (MIT, код и веса), ESRGAN-slim ×2 из UpscalerJS (MIT), среда onnxruntime-web (MIT). Файлы лежат у нас в `public/models` и `public/ort`, контрольные суммы — в разделе 2. Подробно — раздел 2 и [ai.md](ai.md).
+- Проверка повторяется командой `npm run licenses:check` (входит в `npm run test:all`): код выхода 1, если у рабочей зависимости лицензия GPL/AGPL или лицензия не указана.
 - Шрифт Jost — SIL Open Font License 1.1. Логотип и фирменный стиль — © ООО «Фотопринт», только для прототипа.
 - Тестовые фото — Wikimedia Commons, свободные лицензии; авторы и ссылки — [test-photos/sources.md](test-photos/sources.md).
 - У самого кода прототипа лицензии нет: файла `LICENSE` нет, в `package.json` стоит `"private": true`, репозиторий закрытый. Права на код — по разделу 13 ТЗ, вопрос решается с организаторами.
 
 ## 1. npm-зависимости
 
-Таблица ниже сгенерирована скриптом из `node_modules` — обновить: `node scripts/gen-licenses.mjs` (печатает markdown; скрипт только читает `package.json`, `node_modules/*/package.json` и `package-lock.json`). Знак ⚠️ — лицензия вне списка MIT / Apache-2.0 / ISC / BSD / MPL-2.0 / OFL; пояснения — в разделе 7.
+Таблица ниже сгенерирована скриптом из `node_modules` — обновить: `node scripts/gen-licenses.mjs` (печатает markdown; проверка без таблицы — `npm run licenses:check`; скрипт только читает `package.json`, `node_modules/*/package.json` и `package-lock.json`). Знак ⚠️ — лицензия вне списка MIT / Apache-2.0 / ISC / BSD / MPL-2.0 / OFL; пояснения — в разделе 7.
 
-С этапа D1 `@huggingface/transformers`, `onnxruntime-web`, `@tensorflow/tfjs`, `upscaler` и `@upscalerjs/esrgan-slim` используются в воркерах ИИ-редактора (только по нажатию). Часть пакетов установлена заранее и **в коде пока не импортируется**: `nsfwjs` (модерация), `web-push` (пуши), `idb`, `buffer`, `lucide-react`. Их лицензии тоже перечислены.
+С этапа D1 `@huggingface/transformers`, `onnxruntime-web`, `@tensorflow/tfjs`, `upscaler` и `@upscalerjs/esrgan-slim` используются в воркерах ИИ-редактора (только по нажатию). С этапа D5 `web-push` (MPL-2.0) отправляет пуши на сервере. `nsfwjs` подключает этап D4 (модерация). Часть пакетов установлена заранее и в коде может не импортироваться (`idb`, `buffer`, `lucide-react`) — их лицензии тоже перечислены.
 
 Источник: `package.json` и `node_modules/*/package.json` проекта picpac-app (picpac-app 0.1.0).
-Собрано: 2026-11-12T02:49:37.113Z (скрипт `scripts/gen-licenses.mjs`).
+Собрано: 2026-11-12T09:09:28.858Z (скрипт `scripts/gen-licenses.mjs`).
 
 ### Прямые зависимости
 
@@ -88,9 +89,44 @@
 
 ## 2. Модели ИИ
 
-**Сейчас в приложении нет ни одной нейросетевой модели**: в `public/` нет файлов моделей, облачные модели не вызываются. Анализ фото, автоулучшение, команды и «убери солнце» — обычные алгоритмы в нашем коде (`lib/photo/`).
+Файлы моделей лежат в репозитории (`public/models`, `public/ort`) и отдаются с нашего сайта: Hugging Face и CDN во время работы не нужны. Размеры и SHA-256 ниже посчитаны по файлам ветки (12.11.2026, этап D7) и совпадают с `models-cache/MANIFEST.tsv`, откуда модели скачаны (D1). Источники по папкам — `public/models/README.md`.
 
-Модели на устройстве **подключены с этапа D1** (файлы в `public/models`, источники — `public/models/README.md`): SlimSAM-77 `slimsam-77-uniform-boxes` (Apache-2.0), MI-GAN `migan_pipeline_v2.onnx` (MIT, веса MIT, `public/models/migan/LICENSE.txt`), ESRGAN-slim ×2 из `@upscalerjs/esrgan-slim` (MIT), onnxruntime-web wasm (MIT). Выбраны для следующих этапов: nsfwjs / GantMan `nsfw_model` (MIT), в облаке Cloudflare — `@cf/openai/gpt-oss-120b` (Apache-2.0), `@cf/black-forest-labs/flux-2-klein-4b` (Apache-2.0), `@cf/moondream/moondream3.1-9B-A2B` (Moondream Model License 1.0 — не OSI, с ограничениями; перед использованием перечитать с юристом). Обучающие наборы этих моделей (Places2, SA-1B, DIV2K и другие) юридически не разбирались.
+### На устройстве (работают в браузере, фото никуда не уходят)
+
+| Модель | Источник и ревизия | Лицензия кода | Лицензия весов | Набор обучения | Файл, размер | SHA-256 |
+|---|---|---|---|---|---|---|
+| **SlimSAM-77** — кодировщик (int8), выделение касанием | [Xenova/slimsam-77-uniform](https://huggingface.co/Xenova/slimsam-77-uniform) `5850ab45f587c112167512ffef949107115e26a0`; оригинал — github.com/czg1225/SlimSAM | Apache-2.0 | Apache-2.0 | SA-1B (Meta, у набора свои исследовательские условия) | `slimsam-77-uniform-boxes/onnx/vision_encoder_quantized.onnx`, 8 882 165 Б | `cce23c7b2e5d4f330932738fb67ba518e04b0d99ccdd1cccd22a7da4e01f2971` |
+| **SlimSAM-77** — декодер с рамкой (int8) | [ArAnirudh/slimsam-77-uniform-boxes](https://huggingface.co/ArAnirudh/slimsam-77-uniform-boxes) `6a74f508b2cb129eda9f9519d67574f1ec27429f` | Apache-2.0 | Apache-2.0 | SA-1B | `slimsam-77-uniform-boxes/onnx/prompt_encoder_mask_decoder_quantized.onnx`, 4 751 034 Б | `45f97f705ff14a886f69bda2e7ba0e1016d6bbf7e82dfc3fb40d8c2216be01f1` |
+| **MI-GAN** — ластик | [andraniksargsyan/migan](https://huggingface.co/andraniksargsyan/migan) `406830d0fa60666da0071c342ad2fbc8f30c5c64`; проект Picsart-AI-Research/MI-GAN | MIT, © 2024 Picsart AI Research | MIT (`public/models/migan/LICENSE.txt`, 1 082 Б) | Places2 (свои исследовательские условия) | `migan/migan_pipeline_v2.onnx`, 28 079 181 Б | `6f1f3530a1a2324b19752018ce756088b07973cda8d7d890034ace5c8a48c40b` |
+| **ESRGAN-slim ×2** (UpscalerJS) — «Резкость для печати» | npm `@upscalerjs/esrgan-slim` 1.0.0; архитектура idealo ISR | MIT (пакет); Apache-2.0 (ISR) | MIT (в составе пакета) | DIV2K (свои исследовательские условия) | `upscaler/x2/model.json` 12 336 Б и `group1-shard1of1.bin` 888 300 Б | `8efb488c2caed0196a6163e3f06798f9245e92623ffd50654a26c372e09150ea`, `5cb464ae4d390ce0a771afd5feaf60fbfcdb18ab48a56db98cdf6b88202369de` |
+| **nsfwjs / MobileNetV2** — первичная проверка фото (этап D4) | npm `nsfwjs` 4.3.0; модель GantMan/nsfw_model | MIT | MIT (с оговоркой авторов о материалах третьих сторон) | данные авторов модели | `model.json` 117 928 Б и `group1-shard1of1` 2 619 461 Б (появятся в `public/models` с этапом D4) | `feffc6868d61e412a4e7a22657a3d07a8a48df6e11688a9e25b77c23cb7b45c9`, `8e7dddbb16acacc1bf1601b1b8a761e730ff934b7f2d7771312b2f000e5f5f13` |
+
+Веса всех моделей — MIT или Apache-2.0. У наборов обучения (SA-1B, Places2, DIV2K) свои условия для исследований; на сами веса и их использование они в лицензиях моделей не переносятся, но перед пилотом это стоит проверить с юристом.
+
+### Среда выполнения моделей
+
+| Компонент | Версия | Лицензия | Файлы у нас |
+|---|---|---|---|
+| `onnxruntime-web` (wasm-ядро) | 1.31.1 | MIT | `public/ort/ort-wasm-simd-threaded.wasm` 14 848 852 Б (`4b884c203b0fa48d057be3332c65513ff85aa3c5bddd6946acc0fab7ecda001d`), `.mjs` 24 738 Б (`30ed0b5cd1182ede931fea448afb567d4dc705ec957af09f108a2be5f770dac3`) — копии из пакета |
+| `@huggingface/transformers` | 4.3.2 | Apache-2.0 | код в воркере ИИ-редактора |
+| `@tensorflow/tfjs`, `upscaler` | 4.11.0, 1.0.0 | Apache-2.0, MIT | код в воркере (UpscalerJS) |
+
+### В облаке (Cloudflare Workers AI, только по согласию; этап D6)
+
+Мы эти модели не храним и не запускаем сами. Что им передаётся — в [ai.md](ai.md).
+
+| Модель | Лицензия | Примечание |
+|---|---|---|
+| `@cf/openai/gpt-oss-120b` | Apache-2.0 | разбор свободной фразы в команду |
+| `@cf/black-forest-labs/flux-2-klein-4b` | Apache-2.0 (веса FLUX.2 klein 4B) | старшие версии (klein 9B, dev) — только некоммерческие, их не используем |
+| `@cf/moondream/moondream3.1-9B-A2B` | Moondream Model License 1.0 (не из списка OSI) | коммерческое использование допускается с ограничениями; перед пилотом прочитать с юристом |
+
+### Что сознательно не используем
+
+| Что | Почему |
+|---|---|
+| YOLO (Ultralytics) | AGPL-3.0 |
+| FLUX.2 klein 9B и dev | лицензия только для некоммерческого использования |
 
 ## 3. Шрифт и оформление
 
@@ -122,7 +158,7 @@
 | Каталог, цены, сроки, доставка | справочник super.picpac.by (данные заказчика) | для прототипа |
 | Синтетические клиенты, заказы, обращения, события | наш генератор `scripts/demo-data.mjs` (`npm run seed:synthetic`), детерминированный; строки помечены `is_synthetic` / `is_demo` | свои, без реальных людей: имена собраны из списков, телефоны `+375 (00) …` (несуществующий код), почты `synthetic-…@example.com`. Допущения — в README |
 | Демо-аккаунты жюри | `client@example.com`, `moderator@example.com`, `admin@example.com` (`npm run seed`) | синтетические |
-| Внешние датасеты | не используем | — |
+| Внешние датасеты | напрямую не используем; наборы обучения моделей — в разделе 2 | — |
 
 ## 7. Исключения в таблице npm
 

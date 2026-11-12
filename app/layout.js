@@ -1,7 +1,9 @@
 import { Jost } from "next/font/google";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
+import { getImageProps } from "next/image";
 import "./picpac.css";
 import "./globals.css";
+import "./ux.css";
 import Shell from "../components/Shell";
 
 const jost = Jost({
@@ -53,12 +55,24 @@ export const viewport = {
 
 // Чтение заголовков делает страницы динамическими: каждая получает свой nonce из CSP (proxy.js).
 // Без этого страницы ISR отдавались бы со скриптами без nonce, и строгая CSP их заблокировала бы.
+// Режим «Крупный текст» (D2): cookie pp_text=lg → атрибут на <html> ставит сервер — без мигания и без встроенного скрипта (строгая CSP).
 export default async function RootLayout({ children }) {
   await headers();
+  const largeText = (await cookies()).get("pp_text")?.value === "lg";
+  // Логотип через next/image (getImageProps): на сервере, без клиентского JS; SVG отдаётся как есть
+  const { props: logo } = getImageProps({ src: "/logo.svg", alt: "PicPac", width: 72, height: 40, loading: "eager" });
   return (
-    <html lang="ru" data-theme="picpac" className={jost.variable}>
+    <html lang="ru" data-theme="picpac" data-text={largeText ? "lg" : undefined} className={jost.variable}>
       <body>
-        <Shell>{children}</Shell>
+        <Shell
+          logo={
+            <picture>
+              <img {...logo} alt="PicPac" />
+            </picture>
+          }
+        >
+          {children}
+        </Shell>
       </body>
     </html>
   );
