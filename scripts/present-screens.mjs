@@ -24,6 +24,8 @@ import {
   isLocal,
   loginContext,
   alignAnswer,
+  applyPromo,
+  ensureAutumn,
   makeLog,
   newContext,
   parseArgs,
@@ -142,11 +144,13 @@ async function openScreens(browser, device) {
   try {
     await step("01-glavnaya", device, async () => {
       await page.goto(BASE + "/", { waitUntil: "load", timeout: 90_000 });
+      await ensureAutumn(page, BASE, log);
       await settle(page, 1200);
       await snap(page, "01-glavnaya", device);
     });
     await step("01b-glavnaya-osen", device, async () => {
       // осенний баннер сезона (после первого экрана)
+      if (!(await page.getByTestId("season-banner").count())) await ensureAutumn(page, BASE, log);
       if (!(await page.getByTestId("season-banner").count())) throw new Error("нет баннера сезона (сезон не «Осень»?)");
       await scrollToEl(page, page.getByTestId("season-banner"), device === "phone" ? 64 : 72);
       await settle(page, 900);
@@ -307,9 +311,9 @@ async function orderScreens(browser, device) {
       await page.getByText("Фотокнига Classic").first().waitFor({ timeout: 60_000 });
       await settle(page, 800);
       await snap(page, "12a-korzina", device);
-      await page.getByRole("textbox", { name: "Промокод" }).fill(PROMO);
-      await page.getByRole("button", { name: "Применить", exact: true }).click();
-      await waitText(page.getByTestId("promo-applied"), new RegExp(PROMO, "i"), 30_000);
+      await ensureAutumn(page, AUTH, log);
+      // промокод не применился (сезон так и не вернулся) — заказ и остальные экраны всё равно снимаем
+      if (!(await applyPromo(page, PROMO, AUTH, log))) log(`FAIL 12-korzina-promokod-${device}: ${PROMO} не применился — дальше без промокода`);
       await page.getByLabel("Имя и фамилия").fill("Анна Иванова");
       await page.getByLabel("Телефон").fill("+375 (29) 123-45-67");
       await page.locator('input[name="delivery"]').first().check();
@@ -525,6 +529,51 @@ try {
 } finally {
   await browser.close();
   await cleanupUsers(log);
+}
+
+// Список снимков с подписями — для сборки слайдов
+const TITLES = {
+  "01-glavnaya": "Главная: осенняя плашка с промокодом и первый экран",
+  "01b-glavnaya-osen": "Главная: сезонный баннер «Осень в фотокниге»",
+  "02-katalog": "Каталог: фотокниги и печать фото",
+  "03-produkt": "Продукт: фотокнига Classic, цена и сроки",
+  "04-redaktor-foto": "Редактор: фото из тестовой галереи",
+  "05-redaktor-pravki": "Редактор, «Правки»: плашка «ИИ на телефоне», фото",
+  "06-redaktor-ii-komanda": "ИИ-команда словами: «как в старом кино»",
+  "06b-redaktor-ii-komanda-celikom": "То же: фото, команда и ответ целиком",
+  "07-redaktor-kasanie": "Выделение касанием (модель на устройстве)",
+  "08-redaktor-poisk-slovom": "Поиск предмета словом: «размой собаку»",
+  "08b-redaktor-poisk-slovom-celikom": "То же: фото и ответ целиком",
+  "09-redaktor-foto-ne-uhodyat": "Плашка «ИИ на телефоне — фото никуда не уходят»",
+  "09b-plashka-krupno": "Плашка крупно",
+  "10-prevyu-knigi": "Автомакет: развороты книги",
+  "10b-prevyu-knigi-listat": "Превью книги целиком (N11)",
+  "11-proverka": "Проверка перед заказом: дубль, нечёткое фото, пустые страницы",
+  "12a-korzina": "Корзина",
+  "12-korzina-promokod": "Корзина с промокодом OSEN2026",
+  "12b-korzina-itogo": "Итого со скидкой",
+  "13a-zakaz-oformlen": "«Заказ оформлен»",
+  "13-otkrytka": "Открытка с личным промокодом на следующий заказ",
+  "14a-zakaz": "Страница заказа",
+  "14-zakaz-statusy": "Заказ со статусами (в производстве, симулятор ERP)",
+  "15-podderzhka": "Поддержка: обращение по заказу и ответ",
+  "16-moi-zakazy": "«Мои заказы» с кодом открытки",
+  "17-pomosch": "Помощь",
+  "20-admin-obzor": "Админка: обзор",
+  "21-admin-zakazy-filtry": "Админка: заказы с фильтрами",
+  "22-admin-promokody": "Админка: промокоды и их статистика",
+  "23-admin-sezon": "Админка: сезон оформления",
+  "24-admin-moderatsiya": "Модерация: вывод модели словами, фото размыто",
+  "25-admin-statistika": "Админка: статистика и воронка",
+  "26-admin-zhurnal": "Журнал действий",
+};
+{
+  const lines = [`Снимки PicPac (ночь 2) · ${stamp()} · ${BASE}`, "компьютер 1440×900 @2x, телефон 390×844 @3x, светлая тема, сезон «Осень»", ""];
+  for (const f of fs.readdirSync(OUT).filter((x) => x.endsWith(".png")).sort()) {
+    const key = f.replace(/-(desktop|phone)\.png$/, "");
+    lines.push(`${f} — ${TITLES[key] || ""}`);
+  }
+  fs.writeFileSync(path.join(OUT, "_spisok.txt"), lines.join("\n") + "\n");
 }
 
 const ok = results.filter((r) => r.ok && !r.name.startsWith("_")).length;

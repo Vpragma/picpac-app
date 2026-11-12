@@ -148,6 +148,44 @@ export async function checkSeason(base, log, want = "autumn", maxMs = 90_000) {
   return false;
 }
 
+// Сезон в общей базе могут на время переключить чужие тесты (e2e сезона). Перед экранами, где нужна «Осень»
+// (плашка, баннер, OSEN2026), ждём её до maxMs; страница перезагружается, если показала другой сезон.
+export async function ensureAutumn(page, base, log, maxMs = 180_000) {
+  const ok = await checkSeason(base, () => {}, "autumn", maxMs);
+  if (!ok) log(`ВНИМАНИЕ: сезон не «Осень» дольше ${Math.round(maxMs / 1000)} с — снимаем как есть`);
+  if (page) {
+    const shown = await page.locator("html").getAttribute("data-season").catch(() => null);
+    if (shown && shown !== "autumn") {
+      await page.reload({ waitUntil: "load" }).catch(() => {});
+      await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => {});
+    }
+  }
+  return ok;
+}
+
+// Применить промокод в корзине; при отказе (сезон переключили) — дождаться «Осени» и повторить
+export async function applyPromo(page, code, base, log, { typeDelay = 0 } = {}) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const box = page.getByRole("textbox", { name: "Промокод" });
+    if (await box.isVisible().catch(() => false)) {
+      await box.fill("");
+      if (typeDelay) await box.pressSequentially(code, { delay: typeDelay });
+      else await box.fill(code);
+      await page.getByRole("button", { name: "Применить", exact: true }).click();
+    }
+    const t0 = Date.now();
+    while (Date.now() - t0 < 15_000) {
+      const applied = await page.getByTestId("promo-applied").innerText().catch(() => "");
+      if (new RegExp(code, "i").test(applied)) return true;
+      await new Promise((r) => setTimeout(r, 400));
+    }
+    const msg = await page.getByTestId("promo-msg").innerText().catch(() => "");
+    log(`     промокод ${code} не применился (попытка ${attempt}): ${msg.slice(0, 120)}`);
+    await ensureAutumn(null, base, log, 120_000);
+  }
+  return false;
+}
+
 // ---------- тестовые пользователи night2-mat-… ----------
 
 let admin = null;

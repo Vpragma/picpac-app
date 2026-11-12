@@ -29,7 +29,7 @@ function run(script, extra) {
       for (const line of String(d).split("\n").filter(Boolean)) {
         tail.push(line);
         if (tail.length > 400) tail.shift();
-        if (/\b(FAIL|ИТОГ|ВНИМАНИЕ|видео:|время прогона)\b/.test(line)) log("   " + line.trim());
+        if (/(FAIL|ИТОГ|ВНИМАНИЕ|видео:|время прогона)/.test(line)) log("   " + line.trim());
       }
     };
     child.stdout.on("data", keep);

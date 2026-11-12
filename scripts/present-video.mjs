@@ -14,7 +14,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { chromium } from "@playwright/test";
-import { alignAnswer, cleanupUsers, createUser, isLocal, loginContext, makeLog, newContext, parseArgs, stamp, trimBase } from "./present-common.mjs";
+import { alignAnswer, applyPromo, cleanupUsers, createUser, ensureAutumn, isLocal, loginContext, makeLog, newContext, parseArgs, stamp, trimBase } from "./present-common.mjs";
 
 const args = parseArgs(process.argv.slice(2), { base: "http://127.0.0.1:3000", out: ".night-logs/present-video/demo-video-v2.webm", device: "phone", target: "70", fps: "15", captions: "on" });
 const BASE = trimBase(args.base);
@@ -198,6 +198,7 @@ try {
   const top = DEVICE === "phone" ? 64 : 80;
 
   // 1. Главная «Осень»
+  await ensureAutumn(null, BASE, log);
   await page.goto(BASE + "/", { waitUntil: "load", timeout: 90_000 });
   await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => {});
   await hold(600);
@@ -287,9 +288,7 @@ try {
   await smooth(await yOf(page.locator("#h-promo"), top + 8), 800);
   await cap(`Осенний промокод ${PROMO}`);
   await promo.click();
-  await promo.pressSequentially(PROMO, { delay: 80 });
-  await page.getByRole("button", { name: "Применить", exact: true }).click();
-  await poll(async () => new RegExp(PROMO, "i").test(await page.getByTestId("promo-applied").innerText()), 30_000);
+  if (!(await applyPromo(page, PROMO, BASE, log, { typeDelay: 80 }))) log(`ВНИМАНИЕ: ${PROMO} не применился — в ролике без скидки`);
   await hold(2200);
   await smooth(await yOf(page.getByLabel("Имя и фамилия"), top + 60), 700);
   await cap("Получатель и доставка");
