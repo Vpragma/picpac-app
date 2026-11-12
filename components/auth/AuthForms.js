@@ -42,9 +42,6 @@ export default function AuthForms({ next = "", reason = "", initialMode = "login
           Продолжить как гость
         </Link>
       )}
-      <p className="muted small" style={{ textAlign: "center" }}>
-        Данные для входа жюри — в README проекта.
-      </p>
     </div>
   );
 }
