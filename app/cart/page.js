@@ -13,6 +13,9 @@ import { clearAfterOrder, moveLocalToServer, removeLine, setLineQuantity, useCar
 import { FIELD_LABELS, PICKUP_POINTS, formatPhone, needsDate, validateCheckout } from "../../lib/checkout";
 import { kvDel, kvGet, kvSet, markOrdered, useDraft } from "../../lib/draft";
 import { isClient, useMe } from "../../lib/me";
+// Печатные версии: обычный import (не import()) — без сети на «Подтвердить» кусок кода не догрузится,
+// а нужна понятная ошибка «нет связи». Тяжёлая часть (воркер) грузится только при сборке.
+import { preparePrintVersions } from "../../lib/photo/print";
 import { applyPromo, calcTotals, daysWord, etaFromDay, formatEtaRange, linePrice, minskDate } from "../../lib/pricing";
 import { notify, readKey, useLocalValue } from "../../lib/store";
 import { syncProject, useSyncState } from "../../lib/sync";
@@ -192,7 +195,6 @@ export default function CartPage() {
       for (const l of lines) if (l.localProjectId) await syncProject(l.localProjectId);
       // 2а. Печатные версии изменённых фото: файл полного размера со всеми правками (оригинал не меняется)
       const localIds0 = lines.map((l) => l.localProjectId).filter(Boolean);
-      const { preparePrintVersions } = await import("../../lib/photo/print");
       await preparePrintVersions(localIds0, (p) => setPrinting(p.total ? p : null));
       setPrinting(null);
       // 3. Заказ с ключом идемпотентности
