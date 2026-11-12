@@ -102,7 +102,7 @@ export default function OrderPage() {
       <section className="card">
         <h3>Статус</h3>
         <Timeline order={o} />
-        {o.isDemo && o.status !== "done" && <p className="muted small">Демо-заказ: статус сам переходит дальше примерно каждые 30 секунд после оплаты.</p>}
+        {o.isDemo && o.status !== "done" && <p className="muted small">Демо-заказ: статусы присылает симулятор производства (события ERP), шаг ≈ 30 секунд после оплаты.</p>}
       </section>
 
       <section className="card">
@@ -209,9 +209,24 @@ function Support({ order: o, onCreated }) {
     else notify(r.error?.message || "Не получилось загрузить переписку.", "error");
   }
 
+  // Открытые переписки обновляются вместе с заказом (раз в 10 с): ответ оператора виден без перезагрузки
+  const openIds = Object.keys(threads).filter((k) => threads[k]).join(",");
+  useEffect(() => {
+    if (!openIds) return;
+    let alive = true;
+    for (const tid of openIds.split(",")) {
+      callApi(`/api/v1/interactions/${tid}/messages`, { method: "GET" }).then((r) => {
+        if (alive && r.ok) setThreads((t) => (t[tid] ? { ...t, [tid]: r.messages } : t));
+      });
+    }
+    return () => {
+      alive = false;
+    };
+  }, [o, openIds]);
+
   const list = o.interactions || [];
   return (
-    <section className="card" aria-labelledby="support-title">
+    <section className="card" aria-labelledby="support-title" id="support">
       <h3 id="support-title" className="row">
         <IconChat size={20} /> Обращения по заказу
       </h3>
@@ -231,7 +246,8 @@ function Support({ order: o, onCreated }) {
           {threads[it.id] && (
             <div className="chat">
               {threads[it.id].map((m) => (
-                <div key={m.id} className={"bubble " + (m.author === "client" ? "me" : "bot")}>
+                <div key={m.id} className={"bubble " + (m.author === "client" ? "me" : "bot")} data-author={m.author}>
+                  {m.author === "operator" && <b className="small" style={{ display: "block" }}>Оператор PicPac</b>}
                   {m.body}
                 </div>
               ))}

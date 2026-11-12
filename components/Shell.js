@@ -6,6 +6,7 @@ import { IconBook, IconCart, IconGrid, IconPackage, IconUser } from "./icons";
 import { cartCount, useCart } from "../lib/cart";
 import { startSync } from "../lib/sync";
 import Pwa from "./Pwa";
+import NotificationBell from "./NotificationBell";
 
 const TABS = [
   { href: "/", label: "Каталог", icon: IconGrid, match: (p) => p === "/" || p.startsWith("/product") },
@@ -57,6 +58,8 @@ export default function Shell({ children }) {
         <Link href="/" className="logo" aria-label="PicPac — на главную">
           <img src="/logo.svg" alt="PicPac" width="72" height="40" />
         </Link>
+        <div className="row" style={{ gap: 0 }}>
+        <NotificationBell />
         <Link href="/cart" className="cart-btn" aria-label={"Корзина, позиций: " + count}>
           <IconCart />
           {count > 0 && (
@@ -65,6 +68,7 @@ export default function Shell({ children }) {
             </span>
           )}
         </Link>
+        </div>
       </header>
       <main className="content">{children}</main>
       <nav className="tabbar" aria-label="Главное меню">

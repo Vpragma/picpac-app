@@ -1,10 +1,10 @@
 // GET /api/v1/orders/{id} — мой заказ по id или номеру (PP-ГГММДД-NNNNN):
 // состав с миниатюрами (подписанные ссылки на 10 минут), суммы, получатель, доставка, лента статусов, обращения.
-// Чужой заказ — 404. Демо-заказы при чтении продвигаются по таймеру (lib/server/orderFlow.js).
+// Чужой заказ — 404. Демо-заказы при чтении продвигает симулятор ERP (lib/server/orderFlow.js).
 import { notFound, requireUser, serverError } from "@/lib/server/api";
 import { json } from "@/lib/server/http";
 import { findDelivery, findProduct, loadCatalog } from "@/lib/server/catalog";
-import { advanceDemoOrders, loadItemsForFlags } from "@/lib/server/orderFlow";
+import { advanceDemoOrders } from "@/lib/server/orderFlow";
 import { getOwnOrder, loadOrderFull } from "@/lib/server/orders";
 
 const THUMBS_PER_ITEM = 8;
@@ -20,8 +20,7 @@ export async function GET(request, { params }) {
       return notFound("Заказ");
     }
     if (order.is_demo && order.status !== "done") {
-      const items = await loadItemsForFlags(ctx, [order.id]);
-      if (await advanceDemoOrders(ctx, [order], items)) order = await getOwnOrder(ctx, order.id);
+      if (await advanceDemoOrders(ctx, [order])) order = await getOwnOrder(ctx, order.id);
     }
     const full = await loadOrderFull(ctx, order);
     await addThumbs(ctx, full);
