@@ -118,6 +118,8 @@ a.card { transition: box-shadow var(--ds-duration) var(--ds-ease), transform var
   position: absolute; margin: 0; padding: 6px; background: var(--pp-white); border-radius: 4px; box-shadow: var(--ds-shadow-photo);
 }
 .print picture, .print img { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: 2px; }
+/* N5: пока фото грузится — подложка цвета поверхности (токен), а не белый прямоугольник «бумаги» */
+.print picture { background: var(--ds-color-bg-muted); }
 .print-a { left: 4%; top: 6%; width: 58%; aspect-ratio: 4 / 3; z-index: 2; }
 .print-b { right: 2%; top: 0; width: 38%; aspect-ratio: 3 / 4; z-index: 1; }
 .print-c { right: 6%; bottom: 2%; width: 46%; aspect-ratio: 3 / 2; z-index: 3; }

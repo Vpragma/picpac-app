@@ -9,7 +9,7 @@ import { AiBlock, HomeHero, HowItWorks, Trust } from "@/components/home/HomeSect
 import { PRODUCT_PHOTOS } from "@/lib/productPhotos";
 
 // Обложки карточек — фото продуктов, собранные на сервере (getImageProps + <picture>): JS главной не растёт.
-// Все лениво: приоритет на главной — у первого фото коллажа (LCP).
+// Приоритет на главной — у первого фото коллажа; обложки — ниже первого экрана (две первые — сразу, остальные лениво).
 const COVER_SIZES = "(min-width: 1440px) 22rem, (min-width: 1024px) 30vw, (min-width: 768px) 45vw, 100vw";
 
 export const revalidate = 60;
@@ -22,8 +22,9 @@ export default async function HomePage() {
     // База недоступна — экран сам запросит каталог через API и покажет «Повторить»
     console.error(e?.message);
   }
+  // N5: обложки двух первых карточек — без ленивой загрузки (видны сразу при переходе к каталогу), остальные — лениво
   const covers = Object.fromEntries(
-    Object.entries(PRODUCT_PHOTOS).map(([slug, photos]) => [slug, <ProductPhoto key={slug} photo={photos[0]} alt="" sizes={COVER_SIZES} />]),
+    Object.entries(PRODUCT_PHOTOS).map(([slug, photos], i) => [slug, <ProductPhoto key={slug} photo={photos[0]} alt="" sizes={COVER_SIZES} early={i < 2} />]),
   );
   return (
     <>

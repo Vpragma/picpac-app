@@ -47,6 +47,8 @@ PWA для заказа фотокниг и печати фото в фирме�
 
 Next.js 16 и React 19 (JavaScript), Supabase (Postgres, RLS, Auth, Storage), `zod`, `@dnd-kit`, свой Service Worker (PWA, офлайн, пуши), `web-push`; ИИ в Web Worker — `@huggingface/transformers`, `@huggingface/tokenizers`, `onnxruntime-web`, `upscaler`, `@tensorflow/tfjs`; модерация — классификатор обнажённости Marqo ViT-tiny и CLIP ViT-B/32 (`onnxruntime-web` на устройстве и на сервере, `sharp`); pg_cron; тесты — Playwright, `node:test`, axe-core. Хостинг — Vercel. Шрифт Jost, стиль super.picpac.by.
 
+**Скорость (N5):** фото — AVIF/WebP с размерами, приоритет только у фото первого экрана; шрифт Jost с нашего сайта (латиница + кириллица, preload, `swap`); ИИ, модерация и перетаскивание фото — только в воркерах и отдельными кусками кода по требованию; веса моделей кэшируются на год (`immutable`); сервис-воркер открывает оболочку при повторном входе сразу из кэша и обновляет её в фоне. Бюджет JS страниц — `npm run perf:budget` (нужен запущенный сервер); замеры «было → стало» — [docs/test-report.md](docs/test-report.md) (раздел N5).
+
 **Оформление (N1):** фирменный стиль PicPac — шрифт Jost с нашего домена, токены в `app/picpac.css`, компоненты в `app/brand.css` ([docs/design-system.md](docs/design-system.md)); светлая тема по умолчанию у всех, тёмная и «как в системе» — в профиле.
 
 ## 7. Запуск за 15 минут

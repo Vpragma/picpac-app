@@ -3,9 +3,11 @@
 import { getImageProps } from "next/image";
 import { preload } from "react-dom";
 
-// eager — фото первого экрана (главное фото продукта, LCP): грузится сразу и с высоким приоритетом (N5); остальные — лениво
-export default function ProductPhoto({ photo, alt = photo.alt, sizes, eager = false, className }) {
-  const { props } = getImageProps({ src: photo.src, alt, sizes, quality: 75, loading: eager ? "eager" : "lazy", fetchPriority: eager ? "high" : undefined });
+// eager — фото первого экрана (главное фото продукта, LCP): грузится сразу и с высоким приоритетом (N5);
+// early — грузится сразу, приоритет решает браузер (первые карточки каталога: на телефоне они чуть ниже первого экрана,
+// а при переходе к #catalog — на виду); остальные — лениво
+export default function ProductPhoto({ photo, alt = photo.alt, sizes, eager = false, early = false, className }) {
+  const { props } = getImageProps({ src: photo.src, alt, sizes, quality: 75, loading: eager || early ? "eager" : "lazy", fetchPriority: eager ? "high" : undefined });
   // Ссылка <link rel=preload> в <head>: браузер начинает качать фото сразу, не дожидаясь разбора разметки до <img>
   if (eager) preload(props.src, { as: "image", imageSrcSet: props.srcSet, imageSizes: props.sizes, fetchPriority: "high" });
   const blur = photo.src.blurDataURL;
