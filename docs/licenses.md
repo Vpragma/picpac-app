@@ -5,7 +5,7 @@
 Главное:
 
 - Библиотеки — MIT, Apache-2.0, ISC, BSD, MPL-2.0 и несколько разрешительных (Unlicense, CC0, Blue Oak, Python-2.0, CC BY 4.0 у данных `caniuse-lite`). **GPL и AGPL нет.** LGPL — только у бинарной библиотеки `libvips` внутри `sharp` (необязательная зависимость Next.js, работает на сервере, в код для браузера не попадает).
-- Модели ИИ на устройстве: SlimSAM-77 (Apache-2.0), MI-GAN (MIT, код и веса), ESRGAN-slim ×2 из UpscalerJS (MIT), среда onnxruntime-web (MIT). Файлы лежат у нас в `public/models` и `public/ort`, контрольные суммы — в разделе 2. Подробно — раздел 2 и [ai.md](ai.md).
+- Модели ИИ на устройстве: SlimSAM-77 (Apache-2.0), MI-GAN (MIT, код и веса), ESRGAN-slim ×2 из UpscalerJS (MIT), среда onnxruntime-web (MIT). Модерация (N4): Marqo nsfw-image-detection-384 (Apache-2.0) и CLIP ViT-B/32 (MIT) — на устройстве и на нашем сервере. Файлы лежат у нас в `public/models` и `public/ort`, контрольные суммы — в разделе 2. Подробно — раздел 2 и [ai.md](ai.md).
 - Проверка повторяется командой `npm run licenses:check` (входит в `npm run test:all`): код выхода 1, если у рабочей зависимости лицензия GPL/AGPL или лицензия не указана.
 - Шрифт Jost — SIL Open Font License 1.1. Логотип и фирменный стиль — © ООО «Фотопринт», только для прототипа.
 - Тестовые фото — Wikimedia Commons, свободные лицензии; авторы и ссылки — [test-photos/sources.md](test-photos/sources.md).
@@ -17,7 +17,7 @@
 
 Таблица ниже сгенерирована скриптом из `node_modules` — обновить: `node scripts/gen-licenses.mjs` (печатает markdown; проверка без таблицы — `npm run licenses:check`; скрипт только читает `package.json`, `node_modules/*/package.json` и `package-lock.json`). Знак ⚠️ — лицензия вне списка MIT / Apache-2.0 / ISC / BSD / MPL-2.0 / OFL; пояснения — в разделе 7.
 
-`@huggingface/transformers`, `onnxruntime-web`, `@tensorflow/tfjs`, `upscaler` и `@upscalerjs/esrgan-slim` используются в воркерах ИИ-редактора (только по нажатию). `web-push` (MPL-2.0) отправляет пуши на сервере. `nsfwjs` проверяет фото на устройстве в воркере (W-15, модерация). Часть пакетов установлена заранее и в коде может не импортироваться (`idb`, `buffer`, `lucide-react`) — их лицензии тоже перечислены.
+`@huggingface/transformers`, `onnxruntime-web`, `@tensorflow/tfjs`, `upscaler` и `@upscalerjs/esrgan-slim` используются в воркерах ИИ-редактора (только по нажатию). `web-push` (MPL-2.0) отправляет пуши на сервере. `nsfwjs` больше не используется (модерацию с N4 делают модели из раздела 2), пакет пока установлен. `sharp` уменьшает фото для проверки модерации на сервере (N4). Часть пакетов установлена заранее и в коде может не импортироваться (`idb`, `buffer`, `lucide-react`) — их лицензии тоже перечислены.
 
 Источник: `package.json` и `node_modules/*/package.json` проекта picpac-app (picpac-app 0.1.0).
 Собрано: 2026-11-12T09:09:28.858Z (скрипт `scripts/gen-licenses.mjs`).
@@ -102,7 +102,21 @@
 | **SlimSAM-77** — декодер с рамкой (int8) | [ArAnirudh/slimsam-77-uniform-boxes](https://huggingface.co/ArAnirudh/slimsam-77-uniform-boxes) `6a74f508b2cb129eda9f9519d67574f1ec27429f` | Apache-2.0 | Apache-2.0 | SA-1B | `slimsam-77-uniform-boxes/onnx/prompt_encoder_mask_decoder_quantized.onnx`, 4 751 034 Б | `45f97f705ff14a886f69bda2e7ba0e1016d6bbf7e82dfc3fb40d8c2216be01f1` |
 | **MI-GAN** — ластик | [andraniksargsyan/migan](https://huggingface.co/andraniksargsyan/migan) `406830d0fa60666da0071c342ad2fbc8f30c5c64`; проект Picsart-AI-Research/MI-GAN | MIT, © 2024 Picsart AI Research | MIT (`public/models/migan/LICENSE.txt`, 1 082 Б) | Places2 (свои исследовательские условия) | `migan/migan_pipeline_v2.onnx`, 28 079 181 Б | `6f1f3530a1a2324b19752018ce756088b07973cda8d7d890034ace5c8a48c40b` |
 | **ESRGAN-slim ×2** (UpscalerJS) — «Резкость для печати» | npm `@upscalerjs/esrgan-slim` 1.0.0; архитектура idealo ISR | MIT (пакет); Apache-2.0 (ISR) | MIT (в составе пакета) | DIV2K (свои исследовательские условия) | `upscaler/x2/model.json` 12 336 Б и `group1-shard1of1.bin` 888 300 Б | `8efb488c2caed0196a6163e3f06798f9245e92623ffd50654a26c372e09150ea`, `5cb464ae4d390ce0a771afd5feaf60fbfcdb18ab48a56db98cdf6b88202369de` |
-| **nsfwjs / MobileNetV2** — первичная проверка фото для модерации (W-15) | npm `nsfwjs` 4.3.0; модель GantMan/nsfw_model | MIT | MIT (с оговоркой авторов о материалах третьих сторон) | данные авторов модели | `model.json` 117 928 Б и `group1-shard1of1` 2 619 461 Б (в `public/models/nsfw/`) | `feffc6868d61e412a4e7a22657a3d07a8a48df6e11688a9e25b77c23cb7b45c9`, `8e7dddbb16acacc1bf1601b1b8a761e730ff934b7f2d7771312b2f000e5f5f13` |
+| **nsfwjs / MobileNetV2** — прежняя проверка фото для модерации (W-15; с N4 не используется, файлы оставлены) | npm `nsfwjs` 4.3.0; модель GantMan/nsfw_model | MIT | MIT (с оговоркой авторов о материалах третьих сторон) | данные авторов модели | `model.json` 117 928 Б и `group1-shard1of1` 2 619 461 Б (в `public/models/nsfw/`) | `feffc6868d61e412a4e7a22657a3d07a8a48df6e11688a9e25b77c23cb7b45c9`, `8e7dddbb16acacc1bf1601b1b8a761e730ff934b7f2d7771312b2f000e5f5f13` |
+
+### Модерация (N4): на устройстве при загрузке и повторно на нашем сервере перед заказом
+
+Обе модели лежат в `public/models/moderation` (лицензии и NOTICE — там же), на сервере запускаются через `onnxruntime-web` (wasm) в функции Vercel — без сторонних сервисов. Скачаны 12.11.2026 в `models-cache/n4/`, SHA-256 сверены с Hugging Face (LFS).
+
+| Модель | Источник и ревизия | Лицензия кода | Лицензия весов | Набор обучения | Файл, размер | SHA-256 |
+|---|---|---|---|---|---|---|
+| **Marqo nsfw-image-detection-384** (ViT-tiny, 2 класса: nsfw / safe) — обнажённость | [Marqo/nsfw-image-detection-384](https://huggingface.co/Marqo/nsfw-image-detection-384); ONNX — [KanariKanaru/nsfw-image-detection-384-onnx](https://huggingface.co/KanariKanaru/nsfw-image-detection-384-onnx) (конвертация из ревизии `dcbee2f0570c16c3212bc6b81bb8911194b9fa62`, сверка логитов 7·10⁻⁷) | Apache-2.0 (timm) | Apache-2.0 (`public/models/moderation/LICENSE-nsfw-384.txt`, `NOTICE-nsfw-384.md`) | закрытый набор Marqo, 220 тыс. фото | `moderation/nsfw-384.onnx`, 22 450 633 Б | `e9350e576608afe4b57a089ffeb0ebafa1389cdcea4882dd61df28c45f1c24d2` |
+| **CLIP ViT-B/32** — визуальный энкодер int8, нулевой выстрел: символика, оружие, кровь, наркотики | [openai/clip-vit-base-patch32](https://huggingface.co/openai/clip-vit-base-patch32); ONNX — [Xenova/clip-vit-base-patch32](https://huggingface.co/Xenova/clip-vit-base-patch32) `onnx/vision_model_quantized.onnx` | MIT | MIT (`public/models/moderation/LICENSE-clip.txt`) | 400 млн пар «картинка — текст» OpenAI | `moderation/clip-vision-b32-int8.onnx`, 89 117 001 Б | `583fd1110a514667812fee7d684952aaf82a99b959760c8d7dca7e0ab9839299` |
+| Текстовые эмбеддинги 39 классов (наши, из текстовой модели CLIP fp32 — она в репозиторий не входит) | `scripts/moderation-embed.mjs` | MIT (CLIP) | — | — | `moderation/clip-text.json`, ≈ 165 КБ | — |
+
+Оговорка: карточка модели OpenAI CLIP называет её исследовательской и советует проверять под свою задачу. Мы проверили на своём наборе (docs/ai.md, раздел «Модерация»), и решение всегда принимает модератор — модель только помечает фото.
+
+NudeNet (YOLOv8, AGPL-3.0) и YOLO-детекторы не используются — лицензии запрещены правилами проекта.
 
 Веса всех моделей — MIT или Apache-2.0. У наборов обучения (SA-1B, Places2, DIV2K) свои условия для исследований; на сами веса и их использование они в лицензиях моделей не переносятся, но перед пилотом это стоит проверить с юристом.
 

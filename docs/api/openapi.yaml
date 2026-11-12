@@ -206,7 +206,7 @@ paths:
                 path: { type: string }
                 edits: { type: object }
                 quality: { type: object }
-                nsfw: { type: object, description: "Вероятности nsfwjs (porn, hentai, sexy, …). Флаг модерации: porn+hentai > 0,7 или sexy > 0,85" }
+                nsfw: { $ref: "#/components/schemas/DeviceScores" }
       responses:
         "409":
           description: Проект уже в заказе (project_ordered) — фото добавить нельзя
@@ -306,6 +306,20 @@ paths:
     parameters:
       - { $ref: "#/components/parameters/Id" }
       - { name: photoId, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      tags: [Фото]
+      summary: Оценки проверки на устройстве для уже загруженного фото (досланные после загрузки)
+      description: Флаг «проверит модератор» только ставится — снять его оценками с устройства нельзя (N4). Повторную проверку делает сервер.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false, required: [nsfw], properties: { nsfw: { $ref: "#/components/schemas/DeviceScores" } } }
+      responses:
+        "200": { description: Оценки сохранены, content: { application/json: { schema: { type: object, properties: { ok: { const: true }, photo: { $ref: "#/components/schemas/Photo" } } } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: "Фото уже в заказе (project_ordered)" }
+        "429": { $ref: "#/components/responses/TooMany" }
     delete:
       tags: [Фото]
       summary: Удалить фото и файл в хранилище
@@ -1052,12 +1066,30 @@ paths:
           description: Обращение закрыто
           content: { application/json: { example: { ok: false, error: { code: interaction_closed, message: "Обращение закрыто — ответить в нём нельзя.", requestId: "…" } } } }
         "429": { $ref: "#/components/responses/TooMany" }
+  /api/v1/moderation/health:
+    get:
+      tags: [Модерация]
+      summary: Работает ли проверка фото на сервере (без входа)
+      description: |
+        N4: обе модели модерации (классификатор обнажённости и CLIP) прогоняются на серой картинке 64×64, созданной сервером,
+        без фото и данных пользователей. Ответ кэшируется в экземпляре на 5 минут; не чаще 6 запросов в минуту с адреса.
+      security: []
+      responses:
+        "200": { description: Работает, content: { application/json: { example: { ok: true, engine: "onnxruntime-web (wasm) + sharp", models: ["nsfw-image-detection-384 (ViT-tiny)", "clip-vit-base-patch32 int8"], version: 2, sampleFlagged: false, ms: { load: 1376, check: 1175 } } } } }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503": { description: Модели не загрузились — заказы с непроверенными фото уходят модератору, content: { application/json: { example: { ok: false, error: { code: moderation_unavailable, message: "Проверка фото на сервере сейчас недоступна: заказы с непроверенными фото уходят модератору.", requestId: "…" } } } } }
   /api/v1/admin/moderation:
     get:
       tags: [Модерация]
       summary: Очередь модерации (модератор и админ) — фото с флагом цензуры, клиент только инициалами
+      description: |
+        N4: вывод модели — словами, без процентов и сырых оценок. Сначала проверка нашего сервера (`source: server`),
+        иначе оценки с устройства клиента (`source: device`). `stats` — сколько ждёт, среднее время проверки за 7 дней
+        (минуты), решений за 7 дней и за сутки. `?view=history` — последние 30 решений (без фото и без данных клиента).
+      parameters:
+        - { name: view, in: query, required: false, schema: { type: string, enum: [history] }, description: "history — история решений" }
       responses:
-        "200": { description: Очередь, content: { application/json: { example: { ok: true, items: [{ id: "…", orderId: "…", orderNumber: PP-…, photoIndex: 0, url: "https://…(10 минут)", scores: { porn: 0.81, hentai: 0.02, sexy: 0.1 }, client: { name: "Т. Т.", phone: "+375 ••••••• 21", email: "t•••@example.com" }, createdAt: "…" }] } } } }
+        "200": { description: Очередь или история, content: { application/json: { example: { ok: true, items: [{ id: "…", orderId: "…", orderNumber: PP-…, photoIndex: 0, url: "https://…(10 минут)", source: server, findings: [{ id: nazi, level: high, text: "Найдено: нацистская символика (высокая уверенность)" }], client: { name: "Т. Т.", phone: "+375 ••••••• 21", email: "t•••@example.com" }, createdAt: "…" }], stats: { pending: 1, avgMinutes: 4.5, decided7d: 12, decided24h: 3 } } } } }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
   /api/v1/admin/moderation/{id}:
@@ -1319,7 +1351,39 @@ components:
         width: { type: integer }
         height: { type: integer }
         position: { type: integer }
-        moderationFlag: { type: boolean }
+        moderationFlag: { type: boolean, description: "Фото проверит модератор. Оценки моделей клиенту не отдаются (N4)" }
+    DeviceScores:
+      description: |
+        Оценки проверки фото на устройстве (числа 0…1). N4 (v 2): nsfw — классификатор обнажённости, breast / nude / sex /
+        nazi / weapon / blood / drugs — категории CLIP, art / plain — статуя или картина / пустой кадр; demo: 1 — пометка
+        для показа модерации. Старый формат nsfwjs (porn, hentai, sexy, neutral, drawing) тоже принимается.
+        Флаг «проверит модератор» ставит сервер (lib/moderation.js), а перед заказом сервер проверяет файл сам.
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [v]
+          properties:
+            v: { const: 2 }
+            nsfw: { type: number, minimum: 0, maximum: 1 }
+            breast: { type: number, minimum: 0, maximum: 1 }
+            nude: { type: number, minimum: 0, maximum: 1 }
+            sex: { type: number, minimum: 0, maximum: 1 }
+            nazi: { type: number, minimum: 0, maximum: 1 }
+            weapon: { type: number, minimum: 0, maximum: 1 }
+            blood: { type: number, minimum: 0, maximum: 1 }
+            drugs: { type: number, minimum: 0, maximum: 1 }
+            art: { type: number, minimum: 0, maximum: 1 }
+            plain: { type: number, minimum: 0, maximum: 1 }
+            demo: { const: 1 }
+        - type: object
+          additionalProperties: false
+          required: [porn, hentai, sexy]
+          properties:
+            porn: { type: number, minimum: 0, maximum: 1 }
+            hentai: { type: number, minimum: 0, maximum: 1 }
+            sexy: { type: number, minimum: 0, maximum: 1 }
+            neutral: { type: number, minimum: 0, maximum: 1 }
+            drawing: { type: number, minimum: 0, maximum: 1 }
     CartItems:
       type: object
       required: [items]
