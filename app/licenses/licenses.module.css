@@ -1,0 +1,25 @@
+/* «Лицензии и авторы»: только токены --ds-*, шрифт берётся из body (Jost) */
+.section { scroll-margin-top: calc(var(--topbar-h, 56px) + 12px); }
+.section h2 { margin-top: 0; }
+
+.list { list-style: none; margin: 0; padding: 0; }
+.list > li { padding: 12px 0; border-top: 1px solid var(--ds-color-border); overflow-wrap: anywhere; }
+.list > li:first-child { border-top: 0; padding-top: 4px; }
+.list > li:last-child { padding-bottom: 0; }
+
+.name { margin: 0; font-weight: 500; color: var(--ds-color-text-strong); }
+.meta { margin: 4px 0 0; color: var(--ds-color-text-secondary); font-size: 0.875rem; }
+
+.links { display: flex; flex-wrap: wrap; gap: 0 16px; margin-top: 2px; font-size: 0.875rem; }
+.links a { display: inline-flex; align-items: center; min-height: 32px; }
+
+.photo { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 12px; align-items: start; }
+.thumb {
+  display: block;
+  width: 76px;
+  height: 76px;
+  object-fit: cover;
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-color-bg-muted);
+}
+.changed { margin: 4px 0 0; font-size: 0.875rem; color: var(--ds-color-text-strong); }
