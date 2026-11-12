@@ -13,6 +13,10 @@ import { targetToEnglish } from "@/lib/cloudAi/shared";
 export const maxDuration = 60;
 
 const MAX_IMAGE_BYTES = 1_000_000;
+
+// Если модель поиска вернула пустой ответ — 10 минут сразу отвечаем «недоступно» (на этом экземпляре сервера)
+let detectDownUntil = 0;
+const detectUnavailable = () => jsonError(503, "ai_detect_unavailable", "Поиск предмета по слову сейчас недоступен. Коснитесь того, что нужно, — я выделю.");
 const schema = z.strictObject({
   image: z.string().min(100, "Нет кадра.").max(1_400_000, "Кадр слишком большой."),
   target: z.string().trim().min(1, "Напишите, что найти.").max(60, "Слишком длинное название — до 60 символов."),
@@ -31,6 +35,7 @@ export async function POST(request) {
   if (!jpeg) return jsonError(400, "invalid_input", "Кадр должен быть фото JPEG до 1 МБ. Обновите страницу и попробуйте ещё раз.", { fields: { image: "Нужен JPEG." } });
   if (Math.max(jpeg.width, jpeg.height) > 1024) return jsonError(400, "invalid_input", "Кадр нужно уменьшить до 1024 точек по длинной стороне.", { fields: { image: "Больше 1024 точек." } });
 
+  if (Date.now() < detectDownUntil) return detectUnavailable();
   let en = targetToEnglish(body.target);
   const estimate = ESTIMATE.detect + (en ? 0 : ESTIMATE.translate);
   const gate = await cloudGate(ctx, "detect", estimate);
@@ -56,14 +61,20 @@ export async function POST(request) {
     if (n == null) counted = false;
     neurons += n ?? ESTIMATE.detect;
     const parsed = parseDetectAnswer(result, jpeg.width, jpeg.height);
+    const empty = !parsed.ok && parsed.reason === "empty_result";
     await cloudSettle(ctx, {
       ...base,
       neurons,
+      refund: empty, // модель ничего не вернула — правку пользователю возвращаем
       ms: Date.now() - t0,
       result: parsed.ok ? "success" : "error",
       reason: parsed.ok ? undefined : parsed.reason,
       extra: { found: parsed.ok ? parsed.boxes.length : 0, ...(counted ? {} : { estimated: true }) },
     });
+    if (empty) {
+      detectDownUntil = Date.now() + 10 * 60_000; // модель не отвечает — 10 минут не тратим вызовы
+      return detectUnavailable();
+    }
     if (!parsed.ok) return cloudErrors.notUnderstood();
     return json({ ok: true, boxes: parsed.boxes, target: en, left: Math.max(0, gate.limit - gate.used) });
   } catch (e) {

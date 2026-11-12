@@ -101,6 +101,9 @@ test("parseDetectAnswer: доли и пиксели, мелкие и во вес
   const px = parseDetectAnswer({ objects: [{ x_min: 384, y_min: 128, x_max: 768, y_max: 512 }] }, 768, 512);
   assert.deepEqual(px.boxes[0], { x0: 0.5, y0: 0.25, x1: 1, y1: 1 });
   assert.deepEqual(parseDetectAnswer({ objects: [] }, 10, 10), { ok: true, boxes: [] });
+  // Живой ответ Moondream 12.11.2026: {} без objects — «модель не сработала», а не «не нашёл»
+  assert.deepEqual(parseDetectAnswer({}, 10, 10), { ok: false, reason: "empty_result" });
+  assert.deepEqual(parseDetectAnswer(null, 10, 10), { ok: false, reason: "empty_result" });
   assert.equal(parseDetectAnswer({ objects: [{ x_min: "a" }] }, 10, 10).ok, false);
   assert.equal(parseDetectAnswer(fakeDetectResult(), 768, 512).boxes.length, 1);
 });
@@ -191,6 +194,8 @@ test("нейроны: расчёт по токенам и оценки укла�
   assert.equal(neuronsFromUsage(MODELS.command, { prompt_tokens: 420, completion_tokens: 380 }), 40);
   assert.equal(neuronsFromUsage(MODELS.detect, { input_tokens: 760, output_tokens: 24 }), 23);
   assert.equal(neuronsFromUsage(MODELS.command, null), null);
+  // Живой ответ gpt-oss 12.11.2026: usage.neurons = 31,05 при 423/258 токенах — берём его
+  assert.equal(neuronsFromUsage(MODELS.command, { prompt_tokens: 423, completion_tokens: 258, neurons: 31.04991912841797 }), 32);
   assert.equal(neuronsFromUsage(MODELS.edit, { input_tokens: 1, output_tokens: 1 }), null);
   // 20 правок в сутки на пользователя, бюджет 8 000 из бесплатных 10 000 нейронов
   assert.equal(CLOUD_LIMITS.perUserDay, 20);
