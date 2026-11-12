@@ -3,9 +3,10 @@
 // PUT { items: [{ projectId, quantity }] } — заменить корзину целиком.
 import { calcTotals } from "@/lib/pricing";
 import { limitWrite, parseBody, requireUser, serverError, uuid, z } from "@/lib/server/api";
-import { findDelivery, findPromo } from "@/lib/server/catalog";
+import { findDelivery } from "@/lib/server/catalog";
 import { json, jsonError } from "@/lib/server/http";
 import { loadCart, shapeCart } from "@/lib/server/projects";
+import { currentSeason, findPromoFull, promoUsage } from "@/lib/server/promo";
 
 const schema = z.strictObject({
   items: z
@@ -21,9 +22,16 @@ export async function GET(request) {
     const url = new URL(request.url);
     const method = findDelivery(cart.catalog, url.searchParams.get("delivery") || "");
     const code = url.searchParams.get("promo");
-    const promo = code ? await findPromo(code) : null;
-    const lines = cart.items.filter((i) => i.valid).map((i) => ({ lineKop: i.lineTotalKop }));
-    const totals = calcTotals({ lines, method, promo: code ? promo || { active: false } : null });
+    const promo = code ? await findPromoFull(code) : null;
+    const lines = cart.items.filter((i) => i.valid).map((i) => ({ lineKop: i.lineTotalKop, slug: i.product?.slug }));
+    // Условия кода — те же, что при оформлении (N8): сезон, продукты, сумма, личный код, лимиты
+    let check = {};
+    if (promo) {
+      const [usage, season] = await Promise.all([promoUsage(promo.code, ctx.userId), promo.season ? currentSeason() : null]);
+      check = { userId: ctx.userId, usage, season, products: cart.catalog.products };
+    }
+    const totals = calcTotals({ lines, method, promo: code ? promo || null : null, check });
+    if (code && !promo) totals.promo = { ok: false, reason: "not_found", message: "Не подходит: такого промокода нет." };
     return json({ ok: true, cart: shapeCart(cart), totals: { ...totals, delivery: method ? method.code : null } });
   } catch (e) {
     console.error(e?.message);

@@ -7,6 +7,7 @@ import { callApi } from "../lib/api";
 import { getMe } from "../lib/me";
 import { StatusChip, byn, minskDay } from "./OrderBits";
 import { EmptyState } from "./LineArt";
+import { CardLine } from "./promo/Postcard";
 
 const POLL_MS = 15000;
 
@@ -106,6 +107,7 @@ export default function OrdersList() {
           <div className="muted small">
             {(o.titles || []).join(", ") || `Позиций: ${o.itemsCount}`} · от {minskDay(o.createdAt)}
           </div>
+          {o.card && <CardLine card={o.card} />}
           <div className="row between">
             <b>{byn(o.totalKop)}</b>
             <span className="small" style={{ color: "var(--ds-color-link, inherit)" }}>

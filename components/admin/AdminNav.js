@@ -8,6 +8,7 @@ const LINKS = [
   { href: "/admin/moderation", label: "Модерация" },
   { href: "/admin/notifications", label: "Уведомления" },
   { href: "/admin/stats", label: "Статистика", admin: true },
+  { href: "/admin/promo", label: "Промокоды", admin: true },
   { href: "/admin/audit", label: "Журнал действий", admin: true },
   { href: "/admin/reminders", label: "Напоминания", admin: true },
   { href: "/admin/push", label: "Демо пушей", admin: true },

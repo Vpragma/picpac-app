@@ -1,0 +1,55 @@
+/* N8 · промокоды, открытка, сезонная плашка. Только токены N1 (app/picpac.css) и сезонные --season-* (договор N2). */
+
+/* ── Открытка: бумажная карточка с мягкой тенью, фирменные цвета в обеих темах (как настоящая открытка) ── */
+.postcard { display: grid; gap: var(--space-3); justify-items: center; margin: var(--space-2) 0; }
+.postcard-art { width: 100%; max-width: 420px; height: auto; border-radius: var(--ds-radius-xl); box-shadow: var(--ds-shadow-photo); }
+.postcard-compact .postcard-art { max-width: 340px; }
+.postcard-text text { font-family: var(--ds-font-sans); }
+.postcard-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: center; }
+.postcard .note { max-width: 420px; width: 100%; }
+@media (prefers-reduced-motion: no-preference) {
+  .postcard-art { animation: postcard-in 420ms var(--ds-ease) both; }
+  @keyframes postcard-in { from { opacity: 0; transform: translateY(8px) rotate(-1deg); } to { opacity: 1; transform: none; } }
+}
+
+/* Строка с кодом в «Мои заказы» */
+.card-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); margin-top: var(--space-1); }
+
+/* ── Промокод в корзине ── */
+.promo-row { display: flex; gap: var(--space-2); }
+.promo-row .input { flex: 1; min-width: 0; text-transform: uppercase; letter-spacing: 0.04em; }
+.promo-applied { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.promo-msg { margin-top: var(--space-2); }
+
+/* ── Сезонная плашка: цвета сезона, если N2 их задал; иначе фирменная пастель. Пары — с контрастом AA ── */
+.season-promo {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-4); border-radius: var(--ds-radius-lg);
+  background: var(--season-bg, var(--pp-sand)); color: var(--season-ink, var(--pp-green-900));
+  border: 1px solid var(--season-1, var(--pp-frame));
+  margin: var(--space-3) 0;
+}
+.season-promo-text { flex: 1 1 14rem; min-width: 0; }
+.season-promo-text b { display: block; font-weight: 500; font-size: var(--ds-text-lg); }
+.season-promo-code {
+  display: inline-block; padding: 2px 12px; border-radius: var(--ds-radius-pill); font-weight: 500; letter-spacing: 0.06em;
+  background: var(--pp-white); color: var(--pp-green-900); border: 1px dashed var(--season-3, var(--pp-red));
+}
+.season-promo svg { flex: none; color: var(--season-2, var(--pp-logo)); }
+.season-promo .btn { flex: none; }
+
+/* ── Админка «Промокоды» ── */
+.promo-form { margin-bottom: var(--space-4); }
+.promo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); gap: 0 var(--space-4); }
+.promo-fieldset { border: 0; padding: 0; margin: 0 0 var(--space-3); min-width: 0; }
+.promo-fieldset legend { font-size: var(--ds-text-sm); color: var(--ds-color-text-secondary); margin-bottom: var(--space-1); padding: 0; }
+.promo-fieldset .segmented { max-width: 34rem; }
+.promo-products { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.check-chip {
+  display: inline-flex; align-items: center; gap: var(--space-2); min-height: var(--tap); padding: 0 var(--space-3);
+  border: 1px solid var(--ds-color-border-input); border-radius: var(--ds-radius-pill); background: var(--ds-color-bg-field); cursor: pointer;
+}
+.check-chip:has(input:checked) { background: var(--ds-color-bg-selected); border-color: var(--ds-color-border-strong); }
+.check-chip input { width: 18px; height: 18px; accent-color: var(--ds-color-primary); }
+.promo-table .promo-code { letter-spacing: 0.04em; }
+.promo-table td { vertical-align: top; }

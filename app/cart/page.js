@@ -18,7 +18,10 @@ import { isClient, refreshMe, useMe } from "../../lib/me";
 // Печатные версии: обычный import (не import()) — без сети на «Подтвердить» кусок кода не догрузится,
 // а нужна понятная ошибка «нет связи». Тяжёлая часть (воркер) грузится только при сборке.
 import { preparePrintVersions } from "../../lib/photo/print";
-import { applyPromo, calcTotals, daysWord, etaFromDay, formatEtaRange, linePrice, minskDate } from "../../lib/pricing";
+import { calcTotals, daysWord, etaFromDay, formatEtaRange, linePrice, minskDate } from "../../lib/pricing";
+import { benefitText, checkPromo, promoDate } from "../../lib/promo";
+import Postcard from "../../components/promo/Postcard";
+import SeasonPromo from "../../components/promo/SeasonPromo";
 import { notify, readKey, useLocalValue } from "../../lib/store";
 import { syncProject, useSyncState } from "../../lib/sync";
 import { useCatalog } from "../../lib/useCatalog";
@@ -86,6 +89,7 @@ export default function CartPage() {
         unitKop: i.unitPriceKop,
         lineKop: i.lineTotalKop,
         valid: i.valid,
+        slug: i.product?.slug || null,
         printDays: i.product?.printDays || 3,
         thumb: local?.photos[0] ? thumbs[local.photos[0].id] : null,
       };
@@ -112,6 +116,7 @@ export default function CartPage() {
           unitKop: price?.unitKop ?? null,
           lineKop: price?.lineKop ?? null,
           valid: !!price,
+          slug: product?.slug || null,
           printDays: product?.printDays || 3,
           thumb: p?.photos[0] ? thumbs[p.photos[0].id] : c.cover || null,
           pending: cart.mode === "server",
@@ -137,9 +142,11 @@ export default function CartPage() {
 
   // Расчёт: товары → скидка промокода → доставка (бесплатно от порога после скидки) → итого
   const method = catalog.delivery.find((d) => d.code === form.delivery) || null;
-  const goodsLines = lines.filter((l) => l.valid).map((l) => ({ lineKop: l.lineKop }));
-  const totals = calcTotals({ lines: goodsLines, method, promo: form.promo });
-  const promoNow = form.promo ? applyPromo(form.promo, totals.goodsKop) : null;
+  // Позиции с продуктом: код может действовать только на часть продуктов (N8) — экран считает так же, как сервер
+  const goodsLines = lines.filter((l) => l.valid).map((l) => ({ lineKop: l.lineKop, slug: l.slug }));
+  const promoCheck = { products: catalog.products };
+  const totals = calcTotals({ lines: goodsLines, method, promo: form.promo, check: promoCheck });
+  const promoNow = form.promo ? checkPromo(form.promo, { lines: goodsLines, ...promoCheck }) : null;
   const printDays = Math.max(...lines.map((l) => l.printDays));
   const today = minskDate();
   const eta = method ? etaFromDay(today, printDays, method.minDays, method.maxDays) : null;
@@ -149,20 +156,22 @@ export default function CartPage() {
     .filter((s) => s?.state === "syncing" && s.total)
     .reduce((a, s) => ({ done: a.done + s.done, total: a.total + s.total }), { done: 0, total: 0 });
 
-  async function applyPromoCode() {
-    const code = promoInput.trim();
+  async function applyPromoCode(value) {
+    const code = String(value ?? promoInput).trim();
     if (!code) return setPromoMsg({ ok: false, text: "Введите промокод." });
+    // Для гостя сервер считает по этим позициям только предпросмотр; у вошедшего — по своей корзине
+    const previewLines = goodsLines.filter((l) => l.slug).map((l) => ({ slug: l.slug, kop: l.lineKop }));
     const r = await fetch("/api/v1/promo/validate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code, subtotal: totals.goodsKop / 100 }),
+      body: JSON.stringify({ code, subtotal: totals.goodsKop / 100, ...(previewLines.length ? { lines: previewLines } : {}) }),
     })
       .then(async (res) => ({ status: res.status, ...(await res.json().catch(() => ({}))) }))
       .catch(() => ({ status: 0 }));
     if (r.ok && r.valid !== false) {
       update({ promo: r.promo });
       setPromoInput("");
-      setPromoMsg({ ok: true, text: `${r.message}: ${r.promo.code}${r.promo.label ? " — " + r.promo.label : ""}` });
+      setPromoMsg({ ok: true, text: `${r.message}: ${r.promo.code} — ${r.promo.label || benefitText(r.promo)}${r.promo.validTo ? `, до ${promoDate(r.promo.validTo)}` : ""}.` });
     } else {
       setPromoMsg({ ok: false, text: r.status === 0 ? "Нет связи с сервером. Попробуйте ещё раз." : r.message || r.error?.message || "Не подходит." });
     }
@@ -250,6 +259,14 @@ export default function CartPage() {
         for (const [k, v] of Object.entries(fields)) mapped[k.replace("delivery.address.", "").replace("recipient.", "").replace("delivery.code", "delivery")] = v;
         setErrors(mapped);
         if (data?.error?.code === "cart_changed" || data?.error?.code === "cart_empty") await kvDel("checkoutKey").catch(() => {});
+        if (String(data?.error?.code || "").startsWith("promo_")) {
+          // Код перестал подходить, пока оформляли (лимит, срок, выключен): убираем его, итог пересчитается
+          setForm({ ...form, promo: null });
+          setPromoMsg({ ok: false, text: data.error.message });
+          const e = new Error(`${data.error.message} Мы убрали код из заказа — проверьте итог и нажмите «Подтвердить заказ».`);
+          e.final = true;
+          throw e;
+        }
         throw new Error(data?.error?.message || "Сервер не ответил. Попробуйте ещё раз.");
       }
       const order = data.order;
@@ -503,10 +520,11 @@ export default function CartPage() {
 
       <section className="card" aria-labelledby="h-promo">
         <h2 id="h-promo">Промокод</h2>
+        <SeasonPromo place="cart" applied={form.promo?.code} onApply={(code) => applyPromoCode(code)} />
         {form.promo ? (
-          <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+          <div className="promo-applied" data-testid="promo-applied">
             <span className="chip chip-ok">{form.promo.code}</span>
-            <span className="small">{form.promo.label}</span>
+            <span className="small">{form.promo.label || benefitText(form.promo)}</span>
             <button
               className="btn btn-small"
               onClick={() => {
@@ -518,27 +536,33 @@ export default function CartPage() {
             </button>
           </div>
         ) : (
-          <div className="row" style={{ gap: 8 }}>
+          <div className="promo-row">
             <input
               className="input"
-              placeholder="Например, TEST10"
+              id="f-promo"
+              placeholder="Например, OSEN2026"
               value={promoInput}
               onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
               aria-label="Промокод"
+              aria-describedby={promoMsg ? "promo-msg" : undefined}
+              autoComplete="off"
+              autoCapitalize="characters"
+              spellCheck={false}
+              maxLength={30}
               onKeyDown={(e) => e.key === "Enter" && applyPromoCode()}
             />
-            <button className="btn btn-small" onClick={applyPromoCode}>
+            <button className="btn btn-small" onClick={() => applyPromoCode()}>
               Применить
             </button>
           </div>
         )}
-        {promoMsg && (
-          <p className={(promoMsg.ok ? "ok-text" : "err-text") + " small"} role="status" style={{ marginTop: 6 }}>
+        {promoMsg && !(form.promo && promoNow && !promoNow.ok) && (
+          <p id="promo-msg" className={"note small promo-msg " + (promoMsg.ok ? "note-ok" : "note-error")} role="status" data-testid="promo-msg">
             {promoMsg.text}
           </p>
         )}
         {form.promo && promoNow && !promoNow.ok && (
-          <p className="err-text small" role="status" style={{ marginTop: 6 }}>
+          <p className="note note-error small promo-msg" role="status" data-testid="promo-msg">
             {promoNow.message}
           </p>
         )}
@@ -573,9 +597,9 @@ export default function CartPage() {
           <span>Товары</span>
           <span>{byn(totals.goodsKop)}</span>
         </div>
-        <div className={"sum-line" + (totals.discountKop ? " ok-text" : "")}>
-          <span>Скидка{totals.promo?.ok ? " " + totals.promo.code : ""}</span>
-          <span>{totals.discountKop ? "−" + byn(totals.discountKop) : byn(0)}</span>
+        <div className={"sum-line" + (totals.discountKop ? " ok-text" : "")} data-testid="sum-discount">
+          <span>Скидка{totals.promo?.ok ? ` по коду ${totals.promo.code}` : ""}</span>
+          <span>{totals.discountKop ? "−" + byn(totals.discountKop) : totals.promo?.ok && totals.promo.freeDelivery ? "доставка бесплатно" : byn(0)}</span>
         </div>
         <div className="sum-line">
           <span>Доставка</span>
@@ -643,6 +667,12 @@ function OrderDone({ order }) {
         {order.paid ? `оплачено: ${order.paymentMethod === "erip_test" ? "ЕРИП (тест)" : "Карта (тест)"}` : "оплата не прошла — повторите в заказе"}. Деньги не списываются.
       </p>
       <p className="muted small">Статус заказа — «{order.statusLabel || "Принят"}». Проект теперь в «Мои книги» → «Заказанные».</p>
+      {order.card && (
+        <>
+          <p style={{ fontWeight: 500, color: "var(--ds-color-text-strong)", margin: 0 }}>А это открытка от нас — с личным кодом на следующую книгу воспоминаний.</p>
+          <Postcard card={order.card} orderNumber={order.number} />
+        </>
+      )}
       <Link href={"/orders/" + order.id} className="btn btn-primary btn-block">
         Открыть заказ
       </Link>
