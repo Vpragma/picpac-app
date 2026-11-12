@@ -4,11 +4,24 @@
 // кэш, что использует сервис-воркер (picpac-models-v1, «сначала кэш»), — потом воркеры ИИ берут их оттуда без сети.
 // На мобильной сети или с экономией трафика — сначала спрашиваем. «Отмена» останавливает загрузку.
 import { useEffect, useRef, useState } from "react";
-import { MIGAN_FILE, ORT_MJS, ORT_WASM, SAM_FILES, YOLOX_FILE } from "../../lib/photo/modelFiles";
+import { warmWorkers } from "../../lib/photo/ai";
+import { MEANING_FILES, MIGAN_FILE, ORT_MJS, ORT_WASM, SAM_FILES, UPSCALER_FILES, YOLOX_FILE } from "../../lib/photo/modelFiles";
+import { warmUpscale } from "../../lib/photo/upscale";
 
 const CACHE = "picpac-models-v1"; // то же имя, что MODELS в public/sw.js
-// N3: и поиск предметов словом (YOLOX-Nano, 3,7 МБ) — тогда редактор целиком работает без интернета
-const FILES = [...SAM_FILES, ORT_WASM, MIGAN_FILE, YOLOX_FILE, { url: ORT_MJS, size: 24738 }];
+// N3: и поиск предметов словом (YOLOX-Nano, 3,7 МБ), и «по смыслу» (rubert-tiny, 12,9 МБ) — редактор целиком без интернета
+const FILES = [...SAM_FILES, ORT_WASM, MIGAN_FILE, YOLOX_FILE, ...MEANING_FILES, ...UPSCALER_FILES, { url: ORT_MJS, size: 24738 }];
+
+// Код воркеров ИИ — тоже на устройство: дождаться сервис-воркера (он кладёт загруженное в кэш) и запустить
+// каждый воркер на мгновение. Без сервис-воркера (dev, старый браузер) — просто пропускаем
+async function warmCode() {
+  if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+  const ready = await Promise.race([navigator.serviceWorker.ready.then(() => true), new Promise((r) => setTimeout(() => r(false), 8000))]);
+  if (!ready) return;
+  for (let i = 0; i < 20 && !navigator.serviceWorker.controller; i++) await new Promise((r) => setTimeout(r, 250));
+  if (!navigator.serviceWorker.controller) return;
+  await Promise.allSettled([warmWorkers(), warmUpscale()]);
+}
 const TOTAL = FILES.reduce((s, f) => s + f.size, 0);
 const MB = Math.round(TOTAL / 1e6);
 
@@ -40,8 +53,15 @@ export function useAiOffline(dep) {
       alive = false;
     };
   }, [dep, tick]);
+  // Модели на устройстве — значит, и код воркеров нужен там же (один раз за сеанс, в фоне)
+  useEffect(() => {
+    if (!ready || warmed) return;
+    warmed = true;
+    warmCode().catch(() => {});
+  }, [ready]);
   return ready;
 }
+let warmed = false;
 
 // На мобильной сети или с экономией трафика — спросить перед загрузкой
 function meteredNetwork() {
@@ -90,6 +110,7 @@ export default function AiPrefetch({ compact = false }) {
         if (cache) await cache.put(f.url, new Response(new Blob(chunks, { type }), { headers: { "Content-Type": type } }));
         before += f.size;
       }
+      await warmCode().catch(() => {});
       setState({ status: "ready", just: true });
       window.dispatchEvent(new Event("picpac:ai-cached"));
     } catch (e) {

@@ -60,16 +60,11 @@ const MODELS = [
     urlText: "Проект nsfwjs",
   },
   {
-    name: "gpt-oss-120b (Cloudflare Workers AI)",
-    what: "Понимает просьбу своими словами в редакторе. Работает в облаке и только с вашего согласия.",
+    name: "YOLOX-Nano (Megvii)",
+    what: "Находит предмет по слову: «убери машину», «размой собаку». Работает на устройстве, фото никуда не уходит.",
     license: "Apache-2.0",
-    url: "https://huggingface.co/openai/gpt-oss-120b",
-    urlText: "Модель на Hugging Face",
-  },
-  {
-    name: "Moondream (Cloudflare Workers AI)",
-    what: "Подключён, сейчас не используется.",
-    license: "Moondream Model License 1.0",
+    url: "https://github.com/Megvii-BaseDetection/YOLOX",
+    urlText: "Проект YOLOX",
   },
 ];
 

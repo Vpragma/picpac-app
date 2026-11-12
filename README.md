@@ -41,11 +41,11 @@ PWA для заказа фотокниг и печати фото в стиле 
 
 ## 5. Архитектура кратко
 
-Браузер хранит черновики в IndexedDB и синхронизирует их с аккаунтом. Next.js на Vercel проверяет вход и роль, считает цены, пишет журнал. Supabase — Postgres с RLS, вход и закрытое хранилище фото (загрузка по подписанной ссылке). ИИ работает на устройстве; облачный ИИ (Cloudflare Workers AI) вызывает только сервер, после согласия клиента. Статусы меняют события ERP (на стенде — симулятор по pg_cron) через одну функцию базы; уведомления создают триггеры базы, важное уходит пушем. Схемы — [docs/architecture.md](docs/architecture.md).
+Браузер хранит черновики в IndexedDB и синхронизирует их с аккаунтом. Next.js на Vercel проверяет вход и роль, считает цены, пишет журнал. Supabase — Postgres с RLS, вход и закрытое хранилище фото (загрузка по подписанной ссылке). ИИ-редактор работает целиком на устройстве: облачного ИИ нет, фото и текст команд для правок никуда не отправляются. Статусы меняют события ERP (на стенде — симулятор по pg_cron) через одну функцию базы; уведомления создают триггеры базы, важное уходит пушем. Схемы — [docs/architecture.md](docs/architecture.md).
 
 ## 6. Стек
 
-Next.js 16 и React 19 (JavaScript), Supabase (Postgres, RLS, Auth, Storage), `zod`, `@dnd-kit`, свой Service Worker (PWA, офлайн, пуши), `web-push`; ИИ в Web Worker — `@huggingface/transformers`, `onnxruntime-web`, `upscaler`, `@tensorflow/tfjs`, `nsfwjs`; Cloudflare Workers AI; pg_cron; тесты — Playwright, `node:test`, axe-core. Хостинг — Vercel. Шрифт Jost, стиль super.picpac.by.
+Next.js 16 и React 19 (JavaScript), Supabase (Postgres, RLS, Auth, Storage), `zod`, `@dnd-kit`, свой Service Worker (PWA, офлайн, пуши), `web-push`; ИИ в Web Worker — `@huggingface/transformers`, `@huggingface/tokenizers`, `onnxruntime-web`, `upscaler`, `@tensorflow/tfjs`, `nsfwjs`; pg_cron; тесты — Playwright, `node:test`, axe-core. Хостинг — Vercel. Шрифт Jost, стиль super.picpac.by.
 
 ## 7. Запуск за 15 минут
 
@@ -61,7 +61,7 @@ Next.js 16 и React 19 (JavaScript), Supabase (Postgres, RLS, Auth, Storage), `z
 
 ## 8. Переменные окружения
 
-Значения — только в `.env.local` (не в git) и в Vercel, шаблон — [`.env.example`](.env.example): `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `POSTGRES_URL_NON_POOLING`, `SEED_PASSWORD_CLIENT`, `SEED_PASSWORD_MODERATOR`, `SEED_PASSWORD_ADMIN`, `ANALYTICS_SALT`, `REQUIRE_STAFF_MFA`, `VAPID_PUBLIC_KEY`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `CRON_SECRET`, `ERP_SECRET`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`. Зачем каждая — [docs/features.md](docs/features.md#переменные-окружения-где-нужны-и-зачем).
+Значения — только в `.env.local` (не в git) и в Vercel, шаблон — [`.env.example`](.env.example): `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `POSTGRES_URL_NON_POOLING`, `SEED_PASSWORD_CLIENT`, `SEED_PASSWORD_MODERATOR`, `SEED_PASSWORD_ADMIN`, `ANALYTICS_SALT`, `REQUIRE_STAFF_MFA`, `VAPID_PUBLIC_KEY`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `CRON_SECRET`, `ERP_SECRET`. Переменные `CLOUDFLARE_*` больше не нужны (облачного ИИ нет). Зачем каждая — [docs/features.md](docs/features.md#переменные-окружения-где-нужны-и-зачем).
 
 ## 9. Данные и их повторная загрузка
 
@@ -82,11 +82,11 @@ REST `/api/v1/…`, JSON, ошибки в едином формате. Опис�
 
 ## 11. Безопасность кратко
 
-Права проверяет сервер (`proxy.js`, обработчик, RLS): без входа — 401, без роли — 403 (ОТ-02). httpOnly-cookie, лимит попыток входа, строгая CSP, схемы `zod`, лимиты частоты (429), заказ без дублей с суммой от сервера, приватное хранилище фото, неизменяемый журнал (ОТ-04), данные клиентов скрыты от сотрудников, 2FA по флагу. Подробно (SEC-01…24) — [docs/security.md](docs/security.md).
+Права проверяет сервер (`proxy.js`, обработчик, RLS): без входа — 401, без роли — 403 (ОТ-02). httpOnly-cookie, лимит попыток входа, строгая CSP (браузер соединяется только со своим сайтом и хранилищем Supabase — сторонние адреса блокируются), фото в хранилище без EXIF и GPS, схемы `zod`, лимиты частоты (429), заказ без дублей с суммой от сервера, приватное хранилище фото, неизменяемый журнал (ОТ-04), данные клиентов скрыты от сотрудников, 2FA по флагу. Подробно (SEC-01…24) — [docs/security.md](docs/security.md).
 
 ## 12. ИИ кратко
 
-На устройстве (фото никуда не уходят): анализ качества, автоулучшение, команды словами, «убери солнце», выделение касанием (SlimSAM), «Размыть фон», ластик (MI-GAN), резкость ×2 (UpscalerJS), проверка фото для модерации (nsfwjs). В облаке (Cloudflare Workers AI) — только вошедшему клиенту после согласия: непонятную фразу разбирает `gpt-oss-120b` (уходит только текст), 20 правок в день. Подробно — [docs/ai.md](docs/ai.md).
+**Всё на устройстве, облака нет** (требование жюри, ночь 2): во время правок ни фото, ни текст команд, ни что-либо о содержимом фото не уходит с телефона. Анализ качества, автоулучшение, команды словами (синонимы, разговорные формы, опечатки, падежи), стили-пресеты («ч/б», «сепия», «винтаж», «как в старом кино», «тёплый вечер», «осеннее настроение»…), фразы вне словаря — маленькая модель rubert-tiny на устройстве подбирает команду по смыслу, поиск предмета словом («убери машину», «размой собаку», «осветли человека справа» — YOLOX-Nano + SlimSAM), выделение касанием, «Размыть фон», ластик (MI-GAN), резкость ×2 (UpscalerJS), проверка фото для модерации (nsfwjs). Модели — с нашего сайта; после первой загрузки редактор работает без интернета. Доказательство — e2e `editor-local-ai.spec.mjs` (перехват всех запросов). Подробно — [docs/ai.md](docs/ai.md).
 
 ## 13. Лицензии
 
@@ -100,7 +100,7 @@ REST `/api/v1/…`, JSON, ошибки в едином формате. Опис�
 - [docs/architecture.md](docs/architecture.md) — схемы, потоки данных, модель данных, роли
 - [docs/api/](docs/api/) — OpenAPI и готовые запросы
 - [docs/security.md](docs/security.md) — безопасность
-- [docs/ai.md](docs/ai.md) — ИИ: данные и лимиты
+- [docs/ai.md](docs/ai.md) — ИИ на устройстве: модели, данные, доказательства
 - [docs/platforms.md](docs/platforms.md) — установка на компьютер, Android, iPhone; офлайн
 - [docs/test-report.md](docs/test-report.md) — отчёт о тестировании
 - [docs/demo-script.md](docs/demo-script.md), [docs/presentation-notes.md](docs/presentation-notes.md) — сценарий показа и слайды
@@ -110,13 +110,14 @@ REST `/api/v1/…`, JSON, ошибки в едином формате. Опис�
 ## 15. Известные ограничения
 
 - Напоминания о корзине по расписанию не включены — рассылку запускает кнопка в админке.
-- Поиск предмета по слову не работает (облачная модель отвечает пустым) — работает касание.
+- Поиск предмета словом знает 80 классов COCO (люди, машины, животные, вещи); небо, лицо, дом, дерево — касанием. Маленькие и далёкие предметы детектор может не найти — тогда редактор просит коснуться.
+- «По смыслу» (rubert-tiny) угадывает команду не всегда: сразу выполняет только уверенные, иначе предлагает 3 кнопки.
 - Пуш на реальных iPhone и Android не подтверждён (проверен в Chrome на Mac); на iPhone пуши — только из приложения на экране «Домой», iOS 16.4+.
 - LCP главной 2,18–2,28 с при цели 2,0 с.
 - Выделению касанием нужно ~2 ГБ памяти; на слабых телефонах оно выключено.
 - Модерация: замены фото после возврата нет; проверка на устройстве — только первичный фильтр.
 - «Убери солнце» — эвристика: солнце за дымкой может не найти.
-- Нет: скелетов загрузки, кнопки «Позвать оператора», настройки тихих часов, кнопки отзыва согласия на облачный ИИ, правки каталога и пользователей в админке, сброса пароля.
-- Оплата только тестовая; часть коэффициентов цен тестовая — уточнить у Фотопринт; настоящей ERP и CRM нет — задача пилота ([docs/pilot-plan.md](docs/pilot-plan.md)); облачный ИИ — Cloudflare (США), нужна правовая оценка.
+- Нет: скелетов загрузки, кнопки «Позвать оператора», настройки тихих часов, правки каталога и пользователей в админке, сброса пароля.
+- Оплата только тестовая; часть коэффициентов цен тестовая — уточнить у Фотопринт; настоящей ERP и CRM нет — задача пилота ([docs/pilot-plan.md](docs/pilot-plan.md)).
 
 Подробно — [docs/features.md](docs/features.md#12-известные-ограничения-подробно) и [docs/test-report.md](docs/test-report.md).

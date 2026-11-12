@@ -21,7 +21,7 @@ import { SUGGESTIONS, parseCommand } from "../../lib/photo/commands";
 import { photoBadges } from "../../lib/photo/badges";
 import { applyOps, findSun } from "../../lib/photo/local";
 import { MAX_MASK_OPS, addMaskOp, editsFit, eraseKey, hydrateOps, maskArea, splitOps } from "../../lib/photo/mask";
-import { aiSupport, aiWhy, detectObjects, embedImage, embeddedFor, eraseImage, isCancelled, segmentBox, segmentPoints, stopAi, stopEraser } from "../../lib/photo/ai";
+import { aiSupport, aiWhy, detectObjects, embedImage, embeddedFor, eraseImage, isCancelled, meaningOf, segmentBox, segmentPoints, stopAi, stopEraser, stopMeaning } from "../../lib/photo/ai";
 import { OBJECT_EXAMPLES, boxMask, clipMaskToBox, pickObjects, unionMasks } from "../../lib/photo/objects";
 import { MIGAN_FILE, ORT_WASM, SAM_FILES, mb } from "../../lib/photo/modelFiles";
 import { UPSCALE_MAX_SIDE, stopUpscale, upscaleBlob, upscaleKey } from "../../lib/photo/upscale";
@@ -118,6 +118,32 @@ function applyFoundMask(pid, act, m) {
   return { edits: next, before: base };
 }
 
+// N3: команда, подобранная по смыслу, — свет, цвет, стиль или автоулучшение — поверх свежих правок фото из черновика
+// (модель думала, замыкание рендера могло устареть). Остальное (по выделению) — null: тогда предлагаем кнопку.
+function applyCommandFresh(pid, label) {
+  const ph = getDraftState().draft?.photos.find((p) => p.id === pid);
+  const r = parseCommand(label);
+  if (!ph || !r.ok || !r.steps.every((x) => x.kind === "adjust" || x.kind === "look" || x.kind === "auto")) return null;
+  const before = normEdits(ph.edits);
+  let next = before;
+  const said = [];
+  for (const step of r.steps) {
+    if (step.kind === "adjust") {
+      next = addManual(next, step.deltas, "command");
+      if (step.look) next = setLook(next, step.look);
+    } else if (step.kind === "look") {
+      next = setLook(next, null);
+      if ((next.manual.saturation || 0) < 0) next = setManual(next, "saturation", 0, "command");
+    } else {
+      const m = ph.quality?.metrics;
+      if (!m) return null;
+      next = { ...next, auto: autoParams(m, { force: true }), autoOff: false };
+    }
+    said.push(step.say);
+  }
+  return { before, next, say: said.join(". "), last: r.steps.find((x) => x.kind === "adjust") || null };
+}
+
 const loadedSize = (id) => {
   const img = cache.get(id);
   return img ? { w: img.width, h: img.height } : null;
@@ -184,7 +210,7 @@ const MASK_SAY = { blurBg: "Размыли фон — главное остал�
 const ERASED_SAY = "Убрали выделенное. «Отменить» вернёт как было.";
 const MASK_VERB = { blurBg: "Размыть фон", blur: "Размыть выделенное", lighten: "Осветлить выделенное", darken: "Затемнить выделенное", erase: "Убрать" };
 // Что сделали с найденным словом предметом (N3)
-const FOUND_SAY = { blurBg: "размыли фон вокруг", blur: "размыли", lighten: "осветлили", darken: "затемнили" };
+const FOUND_SAY = { blurBg: "размыл фон вокруг", blur: "размыл", lighten: "осветлил", darken: "затемнил" };
 const AI_OFF = { status: "off" };
 
 export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds, extra, initialPhotoId }) {
@@ -213,6 +239,7 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
       stopAi();
       stopEraser();
       stopUpscale();
+      stopMeaning();
     },
     [],
   );
@@ -519,11 +546,39 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
     say({ ok: true, say: `Нашёл ${what} и ${FOUND_SAY[act]}. «Отменить» вернёт как было.` });
   }
 
+  // N3 (SHOULD): словарь не понял — маленькая модель на устройстве ищет ближайшую команду по смыслу.
+  // Уверена — выполняем («По смыслу — «Тёплый вечер»…»), нет — до 3 кнопок с похожими командами, совсем мимо — подсказка
+  async function askMeaning(text, fallback) {
+    const pid = photo.id;
+    setAnswer({ ok: false, say: `Не знаю команды «${text}» — подбираю похожую по смыслу…`, thinking: true });
+    let res = null;
+    try {
+      res = await meaningOf(text, (m) => fresh.current === pid && setAnswer({ ok: false, say: `Не знаю команды «${text}» — загружаем подсказчик на устройство: ${Math.round((m.p || 0) * 100)}%`, thinking: true }));
+    } catch (e) {
+      if (!isCancelled(e)) console.error(e);
+    }
+    if (fresh.current !== pid) return;
+    if (res?.pick) {
+      const others = res.options.filter((o) => o.id !== res.pick.id).slice(0, 2);
+      const done = applyCommandFresh(pid, res.pick.label);
+      if (!done) return setAnswer({ ok: true, say: `Понял по смыслу как «${res.pick.label}». Нажмите, чтобы применить:`, options: [res.pick, ...others], meant: true });
+      setHistory((h) => ({ ...h, [pid]: [...(h[pid] || []), done.before].slice(-30) }));
+      setPhotoEdits(pid, done.next);
+      if (done.last) setLast(done.last);
+      track("ai_edit", { props: { kind: "command" } });
+      return setAnswer({ ok: true, say: `По смыслу — «${res.pick.label}»: ${done.say}. «Отменить» вернёт как было.${others.length ? " Или:" : ""}`, options: others });
+    }
+    // Не уверена (в том числе на бессмыслице) — ничего не меняем: подсказка словаря и 3 похожие команды кнопками
+    if (res?.options?.length) return setAnswer({ ok: false, say: `${fallback} Или похожее по смыслу:`, options: res.options });
+    setAnswer({ ok: false, say: fallback });
+  }
+
   function run(text) {
     if (readOnly) return;
     const r = parseCommand(text, { last });
     if (!r.ok) {
       setAnswer({ ok: false, say: r.say });
+      if (String(text || "").trim()) askMeaning(String(text).trim(), r.say);
       return;
     }
     track("ai_edit", { props: { kind: "command" } });
@@ -717,9 +772,19 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
               </button>
             ))}
           </div>
-          <p className="small pe-answer" data-ok={answer ? String(answer.ok) : undefined} role="status" aria-live="polite">
+          <p className="small pe-answer" data-ok={answer ? String(answer.ok) : undefined} role="status" aria-live="polite" aria-busy={answer?.thinking ? "true" : undefined}>
             {answer?.say || ""}
           </p>
+          {/* N3: похожие команды по смыслу (модель на устройстве) — одно нажатие выполняет команду словаря */}
+          {answer?.options?.length > 0 && (
+            <div className="pe-chips" aria-label="Похожие команды" data-meaning>
+              {answer.options.map((o, i) => (
+                <button type="button" key={o.id} className={"btn btn-small" + (answer.meant && i === 0 ? " btn-primary" : "")} onClick={() => run(o.label)} disabled={readOnly}>
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          )}
         </form>
 
         <div className="pe-sliders">
