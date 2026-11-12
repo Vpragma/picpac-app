@@ -80,12 +80,21 @@ test("кнопка админки: клиент 403; забытая корзин
   assert.equal(put.status, 200, put.text);
   // Состарить СВОЮ корзину на 3 суток и убрать тихие часы у этого пользователя (общую задержку не трогаем)
   const old = new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString();
-  await admin.from("cart_items").update({ updated_at: old }).eq("user_id", U.id);
-  await admin.from("projects").update({ updated_at: old }).eq("id", p.json.project.id);
-  await admin.from("notification_settings").upsert({ user_id: U.id, quiet_from: "00:00", quiet_to: "00:00" }, { onConflict: "user_id" });
+  // Сеть медленная, база общая — проверяем каждую запись, а не надеемся на неё
+  const must = async (q, what) => {
+    const { error } = await q;
+    assert.equal(error, null, `${what}: ${error?.message}`);
+  };
+  await must(admin.from("cart_items").update({ updated_at: old }).eq("user_id", U.id), "состарить корзину");
+  await must(admin.from("projects").update({ updated_at: old }).eq("id", p.json.project.id), "состарить проект");
+  await must(admin.from("notification_settings").upsert({ user_id: U.id, quiet_from: "00:00", quiet_to: "00:00" }, { onConflict: "user_id" }), "без тихих часов");
+  const { data: cart } = await admin.from("cart_items").select("updated_at, projects(status, updated_at)").eq("user_id", U.id);
+  assert.equal(cart.length, 1, "в корзине одна позиция");
+  assert.ok(Date.parse(cart[0].updated_at) < Date.now() - 2 * 24 * 3600 * 1000 && cart[0].projects.status === "in_cart", JSON.stringify(cart));
 
   const first = await A.client.req("/api/v1/admin/cart-reminders", { method: "POST", body: {} });
   assert.equal(first.status, 200, first.text);
+  assert.ok(first.json.due >= 1, first.text);
   const count = async () => (await admin.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", U.id).eq("kind", "cart_reminder")).count;
   assert.equal(await count(), 1, "одно напоминание в центре уведомлений");
   const { data: n } = await admin.from("notifications").select("title, body, link").eq("user_id", U.id).eq("kind", "cart_reminder").single();
