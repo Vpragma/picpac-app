@@ -487,7 +487,7 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
     } catch (e) {
       if (isCancelled(e)) return;
       console.error(e, e?.workerStack || "");
-      return say({ ok: false, say: `Не получилось поискать ${what}. ${touch}` });
+      return say({ ok: false, say: `Не получилось поискать ${what}. ${sam ? touch : "Работают свет и цвет: «ярче», «теплее»."}` });
     }
     if (!alive()) return;
     const picked = pickObjects(dets, step);
@@ -558,10 +558,16 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
       if (!isCancelled(e)) console.error(e);
     }
     if (fresh.current !== pid) return;
+    // Кнопки, которые уже есть среди подсказок под полем, не повторяем
+    if (res) res = { ...res, options: res.options.filter((o) => !SUGGESTIONS.includes(o.label)) };
     if (res?.pick) {
       const others = res.options.filter((o) => o.id !== res.pick.id).slice(0, 2);
       const done = applyCommandFresh(pid, res.pick.label);
-      if (!done) return setAnswer({ ok: true, say: `Понял по смыслу как «${res.pick.label}». Нажмите, чтобы применить:`, options: [res.pick, ...others], meant: true });
+      if (!done) {
+        // Правка по выделению («Размыть фон») — только по нажатию: ей нужно касание
+        if (SUGGESTIONS.includes(res.pick.label)) return setAnswer({ ok: true, say: `Понял по смыслу как «${res.pick.label}» — нажмите эту кнопку под полем.`, options: others });
+        return setAnswer({ ok: true, say: `Понял по смыслу как «${res.pick.label}». Нажмите, чтобы применить:`, options: [res.pick, ...others], meant: true });
+      }
       setHistory((h) => ({ ...h, [pid]: [...(h[pid] || []), done.before].slice(-30) }));
       setPhotoEdits(pid, done.next);
       if (done.last) setLast(done.last);

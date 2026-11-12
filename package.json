@@ -29,6 +29,7 @@
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
+    "@huggingface/tokenizers": "^0.2.0",
     "@huggingface/transformers": "^4.3.2",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.119.0",

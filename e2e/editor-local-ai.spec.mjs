@@ -332,3 +332,22 @@ test("авиарежим: модели загружены — без сети п
   expect(w.problems()).toEqual([]);
   expect(w.errors.filter((e) => !/Failed to load resource|ERR_INTERNET_DISCONNECTED|events/i.test(e))).toEqual([]);
 });
+
+test("«Правки»: плашка, ответ и кнопки «по смыслу» доступны (axe, светлая и тёмная тема)", async ({ page }) => {
+  const { default: AxeBuilder } = await import("@axe-core/playwright");
+  await openEditor(page, ["dog.jpg"]);
+  await rendered(page);
+  await say(page, "как на морском курорте"); // вне словаря и без уверенности — подсказка и 3 кнопки
+  await expect(page.locator("[data-meaning] button")).toHaveCount(3, { timeout: 120_000 });
+  await expect(answer(page)).toHaveText(/Не понял.*Попробуйте.*Или похожее по смыслу/);
+  for (const scheme of ["light", "dark"]) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.waitForTimeout(300);
+    const r = await new AxeBuilder({ page }).include(".pe").withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]).analyze();
+    const bad = r.violations.filter((v) => v.impact === "serious" || v.impact === "critical");
+    expect(bad.map((v) => `${scheme} ${v.id}: ${v.nodes.slice(0, 3).map((n) => n.target.join(" ")).join(" | ")}`)).toEqual([]);
+  }
+  // Кнопка «по смыслу» выполняет команду словаря
+  await page.locator("[data-meaning] button").first().click();
+  await expect(answer(page)).not.toHaveText(/Не понял/);
+});

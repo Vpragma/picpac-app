@@ -21,6 +21,7 @@ const LIBRARIES = [
   { name: "react", what: "интерфейс", license: "MIT", url: "https://github.com/facebook/react" },
   { name: "@supabase/supabase-js", what: "база данных, вход и хранилище фото", license: "MIT", url: "https://github.com/supabase/supabase-js" },
   { name: "onnxruntime-web", what: "запуск моделей ИИ прямо в браузере", license: "MIT", url: "https://github.com/microsoft/onnxruntime" },
+  { name: "@huggingface/tokenizers", what: "разбор фразы на слова для модели «по смыслу»", license: "Apache-2.0", url: "https://github.com/huggingface/tokenizers.js" },
   { name: "@huggingface/transformers", what: "работа с моделью выделения предмета", license: "Apache-2.0", url: "https://github.com/huggingface/transformers.js" },
   { name: "upscaler и @upscalerjs/esrgan-slim", what: "«Резкость для печати»", license: "MIT", url: "https://github.com/thekevinscott/UpscalerJS" },
   { name: "@tensorflow/tfjs", what: "вычисления для резкости и проверки фото", license: "Apache-2.0", url: "https://github.com/tensorflow/tfjs" },
@@ -58,6 +59,13 @@ const MODELS = [
     license: "MIT",
     url: "https://github.com/infinitered/nsfwjs",
     urlText: "Проект nsfwjs",
+  },
+  {
+    name: "rubert-tiny (cointegrated)",
+    what: "Понимает просьбу своими словами, если её нет в словаре команд. Работает на устройстве, текст никуда не уходит.",
+    license: "MIT",
+    url: "https://huggingface.co/cointegrated/rubert-tiny",
+    urlText: "Модель на Hugging Face",
   },
   {
     name: "YOLOX-Nano (Megvii)",

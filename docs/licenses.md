@@ -5,7 +5,7 @@
 Главное:
 
 - Библиотеки — MIT, Apache-2.0, ISC, BSD, MPL-2.0 и несколько разрешительных (Unlicense, CC0, Blue Oak, Python-2.0, CC BY 4.0 у данных `caniuse-lite`). **GPL и AGPL нет.** LGPL — только у бинарной библиотеки `libvips` внутри `sharp` (необязательная зависимость Next.js, работает на сервере, в код для браузера не попадает).
-- Модели ИИ на устройстве: SlimSAM-77 (Apache-2.0), MI-GAN (MIT, код и веса), ESRGAN-slim ×2 из UpscalerJS (MIT), YOLOX-Nano (Apache-2.0, поиск предмета словом), среда onnxruntime-web (MIT). Облачного ИИ нет. Файлы лежат у нас в `public/models` и `public/ort`, контрольные суммы — в разделе 2. Подробно — раздел 2 и [ai.md](ai.md).
+- Модели ИИ на устройстве: SlimSAM-77 (Apache-2.0), MI-GAN (MIT, код и веса), ESRGAN-slim ×2 из UpscalerJS (MIT), YOLOX-Nano (Apache-2.0, поиск предмета словом), rubert-tiny (MIT, команда по смыслу), среда onnxruntime-web (MIT). Облачного ИИ нет. Файлы лежат у нас в `public/models` и `public/ort`, контрольные суммы — в разделе 2. Подробно — раздел 2 и [ai.md](ai.md).
 - Проверка повторяется командой `npm run licenses:check` (входит в `npm run test:all`): код выхода 1, если у рабочей зависимости лицензия GPL/AGPL или лицензия не указана.
 - Шрифт Jost — SIL Open Font License 1.1. Логотип и фирменный стиль — © ООО «Фотопринт», только для прототипа.
 - Тестовые фото — Wikimedia Commons, свободные лицензии; авторы и ссылки — [test-photos/sources.md](test-photos/sources.md).
@@ -103,6 +103,7 @@
 | **MI-GAN** — ластик | [andraniksargsyan/migan](https://huggingface.co/andraniksargsyan/migan) `406830d0fa60666da0071c342ad2fbc8f30c5c64`; проект Picsart-AI-Research/MI-GAN | MIT, © 2024 Picsart AI Research | MIT (`public/models/migan/LICENSE.txt`, 1 082 Б) | Places2 (свои исследовательские условия) | `migan/migan_pipeline_v2.onnx`, 28 079 181 Б | `6f1f3530a1a2324b19752018ce756088b07973cda8d7d890034ace5c8a48c40b` |
 | **ESRGAN-slim ×2** (UpscalerJS) — «Резкость для печати» | npm `@upscalerjs/esrgan-slim` 1.0.0; архитектура idealo ISR | MIT (пакет); Apache-2.0 (ISR) | MIT (в составе пакета) | DIV2K (свои исследовательские условия) | `upscaler/x2/model.json` 12 336 Б и `group1-shard1of1.bin` 888 300 Б | `8efb488c2caed0196a6163e3f06798f9245e92623ffd50654a26c372e09150ea`, `5cb464ae4d390ce0a771afd5feaf60fbfcdb18ab48a56db98cdf6b88202369de` |
 | **YOLOX-Nano** — поиск предмета словом («убери машину», «размой собаку»), 80 классов COCO | [Megvii-BaseDetection/YOLOX](https://github.com/Megvii-BaseDetection/YOLOX), релиз `0.1.1rc0`, официальный файл `yolox_nano.onnx` | Apache-2.0 (© Megvii) | Apache-2.0 (веса в релизе того же репозитория) | COCO 2017 (аннотации CC BY 4.0, изображения — условия Flickr) | `yolox-nano/yolox_nano.onnx`, 3 659 407 Б | `c789161ed43c8269fcd4e67c67eeeb4e80c622da2eb296a20bc6007bd18a0b7d` |
+| **rubert-tiny** (int8) — подбор команды по смыслу для фраз вне словаря | [onnx-community/rubert-tiny-ONNX](https://huggingface.co/onnx-community/rubert-tiny-ONNX) (конвертация transformers.js) из [cointegrated/rubert-tiny](https://huggingface.co/cointegrated/rubert-tiny) | MIT | MIT (карточка cointegrated/rubert-tiny) | Yandex Translate corpus, OPUS-100, Tatoeba (по карточке) | `rubert-tiny/onnx/model_quantized.onnx`, 12 089 968 Б — исходный файл 12 089 905 Б (`b57b049fbe8a567203f86b8172b56df1c8c74d1900827ed665ee2efa649c0774`) с дописанным выходом скрытого состояния (`scripts/onnx-add-output.mjs`, веса не менялись); `tokenizer.json` 705 882 Б, `tokenizer_config.json` 1 457 Б, `intents.json` (векторы наших примеров) | `93c3368d93ee32aa41fb795ac9dc9d5de6dbb86e2ceb05d62b83c92ae43b3374` |
 | **nsfwjs / MobileNetV2** — первичная проверка фото для модерации (W-15) | npm `nsfwjs` 4.3.0; модель GantMan/nsfw_model | MIT | MIT (с оговоркой авторов о материалах третьих сторон) | данные авторов модели | `model.json` 117 928 Б и `group1-shard1of1` 2 619 461 Б (в `public/models/nsfw/`) | `feffc6868d61e412a4e7a22657a3d07a8a48df6e11688a9e25b77c23cb7b45c9`, `8e7dddbb16acacc1bf1601b1b8a761e730ff934b7f2d7771312b2f000e5f5f13` |
 
 Веса всех моделей — MIT или Apache-2.0. У наборов обучения (SA-1B, Places2, DIV2K, COCO) свои условия для исследований; на сами веса и их использование они в лицензиях моделей не переносятся, но перед пилотом это стоит проверить с юристом.
@@ -113,6 +114,7 @@
 |---|---|---|---|
 | `onnxruntime-web` (wasm-ядро) | 1.31.1 | MIT | `public/ort/ort-wasm-simd-threaded.wasm` 14 848 852 Б (`4b884c203b0fa48d057be3332c65513ff85aa3c5bddd6946acc0fab7ecda001d`), `.mjs` 24 738 Б (`30ed0b5cd1182ede931fea448afb567d4dc705ec957af09f108a2be5f770dac3`) — копии из пакета |
 | `@huggingface/transformers` | 4.3.2 | Apache-2.0 | код в воркере ИИ-редактора |
+| `@huggingface/tokenizers` | 0.2.0 | Apache-2.0 | токенизатор rubert-tiny в воркере «по смыслу» |
 | `@tensorflow/tfjs`, `upscaler` | 4.11.0, 1.0.0 | Apache-2.0, MIT | код в воркере (UpscalerJS) |
 
 ### Облако

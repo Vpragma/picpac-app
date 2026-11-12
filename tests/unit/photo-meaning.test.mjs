@@ -74,6 +74,7 @@ test(`N3: фразы вне словаря (${OUTSIDE.length}) — словар�
   let dictOk = 0;
   let modelOk = 0;
   let top3 = 0;
+  let wrongAuto = 0; // модель выполнила не то — хуже, чем подсказка
   const lines = [];
   for (const [phrase, want] of OUTSIDE) {
     const r = parseCommand(phrase);
@@ -87,6 +88,7 @@ test(`N3: фразы вне словаря (${OUTSIDE.length}) — словар�
       const ranked = rankIntents(await embedText(rt, phrase), table);
       const dec = decide(ranked);
       mHit = !!dec.pick && want.includes(dec.pick.id);
+      if (dec.pick && !mHit) wrongAuto++;
       t3 = dec.options.some((o) => want.includes(o.id));
       shown = (dec.pick ? "сразу: " + dec.pick.id : "варианты: " + dec.options.map((o) => o.id).join("/")) + ` (${ranked[0].id} ${ranked[0].score.toFixed(2)})`;
     }
@@ -95,10 +97,11 @@ test(`N3: фразы вне словаря (${OUTSIDE.length}) — словар�
     lines.push(`${mHit ? "✓" : t3 ? "~" : "✗"} «${phrase}» → ${shown}`);
   }
   const pct = (n) => Math.round((n / OUTSIDE.length) * 1000) / 10 + "%";
-  console.log(`Вне словаря (${OUTSIDE.length} фраз): словарь — ${dictOk} (${pct(dictOk)}); словарь + модель, выполнено верно сразу — ${modelOk} (${pct(modelOk)}); верное среди предложенных кнопок — ${top3} (${pct(top3)})`);
+  console.log(`Вне словаря (${OUTSIDE.length} фраз): словарь — ${dictOk} (${pct(dictOk)}); словарь + модель, выполнено верно сразу — ${modelOk} (${pct(modelOk)}); верное среди предложенных кнопок — ${top3} (${pct(top3)}); выполнено неверно — ${wrongAuto}`);
   console.log("  " + lines.join("\n  "));
   assert.ok(modelOk > dictOk, "модель должна понимать больше словаря");
   assert.ok(top3 / OUTSIDE.length >= 0.6, `верное среди вариантов: ${pct(top3)}`);
+  assert.equal(wrongAuto, 0, "неуверенная модель не должна сама менять фото");
 });
 
 test("N3: модель не ломает понятные словарю фразы (они до неё не доходят)", () => {
