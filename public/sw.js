@@ -16,7 +16,7 @@ const PAGES = "picpac-pages-" + VERSION;
 const DATA = "picpac-data-" + VERSION;
 const MODELS = "picpac-models-v1";
 const OFFLINE = "/offline.html";
-const SHELL = ["/", "/books", "/editor", "/cart"];
+const SHELL = ["/", "/books", "/editor", "/cart", "/help"]; // /help — телефон поддержки доступен и без сети
 const SHELL_ASSETS = [OFFLINE, "/manifest.webmanifest", "/logo.svg", "/icon.svg", "/favicon.ico", "/icons/icon-192.png", "/icons/icon-512.png"];
 const NET_TIMEOUT = 4000;
 

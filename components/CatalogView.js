@@ -26,13 +26,17 @@ export default function CatalogView({ initial }) {
       {data && (
         <>
           <h2 style={{ marginTop: 16 }}>Фотокниги</h2>
-          {data.products.filter((p) => p.kind === "book").map((p) => (
-            <ProductCard key={p.slug} p={p} />
-          ))}
+          <div className="catalog-grid">
+            {data.products.filter((p) => p.kind === "book").map((p) => (
+              <ProductCard key={p.slug} p={p} />
+            ))}
+          </div>
           <h2 style={{ marginTop: 16 }}>Нужны просто фотографии?</h2>
-          {data.products.filter((p) => p.kind === "print").map((p) => (
-            <ProductCard key={p.slug} p={p} />
-          ))}
+          <div className="catalog-grid">
+            {data.products.filter((p) => p.kind === "print").map((p) => (
+              <ProductCard key={p.slug} p={p} />
+            ))}
+          </div>
         </>
       )}
     </div>
@@ -48,7 +52,7 @@ function ProductCard({ p }) {
         {isBook ? <IconBook size={44} /> : <IconImage size={44} />}
       </div>
       <div className="row between">
-        <h3 style={{ margin: 0, fontSize: 22 }}>{p.name}</h3>
+        <h3 className="card-title">{p.name}</h3>
         {p.badge && <span className="chip chip-hl">{p.badge}</span>}
       </div>
       <p className="muted" style={{ margin: "4px 0 8px" }}>{p.tagline}</p>

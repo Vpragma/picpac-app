@@ -450,6 +450,7 @@ function GalleryPanel({ busy, onAdd }) {
           <div className="gallery-grid">
             {items.map((it) => (
               <label key={it.file} title={it.title}>
+                {/* eslint-disable-next-line @next/next/no-img-element -- статика тестовой галереи: e2e ищут img[src="/demo-gallery/…"], сервис-воркер кэширует оригиналы для офлайна */}
                 <img src={"/demo-gallery/" + it.file} alt={it.title} loading="lazy" />
                 <input type="checkbox" checked={!!picked[it.file]} onChange={(e) => setPicked((p) => ({ ...p, [it.file]: e.target.checked }))} aria-label={it.title} />
                 {it.problem && <span className="tag">{PROBLEM[it.problem] || it.problem}</span>}
@@ -523,6 +524,7 @@ function SortablePhoto({ p, i, n, thumb, readOnly, badges, upload }) {
   const style = { transform: transform ? `translate3d(${Math.round(transform.x)}px, ${Math.round(transform.y)}px, 0)` : undefined, transition };
   return (
     <div ref={setNodeRef} style={style} className={"photo-cell" + (isDragging ? " dragging" : "")} data-photo={p.name}>
+      {/* eslint-disable-next-line @next/next/no-img-element -- фото клиента с устройства (blob:/data:): next/image их не оптимизирует, оптимизатор Vercel для фото клиентов не используем */}
       {thumb ? <img src={thumb} alt={p.name} /> : <div className="bad">{p.supported ? "…" : p.tooBig ? "Больше 25 МБ" : p.tooManyPixels ? "Больше 100 Мп" : "Формат не подходит"}</div>}
       <span className="num">{i + 1}</span>
       {upload && (
@@ -597,6 +599,7 @@ function BookPreview({ layout, thumbs, size, issues, byId }) {
       <div className="page" style={{ width: pw, height: ph }}>
         {pg.slots.map((sl) => (
           <div key={sl.photoId} className={"slot" + slotClass(issues, sl.photoId)} style={{ left: sl.x * 100 + "%", top: sl.y * 100 + "%", width: sl.w * 100 + "%", height: sl.h * 100 + "%" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element -- фото клиента с устройства (blob:/data:): next/image их не оптимизирует, оптимизатор Vercel для фото клиентов не используем */}
             {thumbs[sl.photoId] && <img src={thumbs[sl.photoId]} alt="" style={placeStyle(byId[sl.photoId])} />}
           </div>
         ))}
@@ -663,6 +666,7 @@ function PrintPreview({ draft, thumbs, size, issues }) {
             <div key={p.id} style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
               <div className={"page" + slotClass(issues, p.id)} style={{ aspectRatio: ratio, width: land ? "100%" : "70%", position: "relative" }}>
                 <div className={"slot" + slotClass(issues, p.id)} style={{ inset: 0 }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element -- фото клиента с устройства (blob:/data:): next/image их не оптимизирует, оптимизатор Vercel для фото клиентов не используем */}
                   {thumbs[p.id] && <img src={thumbs[p.id]} alt={p.name} style={placeStyle(p)} />}
                 </div>
               </div>
@@ -690,6 +694,7 @@ function PlacementCard({ photo, thumb, readOnly }) {
       <h3>Кадрирование</h3>
       <p className="muted small">Как фото ляжет на своё место — заполнит его целиком (края обрежутся) или войдёт полностью, с белыми полями.</p>
       <div className="row wrap" style={{ alignItems: "flex-start", gap: 16 }}>
+        {/* eslint-disable-next-line @next/next/no-img-element -- фото клиента с устройства (blob:/data:): next/image их не оптимизирует, оптимизатор Vercel для фото клиентов не используем */}
         <div className="place-preview" aria-hidden="true">{thumb && <img src={thumb} alt="" style={placeStyle(photo)} />}</div>
         <div style={{ flex: 1, minWidth: 180 }}>
           <div className="options">
@@ -839,6 +844,7 @@ function CheckStep({ draft, thumbs, product, price, goPhotos, readOnly }) {
         return (
           <div key={i.key} className={"card issue " + (done ? "ok" : i.level)}>
             <div className="row" style={{ alignItems: "flex-start", gap: 12 }}>
+              {/* eslint-disable-next-line @next/next/no-img-element -- фото клиента с устройства (blob:/data:): next/image их не оптимизирует, оптимизатор Vercel для фото клиентов не используем */}
               {i.photoId && (thumbs[i.photoId] ? <img className="issue-thumb" src={thumbs[i.photoId]} alt="" /> : <div className="issue-thumb" />)}
               <div style={{ flex: 1 }}>
                 <b className={done ? "" : i.level === "err" ? "err-text" : "warn-text"}>

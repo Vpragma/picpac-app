@@ -328,6 +328,7 @@ export default function CartPage() {
       {lines.map((l) => (
         <div key={l.key} className="card row" style={{ gap: 12, alignItems: "flex-start" }}>
           {l.thumb ? (
+            // eslint-disable-next-line @next/next/no-img-element -- фото клиента с устройства (blob:/data:): next/image их не оптимизирует, оптимизатор Vercel для фото клиентов не используем
             <img src={l.thumb} alt="" className="issue-thumb" />
           ) : (
             <div className="issue-thumb row" style={{ justifyContent: "center" }}>

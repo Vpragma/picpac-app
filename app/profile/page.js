@@ -4,6 +4,9 @@ import AccountPanel from "@/components/auth/AccountPanel";
 import Notifications from "@/components/Notifications";
 import PushToggle from "@/components/PushToggle";
 import AutoEnhanceSetting from "@/components/AutoEnhanceSetting";
+import TextSizeSetting from "@/components/TextSizeSetting";
+import { cookies } from "next/headers";
+import { SUPPORT } from "@/lib/support";
 import { InstallCard } from "@/components/Pwa";
 import { isStaffRole } from "@/lib/roles";
 import { staffMfaRequired } from "@/lib/server/env";
@@ -13,6 +16,7 @@ export const metadata = { title: "Профиль — PicPac" };
 
 export default async function ProfilePage() {
   const auth = await getAuth();
+  const largeText = (await cookies()).get("pp_text")?.value === "lg";
   let profile = null;
   let mfa = null;
   if (auth.user) {
@@ -56,12 +60,19 @@ export default async function ProfilePage() {
         </div>
       )}
       <Notifications />
+      <TextSizeSetting initial={largeText} />
       {auth.user && <PushToggle />}
       <AutoEnhanceSetting />
       <InstallCard />
       <section className="card">
         <h3>Поддержка</h3>
-        <p className="small">support@picpac.by · +375 44 539-67-89, ежедневно 9:00–21:00</p>
+        <p style={{ margin: 0 }}>
+          <a href={SUPPORT.phoneHref}>{SUPPORT.phone}</a> · <a href={SUPPORT.emailHref}>{SUPPORT.email}</a>
+        </p>
+        <p className="muted small">Ежедневно {SUPPORT.hours}</p>
+        <Link href="/help" className="btn btn-small">
+          Все ответы — в «Помощи»
+        </Link>
       </section>
     </div>
   );

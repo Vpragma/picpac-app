@@ -2,9 +2,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { IconBook, IconCart, IconGrid, IconPackage, IconUser } from "./icons";
+import { IconBook, IconCart, IconGrid, IconHelp, IconPackage, IconUser } from "./icons";
+import { SUPPORT } from "../lib/support";
 import { cartCount, useCart } from "../lib/cart";
 import { startSync } from "../lib/sync";
+import { syncLargeTextFromCookie } from "../lib/textSize";
 import Pwa from "./Pwa";
 
 const TABS = [
@@ -12,6 +14,8 @@ const TABS = [
   { href: "/books", label: "Мои книги", icon: IconBook, match: (p) => p.startsWith("/books") || p.startsWith("/editor") },
   { href: "/orders", label: "Заказы", icon: IconPackage, match: (p) => p.startsWith("/orders") },
   { href: "/profile", label: "Профиль", icon: IconUser, match: (p) => p.startsWith("/profile") || p.startsWith("/login") || p.startsWith("/admin") },
+  // На телефоне «Помощь» — значок «?» в шапке; на компьютере ещё и пункт бокового меню
+  { href: "/help", label: "Помощь", icon: IconHelp, match: (p) => p.startsWith("/help"), desktopOnly: true },
 ];
 
 // hidden — на экране входа тосты не показываем: они закрывали бы текст «Войдите или зарегистрируйтесь…» на телефоне
@@ -38,12 +42,14 @@ function Toasts({ hidden = false }) {
   );
 }
 
-export default function Shell({ children }) {
+// logo — картинка логотипа, собранная на сервере (getImageProps в app/layout.js): без лишнего JS в браузере
+export default function Shell({ children, logo }) {
   const path = usePathname() || "/";
   const count = cartCount(useCart());
   // Проекты вошедшего клиента синхронизируются с аккаунтом (гость работает только на устройстве)
   useEffect(() => {
     startSync();
+    syncLargeTextFromCookie();
   }, []);
   // Старая версия хранила «вход» в localStorage — убираем остатки, вход теперь только на сервере
   useEffect(() => {
@@ -53,32 +59,55 @@ export default function Shell({ children }) {
   }, []);
   return (
     <div className="app">
+      <a href="#main" className="skip-link">
+        Перейти к содержимому
+      </a>
       <header className="topbar">
         <Link href="/" className="logo" aria-label="PicPac — на главную">
-          <img src="/logo.svg" alt="PicPac" width="72" height="40" />
+          {logo}
         </Link>
-        <Link href="/cart" className="cart-btn" aria-label={"Корзина, позиций: " + count}>
-          <IconCart />
-          {count > 0 && (
-            <span className="badge badge-bump" key={count}>
-              {count}
-            </span>
-          )}
-        </Link>
+        <div className="topbar-actions">
+          <Link href="/help" className="help-btn" aria-label="Помощь" aria-current={path.startsWith("/help") ? "page" : undefined}>
+            <IconHelp />
+          </Link>
+          <Link href="/cart" className="cart-btn" aria-label={"Корзина, позиций: " + count}>
+            <IconCart />
+            {count > 0 && (
+              <span className="badge badge-bump" key={count}>
+                {count}
+              </span>
+            )}
+          </Link>
+        </div>
       </header>
-      <main className="content">{children}</main>
       <nav className="tabbar" aria-label="Главное меню">
         {TABS.map((t) => {
           const active = t.match(path);
           const I = t.icon;
           return (
-            <Link key={t.href} href={t.href} className={"tab" + (active ? " active" : "")} aria-current={active ? "page" : undefined}>
+            <Link
+              key={t.href}
+              href={t.href}
+              className={"tab" + (active ? " active" : "") + (t.desktopOnly ? " tab-desktop" : "")}
+              aria-current={active ? "page" : undefined}
+            >
               <I size={22} />
               <span>{t.label}</span>
             </Link>
           );
         })}
       </nav>
+      <main id="main" tabIndex={-1} className="content">
+        {children}
+      </main>
+      <footer className="site-footer">
+        <nav aria-label="Поддержка">
+          <Link href="/help">Помощь</Link>
+          <a href={SUPPORT.phoneHref}>{SUPPORT.phone}</a>
+          <a href={SUPPORT.emailHref}>{SUPPORT.email}</a>
+        </nav>
+        <p>Поддержка ежедневно {SUPPORT.hours}</p>
+      </footer>
       <Toasts hidden={path.startsWith("/login")} />
       <Pwa />
     </div>
