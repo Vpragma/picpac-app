@@ -34,6 +34,8 @@ test("N4: статуя в музее — один классификатор б�
   assert.deepEqual(M.findings({ ...clean, nsfw: 0.88, art: 0.95 }), [], "Давид в музее");
   assert.equal(M.findings({ ...clean, nsfw: 0.88, art: 0.95, nude: 0.4 })[0].id, "nude", "CLIP видит обнажённое тело — флаг");
   assert.equal(M.findings({ ...clean, nsfw: 0.88, art: 0.3 })[0].id, "nudity", "не искусство — флаг");
+  // Однотонный бежевый кадр: классификатор путает цвет кожи с телом — CLIP видит «пустой кадр»
+  assert.deepEqual(M.findings({ ...clean, nsfw: 0.5, plain: 0.95 }), [], "пустой кадр");
 });
 
 test("N4: символика, оружие, кровь, наркотики — уровни и слова", () => {

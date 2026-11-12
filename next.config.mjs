@@ -34,7 +34,7 @@ const nextConfig = {
   // public/models/moderation (≈ 112 МБ; функция ≈ 150 МБ при лимите Vercel 250 МБ) — сеть для моделей не нужна.
   serverExternalPackages: ["onnxruntime-web"],
   outputFileTracingIncludes: Object.fromEntries(
-    ["/api/v1/orders", "/api/v1/projects/*/photos", "/api/v1/projects/*/photos/*/print"].map((route) => [
+    ["/api/v1/orders", "/api/v1/projects/*/photos", "/api/v1/projects/*/photos/*/print", "/api/v1/moderation/health"].map((route) => [
       route,
       ["./node_modules/onnxruntime-web/dist/ort.node.min.mjs", "./node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.{mjs,wasm}", "./public/models/moderation/*.{onnx,json}"],
     ]),
