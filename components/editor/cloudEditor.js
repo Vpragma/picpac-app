@@ -9,6 +9,10 @@ import { maskArea } from "../../lib/photo/mask";
 import { cloudCommand, cloudDetect, cloudState } from "../../lib/cloudAi/client";
 import { CLOUD_SAY, boxPoint, clipMaskToBox, unionMasks } from "../../lib/cloudAi/shared";
 
+// Один облачный запрос за раз: двойное нажатие не тратит лишнюю правку из дневного лимита
+let busy = false;
+const BUSY_SAY = "Облачный ИИ ещё думает над прошлой командой — секунду.";
+
 const same = (getCtx, pid) => {
   const c = getCtx();
   return c && c.photoId === pid ? c : null;
@@ -29,8 +33,15 @@ export async function cloudAsk(text, local, getCtx) {
     return c1.setAnswer({ ok: false, say: `${local.say} Или разрешите облачный ИИ — ниже.` });
   }
   if (st.left <= 0) return c1.setAnswer({ ok: false, say: `${local.say} ${CLOUD_SAY.quota}` });
+  if (busy) return c1.setAnswer({ ok: true, say: BUSY_SAY });
   c1.setAnswer({ ok: true, say: "Спрашиваю облачный ИИ…" });
-  const r = await cloudCommand(text);
+  busy = true;
+  let r;
+  try {
+    r = await cloudCommand(text);
+  } finally {
+    busy = false;
+  }
   const c2 = same(getCtx, pid);
   if (!c2) return;
   if (!r.ok) return c2.setAnswer({ ok: false, say: `${local.say} ${r.say}` });
@@ -78,14 +89,18 @@ export async function cloudFind(target, act, getCtx) {
     c1.startSelect(act);
     return c1.setAnswer({ ok: false, say: `Разрешите облачный ИИ — ниже. Или: ${touch[0].toLowerCase() + touch.slice(1)}` });
   }
+  if (busy) return c1.setAnswer({ ok: true, say: BUSY_SAY });
   c1.setAnswer({ ok: true, say: `Ищу «${target}» на фото…` });
   c1.startSelect(act); // выделение готовится на устройстве, пока облако ищет предмет
   let det;
+  busy = true;
   try {
     det = await cloudDetect(await c1.getFrame(), target);
   } catch (e) {
     console.error("Облачный поиск:", e);
     det = { ok: false, say: CLOUD_SAY.unavailable };
+  } finally {
+    busy = false;
   }
   const c2 = same(getCtx, pid);
   if (!c2) return;
