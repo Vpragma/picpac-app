@@ -87,7 +87,7 @@ export async function cloudFind(target, act, getCtx) {
   if (!st.consent) {
     c1.setConsentAsk({ kind: "find", target, act, why: `Найти «${target}» по слову может облачный ИИ` });
     c1.startSelect(act);
-    return c1.setAnswer({ ok: false, say: `Разрешите облачный ИИ — ниже. Или: ${touch[0].toLowerCase() + touch.slice(1)}` });
+    return c1.setAnswer({ ok: false, say: `${touch} Или разрешите облачный ИИ ниже — он поищет «${target}» сам.` });
   }
   if (busy) return c1.setAnswer({ ok: true, say: BUSY_SAY });
   c1.setAnswer({ ok: true, say: `Ищу «${target}» на фото…` });
