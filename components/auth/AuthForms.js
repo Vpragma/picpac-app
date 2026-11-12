@@ -8,7 +8,7 @@ import { PASSWORD_MIN } from "../../lib/validate";
 export default function AuthForms({ next = "", reason = "", initialMode = "login" }) {
   const [mode, setMode] = useState(initialMode);
   return (
-    <div>
+    <div className="narrow">
       {reason === "checkout" && (
         <div className="card" role="status">
           <b style={{ color: "var(--ds-color-text-strong)" }}>Осталось войти — и заказ готов</b>

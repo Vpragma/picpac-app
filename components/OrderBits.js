@@ -46,7 +46,7 @@ export function minskDayRange(fromIso, toIso) {
 // Плашка статуса — пастельные заливки брендбука (токены --ds-color-status-*, класс .status-chip в app/brand.css)
 export function StatusChip({ status }) {
   return (
-    <span className="status-chip" data-status={status}>
+    <span className="chip status-chip" data-status={status}>
       {STATUS_LABELS[status] || status}
     </span>
   );

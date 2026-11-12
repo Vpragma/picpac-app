@@ -1,5 +1,6 @@
 // N1: скриншоты «было / стало» для презентации (открытые экраны, без входа).
 // Запуск: node scripts/screens-before-after.mjs <base-url> <before|after> [light|dark]
+// dark: телефон в тёмном режиме + cookie pp_theme=dark (после N1 тёмная тема включается в профиле)
 // Пишет в docs/presentation/screens-v2/before-after/<label>-<phone|desktop>-<экран>.jpg
 import { chromium } from "@playwright/test";
 import fs from "node:fs";
@@ -37,6 +38,8 @@ for (const [device, viewport, dpr] of VIEWPORTS) {
     // онбординг пропускаем: снимаем сами экраны
     storageState: { cookies: [], origins: [{ origin: new URL(base).origin, localStorage: [{ name: "pp:onboarding", value: "done" }] }] },
   });
+  // после N1 тёмная тема — выбор в профиле (cookie pp_theme); до N1 сайт следовал теме телефона
+  if (scheme === "dark") await ctx.addCookies([{ name: "pp_theme", value: "dark", url: base }]);
   const page = await ctx.newPage();
   for (const [p, name] of PAGES) {
     try {

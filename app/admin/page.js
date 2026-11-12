@@ -72,7 +72,7 @@ export default async function AdminPage() {
                     <td className="num">{time(i.created_at)}</td>
                     <td className="num">{time(i.sla_due)}</td>
                     <td>
-                      <span className="status-chip" data-status={i.status}>
+                      <span className="chip status-chip" data-status={i.status}>
                         {IT_STATUS[i.status] || i.status}
                       </span>
                     </td>

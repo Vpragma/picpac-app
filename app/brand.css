@@ -149,7 +149,7 @@ a.card { transition: box-shadow var(--ds-duration) var(--ds-ease), transform var
 .how h3 { margin: 2px 0 var(--space-1); font-size: var(--ds-text-lg); }
 .how p { margin: 0; color: var(--ds-color-text-secondary); }
 .how-num { font-size: var(--ds-text-sm); font-weight: 500; color: var(--ds-color-accent); letter-spacing: var(--ds-tracking-caps); text-transform: uppercase; }
-@media (min-width: 768px) { .how { grid-template-columns: repeat(3, minmax(0, 1fr)); } .how li { grid-template-columns: 1fr; } }
+@media (min-width: 768px) { .how { grid-template-columns: repeat(3, minmax(0, 1fr)); } .how li { grid-template-columns: 1fr; padding: var(--space-5); } .how-icon { width: 104px; height: 78px; margin-left: -6px; } }
 
 .band {
   margin: var(--space-10) calc(-1 * var(--space-4)) 0; padding: var(--space-8) var(--space-4);
@@ -197,7 +197,7 @@ a.card:hover .go-arrow { background: var(--ds-color-primary); border-color: var(
 /* ── 11. Страница продукта: выбор параметров ──────────────────────────── */
 .option { transition: border-color var(--ds-duration) var(--ds-ease), background-color var(--ds-duration) var(--ds-ease); position: relative; padding-right: 36px; }
 .option:hover:not(.selected) { border-color: var(--ds-color-border-strong); }
-.option.selected::after {
+.option.selected:not([role='tab'])::after {
   content: ""; position: absolute; top: 10px; right: 10px; width: 18px; height: 18px; border-radius: 999px;
   background: var(--ds-color-accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / 12px no-repeat;
 }
@@ -320,3 +320,25 @@ html[data-text='lg'] { --sticky-h: 92px; }
   background: var(--ds-color-bg-surface); color: var(--ds-color-text-strong);
 }
 .steps button.active::before { background: var(--ds-color-on-accent); color: var(--pp-red); }
+
+/* ── 22. Таблицы статистики — как .data-table ─────────────────────────── */
+.stat-table { font-size: var(--ds-text-sm); }
+.stat-table thead th { background: var(--ds-color-bg-muted); font-weight: 500; }
+.stat-table th.num, .stat-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ── 23. Плашки модерации у клиента (заказ): пастель брендбука, текст тёмный в обеих темах ──
+   (крючки — data-testid карточек: разметку этих блоков меняет N4, стили — здесь) */
+[data-testid='moderation-checking'] { background: var(--ds-color-status-moderation) !important; color: var(--ds-color-on-chip); border-color: transparent; }
+[data-testid='moderation-returned'] { background: var(--ds-color-status-returned); color: var(--ds-color-on-chip); border-color: transparent; border-left-color: var(--pp-red) !important; }
+[data-testid='moderation-returned'] h3, [data-testid='moderation-checking'] b { color: var(--pp-green-900); }
+
+/* ── 24. Вкладки «Вход / Регистрация» и подобные (.options[role=tablist]) — сегменты ── */
+.options[role='tablist'] {
+  display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; padding: 4px;
+  border-radius: var(--ds-radius-pill); background: var(--ds-color-bg-muted); border: 1px solid var(--ds-color-border);
+}
+.options[role='tablist'] .option {
+  border: 0; background: transparent; box-shadow: none; border-radius: var(--ds-radius-pill); text-align: center;
+  padding: 0 var(--space-3); min-height: var(--tap); font-weight: 500; color: var(--ds-color-text);
+}
+.options[role='tablist'] .option.selected { background: var(--ds-color-bg-inverse); color: var(--ds-color-text-inverse); }

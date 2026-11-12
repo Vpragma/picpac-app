@@ -36,7 +36,7 @@ export default async function ProfilePage() {
   }
 
   return (
-    <div>
+    <div className="narrow">
       <h1>Профиль</h1>
       {auth.user ? (
         <AccountPanel
