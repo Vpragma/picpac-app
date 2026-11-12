@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useProduct } from "../lib/useCatalog";
 import { pagesForPhotos, photoHint } from "../lib/price";
 import { daysWord, etaFromDay, formatByn, formatEtaRange, linePrice, minskDate } from "../lib/pricing";
+import { plural } from "../lib/plural";
 import { createProject } from "../lib/draft";
 import { notify } from "../lib/store";
 
@@ -18,7 +19,8 @@ const GROUPS = [
   ["surface", "Поверхность"],
 ];
 
-export default function ProductView({ slug, initial, serverToday }) {
+// gallery — фото продукта, собранные на сервере (app/product/[slug]/page.js), без клиентского JS
+export default function ProductView({ slug, initial, serverToday, gallery = null }) {
   useEffect(() => {
     if (slug) track("product_view", { props: /^[a-z0-9-]{1,40}$/.test(slug) ? { product: slug } : undefined });
   }, [slug]);
@@ -41,7 +43,7 @@ export default function ProductView({ slug, initial, serverToday }) {
         <Link href="/">Вернуться в каталог</Link>
       </div>
     );
-  return <ProductForm key={product.slug} product={product} delivery={catalog?.delivery || []} serverToday={serverToday} />;
+  return <ProductForm key={product.slug} product={product} delivery={catalog?.delivery || []} serverToday={serverToday} gallery={gallery} />;
 }
 
 // Сегодняшняя дата по Минску. На сервере — дата отрисовки страницы, в браузере — текущая (без ошибки гидратации).
@@ -58,7 +60,14 @@ function defaultOptions(p) {
   return out;
 }
 
-function ProductForm({ product: p, delivery, serverToday }) {
+// «Для фотокниги Lite…», «Для цифровой печати…» — название в родительном падеже
+const PRINT_GENITIVE = { photo: "печати фото", digital: "цифровой печати" };
+function forName(p) {
+  if (p.kind === "book") return `фотокниги ${p.name}`;
+  return PRINT_GENITIVE[p.slug] || "этого продукта";
+}
+
+function ProductForm({ product: p, delivery, serverToday, gallery }) {
   const router = useRouter();
   const isBook = p.kind === "book";
   const [sizeId, setSizeId] = useState(p.sizes[0].id);
@@ -120,6 +129,7 @@ function ProductForm({ product: p, delivery, serverToday }) {
           {p.name}
         </h1>
         <p className="muted">{p.tagline}</p>
+        {gallery}
         <p>{p.description}</p>
 
         <section className="card">
@@ -142,7 +152,7 @@ function ProductForm({ product: p, delivery, serverToday }) {
           return (
             <section className="card" key={group}>
               <h3>{title}</h3>
-              {list.length === 1 && <p className="muted small">Для {p.name} доступен один вариант.</p>}
+              {list.length === 1 && <p className="muted small">Для {forName(p)} доступен один вариант.</p>}
               <div className="options">
                 {list.map((o) => (
                   <button key={o.id} className={"option" + (o.id === opts[group] ? " selected" : "")} onClick={() => pick(group, o.id)} aria-pressed={o.id === opts[group]}>
@@ -206,7 +216,7 @@ function ProductForm({ product: p, delivery, serverToday }) {
           <ul className="small" style={{ margin: "4px 0 0", paddingLeft: 20 }}>
             <li>JPEG или PNG, до {Math.round((p.requirements?.maxBytes || 25 * 1048576) / 1048576)} МБ за файл. HEIC (iPhone), WebP и GIF сначала сохраните как JPEG.</li>
             <li>
-              Для чёткой печати {size.id.replace("x", "×")} см {isBook ? "на всю страницу" : ""} — от {px(150)} точек по длинной стороне, лучше {px(300)}. Меньше {px(100)} — будет размыто.
+              Для чёткой печати {size.id.replace("x", "×")} см {isBook ? "на всю страницу" : ""} — от {px(150)} {plural(px(150), ["точки", "точек", "точек"])} по длинной стороне, лучше {px(300)}. Меньше {px(100)} — будет размыто.
             </li>
             <li>Берите оригиналы из галереи телефона, а не из мессенджеров: там фото сжаты.</li>
           </ul>
@@ -216,7 +226,7 @@ function ProductForm({ product: p, delivery, serverToday }) {
       <aside className="product-aside" aria-label="Итого и сроки">
         <section className="card">
           <div className="row between">
-            <span>Итого{quantity > 1 ? ` за ${quantity} ${isBook ? "экз." : "копии"}` : ""}</span>
+            <span>Итого{quantity > 1 ? ` за ${quantity} ${isBook ? "экз." : plural(quantity, ["копию", "копии", "копий"])}` : ""}</span>
             <span className="price">
               {!isBook && <span className="muted small">за фото </span>}
               {formatByn(totalKop)}
