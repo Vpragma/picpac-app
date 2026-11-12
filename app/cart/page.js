@@ -9,10 +9,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { IconImage, IconTrash } from "../../components/icons";
-import { clearAfterOrder, moveLocalToServer, removeLine, setLineQuantity, useCart } from "../../lib/cart";
+import { clearAfterOrder, moveLocalToServer, removeLine, retryMove, setLineQuantity, useCart } from "../../lib/cart";
 import { FIELD_LABELS, PICKUP_POINTS, formatPhone, needsDate, validateCheckout } from "../../lib/checkout";
 import { kvDel, kvGet, kvSet, markOrdered, useDraft } from "../../lib/draft";
-import { isClient, useMe } from "../../lib/me";
+import { isClient, refreshMe, useMe } from "../../lib/me";
 // Печатные версии: обычный import (не import()) — без сети на «Подтвердить» кусок кода не догрузится,
 // а нужна понятная ошибка «нет связи». Тяжёлая часть (воркер) грузится только при сборке.
 import { preparePrintVersions } from "../../lib/photo/print";
@@ -167,6 +167,18 @@ export default function CartPage() {
   async function confirm() {
     if (lock.current) return;
     setFailure(null);
+    if (me?.unknown) {
+      // Сервер не ответил, кто вошёл: не отправляем на вход по кругу — спрашиваем ещё раз
+      const m = await refreshMe();
+      if (m.unknown) {
+        setFailure("Не получилось проверить вход: сервер не отвечает. Проверьте интернет и нажмите «Повторить».");
+        return;
+      }
+      if (m.authenticated) {
+        setFailure("Связь восстановилась — нажмите «Повторить», чтобы оформить заказ.");
+        return;
+      }
+    }
     if (me && !me.authenticated) {
       // Корзина, проекты и форма сохранены на устройстве — после входа или регистрации вернёмся сюда
       router.push("/login?reason=checkout&next=" + encodeURIComponent("/cart"));
@@ -290,7 +302,16 @@ export default function CartPage() {
   return (
     <div>
       <h1>Корзина</h1>
-      {cart.error && <p className="warn-text small">{cart.error}</p>}
+      {cart.error && (
+        <p className="warn-text small" role="alert">
+          {cart.error}{" "}
+          {!cart.moving && (
+            <button type="button" className="btn btn-small" onClick={() => retryMove()}>
+              Повторить
+            </button>
+          )}
+        </p>
+      )}
       {pending.length > 0 && (
         <p className="muted small" role="status">
           Переносим в аккаунт: {uploading.total ? `загружено фото ${uploading.done} из ${uploading.total}` : "сохраняем проект"}…

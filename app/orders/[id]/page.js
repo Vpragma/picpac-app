@@ -32,7 +32,7 @@ export default function OrderPage() {
     const m = await getMe();
     const r = m?.authenticated
       ? await callApi(`/api/v1/orders/${encodeURIComponent(id)}`, { method: "GET" })
-      : { status: m?.offline ? 0 : 401, ok: false, error: { message: "Нет связи с сервером. Проверьте интернет и попробуйте ещё раз." } };
+      : { status: m?.unknown ? 0 : 401, ok: false, error: { message: "Нет связи с сервером. Проверьте интернет и попробуйте ещё раз." } };
     setRes((prev) => (r.status === 0 && prev?.ok ? prev : r));
     setIsNew(window.location.search.includes("new=1"));
     return r;

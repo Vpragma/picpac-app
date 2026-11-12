@@ -17,7 +17,7 @@ export default function OrdersPage() {
     const load = async () => {
       // Гостю заказы не запрашиваем (нет лишних 401 в консоли) — сразу предлагаем войти
       const m = await getMe();
-      const r = m?.authenticated ? await callApi("/api/v1/orders", { method: "GET" }) : { status: m?.offline ? 0 : 401, ok: false, error: { message: "Нет связи с сервером. Проверьте интернет и попробуйте ещё раз." } };
+      const r = m?.authenticated ? await callApi("/api/v1/orders", { method: "GET" }) : { status: m?.unknown ? 0 : 401, ok: false, error: { message: "Нет связи с сервером. Проверьте интернет и попробуйте ещё раз." } };
       // Без связи оставляем то, что уже показано
       if (alive) setRes((prev) => (r.status === 0 && prev?.ok ? prev : r));
     };
