@@ -101,3 +101,62 @@ test("непонятная команда — подсказка, не молч�
 });
 
 test("в наборе не меньше 40 фраз", () => assert.ok(CASES.length >= 40));
+
+// Критик S03 (круг 1): команды «наоборот» и разговорные формы — все фразы из отчёта
+const CRITIC = [
+  ["поменьше яркости", { exposure: -1 }],
+  ["яркость поменьше", { exposure: -1 }],
+  ["яркость пониже", { exposure: -1 }],
+  ["контраст пониже", { contrast: -1 }],
+  ["поменьше контраста", { contrast: -1 }],
+  ["поменьше насыщенности", { saturation: -1 }],
+  ["насыщенность пониже", { saturation: -1 }],
+  ["чуть поменьше тепла", { warmth: -1 }],
+  ["сделай менее ярким", { exposure: -1 }],
+  ["менее ярко", { exposure: -1 }],
+  ["сделай менее тёплым", { warmth: -1 }],
+  ["не надо желтизны", { warmth: -1 }],
+  ["слишком жёлтое", { warmth: -1 }],
+  ["слишком синее", { warmth: 1 }],
+  ["не надо так ярко", { exposure: -1 }],
+  ["не надо темнее", { exposure: 1 }],
+  ["слишком тепло", { warmth: -1 }],
+  ["сделай ярче, пожалуйста", { exposure: 1 }],
+  ["пожалуйста, сделай теплее", { warmth: 1 }],
+  ["пересвечено", { highlights: -1 }],
+  ["фото засвечено", { highlights: -1 }],
+  ["темновато", { exposure: 1 }],
+  ["приглуши свет", { exposure: -1 }],
+  ["менее контрастно", { contrast: -1 }],
+  ["слишком контрастно", { contrast: -1 }],
+  ["яркость +30", { exposure: 1 }],
+  ["яркость -20", { exposure: -1 }],
+  ["желтовато", { warmth: -1 }],
+  ["убери яркость", { exposure: -1 }],
+  ["больше света", { exposure: 1 }],
+];
+
+for (const [phrase, want] of CRITIC) {
+  test(`критик: «${phrase}»`, () => {
+    const r = parseCommand(phrase);
+    assert.equal(r.ok, true, `не разобрано: ${r.say}`);
+    const adj = r.steps.find((x) => x.kind === "adjust");
+    assert.ok(adj, `нет правки света и цвета: ${JSON.stringify(r.steps)}`);
+    for (const [k, sign] of Object.entries(want)) {
+      assert.equal(Math.sign(adj.deltas[k] || 0), sign, `${k}: ${JSON.stringify(adj.deltas)}`);
+    }
+    assert.doesNotMatch(r.say, /Не понял/);
+  });
+}
+
+test("число в команде задаёт силу: «яркость +30» → +30, «контраст минус 10» → −10", () => {
+  assert.equal(parseCommand("яркость +30").steps[0].deltas.exposure, 30);
+  assert.equal(parseCommand("контраст минус 10").steps[0].deltas.contrast, -10);
+});
+
+test("ответ «ещё» без «ещё ещё»", () => {
+  const a = parseCommand("сильнее", { last: parseCommand("ярче").steps[0] });
+  const b = parseCommand("ещё", { last: a.steps[0] });
+  assert.equal(b.say, "Сделали ещё ярче");
+  assert.doesNotMatch(b.say, /ещё ещё/);
+});

@@ -310,12 +310,12 @@ button, input, select { font: inherit; color: inherit; }
 
 /* ИИ-редактор (S03): значки, превью «до/после», команды, ползунки */
 .pe-badges { display: inline-flex; flex-wrap: wrap; gap: 4px; }
-.pe-badges.compact { position: absolute; right: 4px; top: 4px; left: 28px; justify-content: flex-end; pointer-events: none; }
+.pe-badges.compact { position: absolute; left: 3px; right: 3px; bottom: 3px; gap: 2px; justify-content: flex-start; pointer-events: none; }
 .pe-badge {
   display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; line-height: 18px; font-weight: 500;
   background: var(--ds-color-warning-bg); color: var(--ds-color-text-strong); border: 1px solid var(--ds-color-warning);
 }
-.pe-badges.compact .pe-badge { font-size: 11px; padding: 0 6px; line-height: 16px; }
+.pe-badges.compact .pe-badge { font-size: 10px; padding: 0 5px; line-height: 15px; }
 .pe-badge.ok { background: var(--ds-color-success); border-color: var(--ds-color-success); color: #fff; }
 .pe-badge.ai { background: var(--ds-color-bg-inverse); border-color: var(--ds-color-bg-inverse); color: var(--ds-color-text-inverse); }
 .pe-strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 6px; margin-bottom: 12px; }
@@ -353,4 +353,4 @@ button, input, select { font: inherit; color: inherit; }
 .pe-actions { gap: 8px; margin-top: 8px; }
 .pe-switch { gap: 12px; cursor: pointer; }
 .pe-switch input { width: 44px; height: 24px; accent-color: var(--ds-color-success); flex: none; }
-.pe-badges.compact .pe-badge { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pe-badges.compact .pe-badge { max-width: 100%; white-space: nowrap; }
