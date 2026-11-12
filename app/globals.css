@@ -445,15 +445,16 @@ body:has(.sticky-bar) .net-banner { bottom: calc(var(--tabbar-h) + var(--sticky-
 .gallery-thumb.loaded img { opacity: 1; }
 .gallery-retry { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: transparent; font-size: 1.5rem; color: var(--ds-color-text); cursor: pointer; }
 /* ED (п. 14): на миниатюре значки — маленькие кружки в одну строку, фото не закрывают: «!» — есть замечание,
-   «✓» — улучшено, «ИИ» — правки. Полный текст — во всплывающей подсказке, в описании кнопки и в карточке фото */
-.pe-badges.compact { flex-wrap: nowrap; gap: 3px; left: 4px; right: auto; bottom: 4px; }
-.pe-badges.compact .pe-badge { font-size: 0; line-height: 0; min-width: 18px; height: 18px; padding: 0; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 0 0 1px rgb(255 255 255 / 0.8); }
-.pe-badges.compact .pe-badge::before { font-size: 11px; line-height: 1; font-weight: 700; }
-.pe-badges.compact .pe-badge.warn::before { content: "!"; }
-.pe-badges.compact .pe-badge.ok::before { content: "✓"; }
-.pe-badges.compact .pe-badge.ai { padding: 0 4px; }
-.pe-badges.compact .pe-badge.ai::before { content: "ИИ"; font-size: 9px; }
-.pe-badges.compact .pe-badge.warn ~ .pe-badge.warn { display: none; }
+   «✓» — улучшено, «ИИ» — правки. Полный текст — во всплывающей подсказке, в описании кнопки и в карточке фото.
+   :root — сильнее правил app/ux.css (D2), которые подключаются позже */
+:root .pe-badges.compact { flex-wrap: nowrap; gap: 3px; left: 4px; right: auto; bottom: 4px; }
+:root .pe-badges.compact .pe-badge { font-size: 0; line-height: 0; min-width: 18px; height: 18px; padding: 0; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 0 0 1px rgb(255 255 255 / 0.8); }
+:root .pe-badges.compact .pe-badge::before { font-size: 11px; line-height: 1; font-weight: 700; }
+:root .pe-badges.compact .pe-badge.warn::before { content: "!"; }
+:root .pe-badges.compact .pe-badge.ok::before { content: "✓"; }
+:root .pe-badges.compact .pe-badge.ai { padding: 0 4px; }
+:root .pe-badges.compact .pe-badge.ai::before { content: "ИИ"; font-size: 9px; }
+:root .pe-badges.compact .pe-badge.warn ~ .pe-badge.warn { display: none; }
 .ai-prefetch { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 10px; }
 .ai-prefetch p { margin: 0; }
 /* ED (п. 5): после касания страница не прыгает — без «якорения прокрутки» в редакторе и с постоянной высотой
