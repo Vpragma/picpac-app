@@ -7,10 +7,8 @@
 <title>Нет сети — PicPac</title>
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <style>
-  :root { --bg: #faf5ed; --surface: #ffffff; --text: #38524f; --strong: #2b403d; --muted: #5f6563; --accent: #bd3434; --border: #ebe3d8; color-scheme: light; }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg: #15100e; --surface: #211a17; --text: #f4ece6; --strong: #fff8f2; --muted: #c4b8b0; --accent: #ff8585; --border: #3a2e2a; color-scheme: dark; }
-  }
+  :root { --bg: #faf5ed; --surface: #ffffff; --text: #38524f; --strong: #2b403d; --muted: #5c615f; --accent: #bd3434; --border: #e9e1d5; color-scheme: light; }
+  /* N1: светлая тема бренда у всех (как в приложении по умолчанию) */
   * { box-sizing: border-box; }
   body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); font: 16px/1.5 Jost, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; display: flex; align-items: center; justify-content: center; padding: 24px 16px; }
   main { max-width: 420px; width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 28px 22px; text-align: center; }
@@ -20,7 +18,6 @@
   .row { display: grid; gap: 10px; }
   a { display: block; padding: 13px 16px; border-radius: 12px; text-decoration: none; font-weight: 500; border: 1px solid var(--border); color: var(--strong); }
   a.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  @media (prefers-color-scheme: dark) { a.primary { color: #15100e; } }
   a:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 </style>
 </head>

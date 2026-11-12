@@ -61,7 +61,7 @@ a.card { transition: box-shadow var(--ds-duration) var(--ds-ease), transform var
 .tag-new { background: var(--ds-color-tag-new); }
 .tag-sale { background: var(--ds-color-tag-sale); }
 .tag-choice { background: var(--ds-color-tag-choice); }
-.tag-180 { background: var(--ds-color-bg-surface); border: 1px solid var(--ds-color-border-strong); }
+.tag-180 { background: var(--pp-snow); box-shadow: inset 0 0 0 1px var(--pp-frame); } /* светлая плашка в обеих темах — текст тёмный */
 .tags { display: flex; flex-wrap: wrap; gap: var(--space-1); }
 /* плашки поверх фото обложки */
 .tags-over { position: absolute; left: var(--space-3); top: var(--space-3); z-index: 1; }
@@ -298,3 +298,25 @@ html[data-text='lg'] { --sticky-h: 92px; }
 /* ── 19. Страница продукта: варианты ровной сеткой ────────────────────── */
 .product-page .options { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 11.5rem), 1fr)); gap: var(--space-2); }
 .product-page .option { width: 100%; }
+
+/* ── 20. Админка: шапка разделов, заголовки карточек ──────────────────── */
+.admin-head { margin-bottom: var(--space-3); gap: var(--space-2); }
+.admin-nav { margin: 0; }
+.admin-h { font-size: var(--ds-text-lg); margin: 0 0 var(--space-3); }
+.admin .stat-tiles { margin: var(--space-3) 0; }
+.admin .data-table a { font-weight: 500; }
+.admin .table-wrap { margin: 0 calc(-1 * var(--space-1)); }
+@media (max-width: 640px) {
+  .admin-nav { flex-wrap: nowrap; overflow-x: auto; padding-bottom: var(--space-1); scrollbar-width: thin; }
+  .admin-nav .filter-chip { flex: none; }
+}
+
+/* ── 21. Шаги редактора с номерами (номер не входит в имя кнопки: content … / "") ── */
+.steps { counter-reset: pp-step; }
+.steps button { counter-increment: pp-step; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 var(--space-2); }
+.steps button::before {
+  content: counter(pp-step) / ""; display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 22px; height: 22px; border-radius: 999px; font-size: var(--ds-text-sm); line-height: 1;
+  background: var(--ds-color-bg-surface); color: var(--ds-color-text-strong);
+}
+.steps button.active::before { background: var(--ds-color-on-accent); color: var(--pp-red); }

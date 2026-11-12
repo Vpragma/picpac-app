@@ -147,6 +147,15 @@ export default function LicensesPage() {
         </div>
       </section>
 
+      <section className={`card ${styles.section}`} id="illustrations" aria-labelledby="lic-illustrations">
+        <h2 id="lic-illustrations">Иллюстрации и графика</h2>
+        <p style={{ margin: 0 }}>
+          Линейные иллюстрации пустых экранов, онбординга и главной (книга, фото, посылка, телефон с ИИ, доставка), линейные рамки коллажа и значки
+          нарисованы командой PicPac App для этого приложения в линейном стиле брендбука PicPac. Сторонней графики нет. Коллаж на главной собран из
+          фото тестовой галереи (авторы и лицензии — ниже).
+        </p>
+      </section>
+
       <section className={`card ${styles.section}`} id="photoprint" aria-labelledby="lic-photoprint">
         <h2 id="lic-photoprint">Материалы «Фотопринт»</h2>
         <p style={{ margin: 0 }}>
