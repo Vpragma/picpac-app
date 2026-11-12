@@ -153,7 +153,8 @@ test("обязательный путь: каталог → проект → 12 
     await login(page);
     await expect(page).toHaveURL(/\/cart/);
     await expect(page.getByLabel("Имя и фамилия")).toBeVisible();
-    await expect.poll(async () => (await user.client.req("/api/v1/cart")).json?.cart?.items?.length, { timeout: 60_000 }).toBe(1);
+    // Перенос корзины ждёт загрузки всех фото в аккаунт: на сети площадки (~1,4 Мбит/с) 14 фото — 1–3 мин, поэтому 240 с
+    await expect.poll(async () => (await user.client.req("/api/v1/cart")).json?.cart?.items?.length, { timeout: 240_000 }).toBe(1);
   });
 
   await test.step("AC-1 получатель, TEST10, доставка, тестовая оплата", async () => {
