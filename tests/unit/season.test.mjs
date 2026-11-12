@@ -66,3 +66,21 @@ test("миграция 0014: в базе допустимы те же значе
   assert.doesNotMatch(sql, /grant (insert|update|delete)[^;]*to (anon|authenticated)/);
   assert.doesNotMatch(sql, /\bdrop table\b|\bdrop column\b|\balter table [^;]* drop\b/i);
 });
+
+test("пуш: иконка в цветах сезона — только свои файлы /icons/season/, без сезона — обычная иконка", async () => {
+  const { pushPayload, seasonIcon } = await import("../../lib/notifyRules.js");
+  const { existsSync } = await import("node:fs");
+  for (const s of ["autumn", "blackfriday", "newyear"]) {
+    const icon = seasonIcon(s);
+    assert.equal(icon, `/icons/season/icon-${s}-192.png`);
+    assert.ok(existsSync(new URL(`../../public${icon}`, import.meta.url)), `файл ${icon}`);
+    assert.equal(JSON.parse(pushPayload({ title: "t", icon })).icon, icon);
+  }
+  assert.equal(seasonIcon("none"), undefined);
+  assert.equal(JSON.parse(pushPayload({ title: "t" })).icon, undefined);
+  for (const bad of ["https://evil.com/x.png", "/icons/icon-192.png", "/icons/season/icon-spring-192.png", "//evil.com/icons/season/icon-autumn-192.png"]) {
+    assert.equal(JSON.parse(pushPayload({ title: "t", icon: bad })).icon, undefined, bad);
+  }
+  const sw = readFileSync(new URL("../../public/sw.js", import.meta.url), "utf8");
+  assert.match(sw, /icons\\\/season\\\/icon-\(autumn\|blackfriday\|newyear\)-192/);
+});
