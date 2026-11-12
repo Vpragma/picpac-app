@@ -807,7 +807,7 @@ paths:
     get:
       tags: [Сезон]
       summary: Текущий сезон оформления (N2) — публично, без входа
-      description: "Договор docs/night/night2-seasons.md. Значения none (Без сезона), autumn (Осень), blackfriday (Чёрная пятница), newyear (Новый год). Кэш — 5 секунд (Cache-Control public, max-age=5, s-maxage=5). Нет ответа базы — none: сезонных элементов нет, всё работает. Клиент читает сезон при загрузке, при возврате на вкладку и раз в 30 секунд; атрибут data-season на <html> сервер ставит сам."
+      description: "Договор docs/night/night2-seasons.md. Значения none (Без сезона), autumn (Осень), blackfriday (Чёрная пятница), newyear (Новый год). Кэш — 5 секунд (Cache-Control public, max-age=5, s-maxage=5); запрос с cookies входа — private, no-store (к ответу может добавиться обновлённая сессия). Нет ответа базы — none: сезонных элементов нет, всё работает. Клиент читает сезон при загрузке, при возврате на вкладку и раз в 30 секунд; атрибут data-season на <html> сервер ставит сам."
       security: []
       responses:
         "200":

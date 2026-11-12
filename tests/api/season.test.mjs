@@ -39,6 +39,11 @@ test("GET /api/v1/season: публично, одно из 4 значений, к
   const cc = r.headers.get("cache-control") || "";
   assert.match(cc, /public/);
   assert.match(cc, /max-age=5\b/);
+  // вошедший пользователь: ответ без общего кэша (к нему proxy.js может добавить обновлённые cookies сессии)
+  const mine = await U.client.req("/api/v1/season");
+  assert.equal(mine.status, 200);
+  assert.equal(mine.json.season, r.json.season);
+  assert.match(mine.headers.get("cache-control") || "", /private, no-store/);
   // смена сезона только через админку: у публичного адреса нет PUT/POST
   assert.equal((await guest.req("/api/v1/season", { method: "PUT", body: { season: "none" } })).status, 405);
   assert.equal((await guest.req("/api/v1/season", { method: "POST", body: { season: "none" } })).status, 405);
