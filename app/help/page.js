@@ -68,7 +68,7 @@ export default async function HelpPage() {
           <li>Профиль → «Уведомления» → «Разрешить».</li>
         </ol>
         <p className="muted small" style={{ margin: 0 }}>
-          На iPhone уведомления работают только в установленном приложении. Если уведомления запрещены — включите их в настройках телефона для PicPac. QR-код для телефона — на странице <Link href="/qr">/qr</Link>.
+          На iPhone уведомления работают только в установленном приложении. Если уведомления запрещены — включите их в настройках телефона для PicPac. QR-код, чтобы открыть PicPac на телефоне, — на странице <Link href="/qr">«QR-код»</Link>.
         </p>
       </section>
 
@@ -144,6 +144,10 @@ export default async function HelpPage() {
           </div>
         </details>
       </section>
+
+      <p className="muted small" style={{ textAlign: "center", margin: 0 }}>
+        Какие библиотеки, модели ИИ, шрифт и фото используются в приложении: <Link href="/licenses">Лицензии и авторы</Link>.
+      </p>
 
       <Link href="/" className="btn btn-block">
         В каталог

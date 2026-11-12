@@ -1,24 +1,26 @@
 // Тестовые аккаунты для проверки (синтетические данные, реальных людей нет).
 // Повторный запуск безопасен: аккаунты не дублируются, пароль и роли приводятся к нужным.
-// Запуск: npm run seed (берёт SUPABASE_URL, SUPABASE_SECRET_KEY и SEED_PASSWORD из .env.local).
+// Запуск: npm run seed (берёт SUPABASE_URL, SUPABASE_SECRET_KEY и пароли SEED_PASSWORD_CLIENT,
+// SEED_PASSWORD_MODERATOR, SEED_PASSWORD_ADMIN из .env.local; запасной общий — SEED_PASSWORD).
 import { createClient } from "@supabase/supabase-js";
 
 const ACCOUNTS = [
-  { email: "client@example.com", name: "Тестовый клиент", roles: ["client"] },
-  { email: "moderator@example.com", name: "Тестовый модератор", roles: ["moderator"] },
+  { email: "client@example.com", name: "Тестовый клиент", roles: ["client"], passEnv: "SEED_PASSWORD_CLIENT" },
+  { email: "moderator@example.com", name: "Тестовый модератор", roles: ["moderator"], passEnv: "SEED_PASSWORD_MODERATOR" },
   // Две роли — чтобы был виден экран выбора роли
-  { email: "admin@example.com", name: "Тестовый администратор", roles: ["client", "admin"] },
+  { email: "admin@example.com", name: "Тестовый администратор", roles: ["client", "admin"], passEnv: "SEED_PASSWORD_ADMIN" },
 ];
 
 const url = process.env.SUPABASE_URL;
 const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
-const password = process.env.SEED_PASSWORD;
+const passwordFor = (acc) => process.env[acc.passEnv] || process.env.SEED_PASSWORD;
 if (!url || !key) {
   console.error("Нет SUPABASE_URL или SUPABASE_SECRET_KEY. Выполните в папке проекта: vercel env pull .env.local");
   process.exit(1);
 }
-if (!password || password.length < 12) {
-  console.error("Нет SEED_PASSWORD в .env.local (нужен надёжный пароль от 12 символов — он же указан в README).");
+const weak = ACCOUNTS.filter((a) => (passwordFor(a) || "").length < 12);
+if (weak.length) {
+  console.error(`Нет пароля от 12 символов в .env.local: ${weak.map((a) => a.passEnv).join(", ")} (они же указаны в README).`);
   process.exit(1);
 }
 
@@ -41,7 +43,7 @@ async function seedAccount(acc) {
   if (!user) {
     const { data, error } = await admin.auth.admin.createUser({
       email: acc.email,
-      password,
+      password: passwordFor(acc),
       email_confirm: true,
       user_metadata: { full_name: acc.name },
       app_metadata: { demo: true }, // тестовый аккаунт: его нельзя удалить из профиля
@@ -51,7 +53,7 @@ async function seedAccount(acc) {
     what = "создан";
   } else {
     const { error } = await admin.auth.admin.updateUserById(user.id, {
-      password,
+      password: passwordFor(acc),
       email_confirm: true,
       user_metadata: { ...user.user_metadata, full_name: acc.name },
       app_metadata: { ...user.app_metadata, demo: true },

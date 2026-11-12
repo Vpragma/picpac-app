@@ -17,11 +17,11 @@ const PATTERNS = [
   ["CLOUDFLARE_API_TOKEN=значение", /CLOUDFLARE_API_TOKEN\s*[=:]\s*["']?[A-Za-z0-9_-]{20,}/g],
 ];
 // Значения настоящих секретов (если есть .env.local) — ищем их буквально
-const SECRET_NAMES = ["SUPABASE_SECRET_KEY", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_JWT_SECRET", "POSTGRES_PASSWORD", "POSTGRES_URL", "CLOUDFLARE_API_TOKEN", "VAPID_PRIVATE_KEY", "CRON_SECRET", "ERP_SECRET", "ANALYTICS_SALT", "SEED_PASSWORD"];
+const SECRET_NAMES = ["SUPABASE_SECRET_KEY", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_JWT_SECRET", "POSTGRES_PASSWORD", "POSTGRES_URL", "CLOUDFLARE_API_TOKEN", "VAPID_PRIVATE_KEY", "CRON_SECRET", "ERP_SECRET", "ANALYTICS_SALT", "SEED_PASSWORD", "SEED_PASSWORD_CLIENT", "SEED_PASSWORD_MODERATOR", "SEED_PASSWORD_ADMIN"];
 const secrets = SECRET_NAMES.map((n) => [n, process.env[n]]).filter(([, v]) => v && v.length >= 12);
-// Пароль демо-аккаунтов жюри (SEED_PASSWORD) опубликован в README намеренно — по нему жюри входит в прототип.
+// Пароли демо-аккаунтов жюри (SEED_PASSWORD_CLIENT / _MODERATOR / _ADMIN) опубликованы в README намеренно — по нему жюри входит в прототип.
 // В репозитории и истории его не считаем находкой, во фронтенде (.next/static) — считаем.
-const PUBLIC_IN_REPO = new Set(["SEED_PASSWORD"]);
+const PUBLIC_IN_REPO = new Set(["SEED_PASSWORD", "SEED_PASSWORD_CLIENT", "SEED_PASSWORD_MODERATOR", "SEED_PASSWORD_ADMIN"]);
 
 // JWT с ролью anon — публичный ключ (его можно показывать), service_role — секрет
 function jwtIsPublic(token) {

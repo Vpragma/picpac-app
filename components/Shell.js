@@ -120,6 +120,7 @@ export default function Shell({ children, logo, phoneQr = null }) {
           <Link href="/help">Помощь</Link>
           <a href={SUPPORT.phoneHref}>{SUPPORT.phone}</a>
           <a href={SUPPORT.emailHref}>{SUPPORT.email}</a>
+          <Link href="/licenses">Лицензии и авторы</Link>
         </nav>
         <p>Поддержка ежедневно {SUPPORT.hours}</p>
         {phoneQr}

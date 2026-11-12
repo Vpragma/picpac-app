@@ -1,14 +1,19 @@
 // Проверка входа, ролей и защиты админки (ОТ-02, ОТ-04).
 // Запуск: npm run test:auth                     — против локального сервера http://localhost:3000
 //         npm run test:auth -- https://адрес-превью  — против превью на Vercel
-// Пароль тестовых аккаунтов берётся из SEED_PASSWORD в .env.local и никуда не печатается.
+// Пароли демо-аккаунтов берутся из SEED_PASSWORD_CLIENT / _MODERATOR / _ADMIN в .env.local (запасной — SEED_PASSWORD)
+// и никуда не печатаются.
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const BASE = (process.argv[2] || process.env.TEST_BASE_URL || "http://localhost:3000").replace(/\/$/, "");
-const PASSWORD = process.env.SEED_PASSWORD;
+const PW = {
+  client: process.env.SEED_PASSWORD_CLIENT || process.env.SEED_PASSWORD,
+  moderator: process.env.SEED_PASSWORD_MODERATOR || process.env.SEED_PASSWORD,
+  admin: process.env.SEED_PASSWORD_ADMIN || process.env.SEED_PASSWORD,
+};
 const AUDIT = "/api/v1/admin/audit";
 // Если превью закрыто защитой Vercel — можно передать ключ обхода для автотестов
 const BYPASS = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
@@ -59,8 +64,8 @@ class Client {
 
 async function main() {
   console.log(`Проверяем ${BASE}\n`);
-  if (!PASSWORD) {
-    console.error("Нет SEED_PASSWORD в .env.local — без него не войти под тестовыми аккаунтами.");
+  if (!PW.client || !PW.moderator || !PW.admin) {
+    console.error("Нет SEED_PASSWORD_CLIENT / _MODERATOR / _ADMIN в .env.local — без них не войти под тестовыми аккаунтами.");
     process.exit(1);
   }
   // Открытый адрес должен отвечать 200. Иначе 401 может прийти от защиты Vercel, а не от нашего сервера,
@@ -81,7 +86,7 @@ async function main() {
 
   // 2) Клиент
   const client = new Client("клиент");
-  const cl = await client.login("client@example.com", PASSWORD);
+  const cl = await client.login("client@example.com", PW.client);
   if (cl.status !== 200) {
     report(false, "вход client@example.com", `код ${cl.status}: ${cl.json?.error?.message || ""}`);
   } else {
@@ -100,7 +105,7 @@ async function main() {
 
   // 4) Админ: вход → выбор роли admin → журнал
   const admin = new Client("админ");
-  const al = await admin.login("admin@example.com", PASSWORD);
+  const al = await admin.login("admin@example.com", PW.admin);
   const needChoice = al.json?.redirect?.startsWith("/login/role");
   const ar = await admin.req("/api/v1/auth/role", { method: "POST", body: { role: "admin" } });
   const a = await admin.req(AUDIT);
@@ -126,7 +131,7 @@ async function main() {
   // Дополнительные проверки
   console.log("\nДополнительно:");
   const mod = new Client("модератор");
-  const ml = await mod.login("moderator@example.com", PASSWORD);
+  const ml = await mod.login("moderator@example.com", PW.moderator);
   const m = await mod.req(AUDIT);
   const mp = await mod.req("/admin");
   report(ml.status === 200 && m.status === 403 && mp.status === 200, "модератор: журнал закрыт (403), раздел заказов открыт (200)", `вход ${ml.status}, журнал ${m.status}, /admin ${mp.status}`);
@@ -175,6 +180,9 @@ function scanStatic() {
     SUPABASE_JWT_SECRET: process.env.SUPABASE_JWT_SECRET,
     POSTGRES_PASSWORD: process.env.POSTGRES_PASSWORD,
     SEED_PASSWORD: process.env.SEED_PASSWORD,
+    SEED_PASSWORD_CLIENT: process.env.SEED_PASSWORD_CLIENT,
+    SEED_PASSWORD_MODERATOR: process.env.SEED_PASSWORD_MODERATOR,
+    SEED_PASSWORD_ADMIN: process.env.SEED_PASSWORD_ADMIN,
   };
   const files = [];
   const walk = (d) => {
