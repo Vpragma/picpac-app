@@ -195,7 +195,7 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
       setAi((b) => (b.key === key && b.photoId === pid ? { ...b, status: "ready", w: r.w, h: r.h } : b));
     } catch (e) {
       if (isCancelled(e)) return;
-      console.error(e);
+      console.error(e, e?.workerStack || "");
       setAi((b) => (b.key === key ? { status: "error", photoId: pid, say: "Не получилось подготовить выделение. Попробуйте ещё раз — или пользуйтесь командами и ползунками." } : b));
     }
   }
@@ -281,7 +281,7 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
       setAnswer({ ok: true, say: `Резкость для печати включена: ${r.width / 2}×${r.height / 2} → ${r.width}×${r.height} точек. Оригинал не изменился.` });
     } catch (e) {
       if (e?.message === "cancelled") return setUp(null);
-      console.error(e);
+      if (e?.message !== "no_webgl") console.error(e); // без WebGL — не ошибка, а честный отказ
       setUp({
         photoId: pid,
         status: "error",
@@ -354,7 +354,7 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
         const act = step.kind === "blurBackground" ? "blurBg" : step.kind === "maskTone" ? (step.dir > 0 ? "lighten" : "darken") : "erase";
         if (act === "erase" && !hasMask && step.target !== "selection") {
           startSelect("erase");
-          said.push(`Сам «${step.target}» на фото не нахожу. Коснитесь того, что убрать, — я выделю, затем нажмите «Убрать»`);
+          said.push(`Сам найти «${step.target}» пока не умею. Коснитесь того, что убрать, — я выделю, затем нажмите «Убрать»`);
           continue;
         }
         const res = maskStep(act, next);

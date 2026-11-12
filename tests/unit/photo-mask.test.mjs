@@ -243,3 +243,15 @@ test("«Резкость для печати»: правка сохраняет�
   const slot = { w: 0.5, h: 0.5 };
   assert.ok(Math.abs(slotDpi({ ...photo, edits: { upscale: 2 } }, slot, 20, 20) - slotDpi(photo, slot, 20, 20) * 2) <= 1);
 });
+
+test("воркеры Turbopack: параметры из #params= переносятся в ?params= (обход старых Chrome)", async () => {
+  const { fixUrl } = await import("../../lib/workerShim.js");
+  const params = JSON.stringify([["/_next/static/chunks/a.js", "/_next/static/chunks/b.js"], "", "/_next/", null, null]);
+  const u = "http://x.test/_next/static/chunks/turbopack-worker-1.js#params=" + encodeURIComponent(params);
+  const out = new URL(fixUrl(u));
+  assert.equal(out.hash, "");
+  assert.equal(out.searchParams.get("params"), params);
+  // другие адреса не трогаем
+  assert.equal(fixUrl("http://x.test/a.js#params=1"), "http://x.test/a.js#params=1");
+  assert.equal(fixUrl("/ort/x.mjs"), "/ort/x.mjs");
+});
