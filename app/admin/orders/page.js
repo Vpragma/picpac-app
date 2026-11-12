@@ -161,6 +161,15 @@ export default async function AdminOrdersPage({ searchParams }) {
           <p className="small" aria-live="polite" data-testid="orders-summary">
             {res.total ? `Найдено заказов: ${res.total.toLocaleString("ru-RU")}. Страница ${res.page} из ${res.pages}.` : "По этим фильтрам заказов нет."}
           </p>
+          {/* N7: страница за пределами списка (старая ссылка, ?page=99) — пусто, но не ошибка */}
+          {!res.items.length && res.total > 0 && (
+            <div className="card" role="status" data-testid="orders-page-empty">
+              <p style={{ margin: 0 }}>На этой странице заказов нет — всего страниц: {res.pages}.</p>
+              <a className="btn btn-small" href={link({ page: undefined })} style={{ marginTop: 8 }}>
+                На первую страницу
+              </a>
+            </div>
+          )}
           {!!res.items.length && (
             <div className="table-wrap">
               <table className="data-table" data-testid="orders-table">
@@ -202,7 +211,7 @@ export default async function AdminOrdersPage({ searchParams }) {
               </table>
             </div>
           )}
-          {res.pages > 1 && (
+          {res.pages > 1 && res.page <= res.pages && (
             <nav className="admin-pager" aria-label="Страницы списка заказов">
               {res.page > 1 ? (
                 <a className="btn btn-small" href={link({ page: res.page > 2 ? res.page - 1 : undefined })} rel="prev">

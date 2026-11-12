@@ -97,6 +97,13 @@ test("N9 заказы: фильтры, сортировка, страницы, �
   const day = await get("from=2026-11-11&to=2026-11-11");
   assert.ok(day.json.items.every((o) => o.createdAt >= "2026-11-10T21:00:00" && o.createdAt < "2026-11-11T21:00:00"), "день по Минску");
   for (const bad of ["q=%25", "status=lost", "foo=1", "from=11.11.2026", "per=1000"]) assert.equal((await get(bad)).status, 400, bad);
+  // N7: страница за пределами списка — 200 и пустой список (не 500 orders_unavailable)
+  for (const q of [`page=${all.json.pages + 50}`, "status=moderation&page=999", "product=pages-book&page=500&per=50"]) {
+    const far = await get(q);
+    assert.equal(far.status, 200, `${q}: ${far.text}`);
+    assert.deepEqual(far.json.items, [], q);
+    assert.ok(far.json.total >= 0 && far.json.pages >= 1 && far.json.page > far.json.pages, q);
+  }
   // Персональных полей в списке нет
   const keys = new Set(all.json.items.flatMap((o) => Object.keys(o)));
   for (const k of ["recipient", "phone", "email", "street", "house", "flat", "delivery_address", "name"]) assert.ok(!keys.has(k), `нет поля ${k}`);
