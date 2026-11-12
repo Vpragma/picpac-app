@@ -5,8 +5,9 @@
 .qr-url { font-size: 18px; word-break: break-all; }
 .qr-steps { display: grid; gap: 12px; text-align: left; }
 @media (min-width: 768px) { .qr-steps { grid-template-columns: 1fr 1fr; } }
-.phone-qr { display: none; }
+/* Специфичнее, чем .site-footer a (ux.css): на телефоне блока нет совсем */
+.site-footer a.phone-qr { display: none; }
 @media (min-width: 1024px) {
-  .phone-qr { display: flex; align-items: center; gap: 12px; margin-top: 12px; color: inherit; text-decoration: none; }
+  .site-footer a.phone-qr { display: inline-flex; align-items: center; gap: 12px; margin-top: 12px; color: inherit; text-decoration: none; text-align: left; }
   .phone-qr-code { width: 88px; flex: none; background: #fff; padding: 4px; border-radius: 8px; }
 }
