@@ -67,7 +67,7 @@ export default function SeasonPromo({ place = "home", applied = null, onApply = 
           <span className="chip chip-ok">Код применён</span>
         ) : (
           <button type="button" className="btn btn-small" onClick={() => onApply(promo.code)}>
-            Применить {promo.code}
+            Использовать {promo.code}
           </button>
         )
       ) : (
