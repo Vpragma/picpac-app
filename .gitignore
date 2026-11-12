@@ -25,3 +25,4 @@ CLAUDE.md
 # Playwright
 /test-results/
 /playwright-report/
+!.env.example
