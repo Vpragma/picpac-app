@@ -3,9 +3,8 @@ import { plural } from "../../lib/plural";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { DndContext, KeyboardSensor, MouseSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
-import { SortableContext, rectSortingStrategy, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import PhotoCell, { cellProps } from "../../components/editor/PhotoCell";
 import {
   addFiles,
   addGalleryFiles,
@@ -15,10 +14,7 @@ import {
   openProject,
   whenDraftReady,
   loadGallery,
-  movePhoto,
-  removePhoto,
   removePhotosUndoable,
-  reorderPhoto,
   replacePhoto,
   retryUpload,
   setPhotoPlacement,
@@ -36,12 +32,16 @@ import { useSyncState, whenInitialSync } from "../../lib/sync";
 import { useOnline } from "../../components/Pwa";
 import DraftError from "../../components/DraftError";
 import { EmptyState } from "../../components/LineArt";
-import { IconAlert, IconCheck, IconLeft, IconRight, IconTrash, IconUpload } from "../../components/icons";
+import { IconAlert, IconCheck, IconLeft, IconRight, IconUpload } from "../../components/icons";
 import { photoBadges } from "../../lib/photo/badges";
 import ModerationNotice, { flaggedCount } from "../../components/ModerationNotice";
 import ModerationDemoButton from "../../components/ModerationDemoButton";
 import { ANALYSIS_VERSION, findDuplicates } from "../../lib/photo/analyze";
 import { useStepTimer } from "@/lib/analytics";
+
+// N5: перетаскивание фото (@dnd-kit, ≈ 27 КБ сжатого JS) — отдельный кусок, грузится, только когда в черновике есть фото.
+// Пока он грузится, та же сетка без перетаскивания (кнопки «раньше / позже» работают) — подмена без сдвига вёрстки.
+const SortablePhotos = lazy(() => import("../../components/editor/SortablePhotos"));
 
 // ИИ-редактор (шаг «Правки») — отдельный кусок кода, грузится только при открытии шага
 const PhotoEditor = dynamic(() => import("../../components/editor/PhotoEditor"), {
@@ -511,7 +511,7 @@ function PhotosStep({ draft, thumbs, product, uploads, readOnly, lowDpi, dups, o
       {n === 0 ? (
         <p className="muted">Пока пусто. Добавьте фото — черновик сохранится сам, даже если закрыть страницу.</p>
       ) : (
-        <SortablePhotos draft={draft} thumbs={thumbs} readOnly={readOnly} lowDpi={lowDpi} dups={dups} />
+        <PhotoGrid draft={draft} thumbs={thumbs} readOnly={readOnly} lowDpi={lowDpi} dups={dups} />
       )}
       {!readOnly && (
         <p className="muted small" style={{ marginTop: 8 }}>
@@ -623,91 +623,21 @@ function GalleryThumb({ it }) {
 }
 
 // Сетка фото: на компьютере — перетаскивание (мышь и клавиатура), на телефоне — кнопки «раньше / позже»
-function SortablePhotos({ draft, thumbs, readOnly, lowDpi, dups }) {
+function PhotoGrid({ draft, thumbs, readOnly, lowDpi, dups }) {
   const sync = useSyncState();
   const online = useOnline();
-  const sensors = useSensors(useSensor(MouseSensor, { activationConstraint: { distance: 4 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
-  const ids = draft.photos.map((p) => p.id);
-  const pos = (id) => ids.indexOf(id) + 1;
-  const accessibility = {
-    screenReaderInstructions: { draggable: "Чтобы переставить фото, нажмите пробел, двигайте стрелками и нажмите пробел ещё раз. Escape — отмена." },
-    announcements: {
-      onDragStart: ({ active }) => `Взяли фото ${pos(active.id)}.`,
-      onDragOver: ({ active, over }) => (over ? `Фото ${pos(active.id)} над местом ${pos(over.id)}.` : `Фото ${pos(active.id)} вне сетки.`),
-      onDragEnd: ({ active, over }) => (over ? `Фото поставлено на место ${pos(over.id)}.` : `Фото ${pos(active.id)} осталось на месте.`),
-      onDragCancel: ({ active }) => `Отмена. Фото ${pos(active.id)} осталось на месте.`,
-    },
-  };
-  function onDragEnd({ active, over }) {
-    if (!over || active.id === over.id) return;
-    reorderPhoto(ids.indexOf(active.id), ids.indexOf(over.id));
-  }
-  return (
-    <DndContext id="photos-dnd" sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd} accessibility={accessibility}>
-      <SortableContext items={ids} strategy={rectSortingStrategy} disabled={readOnly}>
-        <div className="photo-grid">
-          {draft.photos.map((p, i) => (
-            <SortablePhoto
-              key={p.id}
-              p={p}
-              i={i}
-              n={draft.photos.length}
-              thumb={thumbs[p.id]}
-              readOnly={readOnly}
-              badges={photoBadges(p, { lowDpi: lowDpi?.has(p.id), duplicate: dups?.has(p.id) })}
-              upload={sync.enabled && p.supported && draft.status !== "ordered" ? (p.serverId ? "done" : online ? "sending" : "waiting") : null}
-            />
-          ))}
-        </div>
-      </SortableContext>
-    </DndContext>
-  );
-}
-
-// Загрузка фото в аккаунт (X-5, только у вошедшего клиента): «Загружено», «Загружается», «Ждёт сети»
-const UPLOAD_LABELS = { done: "Загружено", sending: "Загружается", waiting: "Ждёт сети" };
-
-function SortablePhoto({ p, i, n, thumb, readOnly, badges, upload }) {
-  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: p.id, disabled: readOnly });
-  const style = { transform: transform ? `translate3d(${Math.round(transform.x)}px, ${Math.round(transform.y)}px, 0)` : undefined, transition };
-  return (
-    <div ref={setNodeRef} style={style} className={"photo-cell" + (isDragging ? " dragging" : "")} data-photo={p.name}>
-      {/* eslint-disable-next-line @next/next/no-img-element -- фото клиента с устройства (blob:/data:): next/image их не оптимизирует, оптимизатор Vercel для фото клиентов не используем */}
-      {thumb ? <img src={thumb} alt={p.name} /> : <div className="bad">{p.supported ? "…" : p.tooBig ? "Больше 25 МБ" : p.tooManyPixels ? "Больше 100 Мп" : "Формат не подходит"}</div>}
-      <span className="num">{i + 1}</span>
-      {upload && (
-        <span className={"photo-upload photo-upload-" + upload} data-upload={upload}>
-          {UPLOAD_LABELS[upload]}
-        </span>
-      )}
-      {badges?.length > 0 && (
-        <span className="pe-badges compact" aria-label={"Фото " + (i + 1) + ": " + badges.map((b) => b.label).join(", ")}>
-          {badges.map((b) => (
-            <span key={b.id} className={"pe-badge " + b.tone} data-badge={b.id} title={b.label}>
-              {b.short || b.label}
-            </span>
-          ))}
-        </span>
-      )}
-      {!readOnly && (
-        <>
-          <button ref={setActivatorNodeRef} className="drag-handle" {...attributes} {...listeners} aria-label={`Переставить фото ${i + 1} «${p.name}»`} title="Перетащите, чтобы переставить">
-            ⠿
-          </button>
-          <div className="photo-tools">
-            <button onClick={() => movePhoto(p.id, -1)} disabled={i === 0} aria-label={`Раньше: фото ${i + 1} «${p.name}»`} title="Раньше">
-              <IconLeft size={18} />
-            </button>
-            <button onClick={() => removePhoto(p.id)} aria-label={`Удалить фото ${i + 1} «${p.name}»`} title="Удалить">
-              <IconTrash size={16} />
-            </button>
-            <button onClick={() => movePhoto(p.id, 1)} disabled={i === n - 1} aria-label={`Позже: фото ${i + 1} «${p.name}»`} title="Позже">
-              <IconRight size={18} />
-            </button>
-          </div>
-        </>
-      )}
+  const cells = cellProps({ draft, thumbs, readOnly, lowDpi, dups, syncEnabled: sync.enabled, online, photoBadges });
+  const plain = (
+    <div className="photo-grid">
+      {cells.map((c) => (
+        <PhotoCell key={c.p.id} {...c} />
+      ))}
     </div>
+  );
+  return (
+    <Suspense fallback={plain}>
+      <SortablePhotos cells={cells} readOnly={readOnly} />
+    </Suspense>
   );
 }
 

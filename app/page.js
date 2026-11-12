@@ -4,7 +4,7 @@
 import { loadCatalog } from "@/lib/server/catalog";
 import CatalogView from "@/components/CatalogView";
 import ProductPhoto from "@/components/ProductPhoto";
-import Onboarding from "@/components/Onboarding";
+import OnboardingLazy from "@/components/OnboardingLazy";
 import { AiBlock, HomeHero, HowItWorks, Trust } from "@/components/home/HomeSections";
 import { PRODUCT_PHOTOS } from "@/lib/productPhotos";
 
@@ -32,7 +32,7 @@ export default async function HomePage() {
       <CatalogView initial={catalog} covers={covers} />
       <AiBlock />
       <Trust />
-      <Onboarding />
+      <OnboardingLazy />
     </>
   );
 }
