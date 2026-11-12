@@ -19,8 +19,14 @@ const ACTOR_LABELS = { test: "автотест", erp: "ERP", system: "систе
 
 function objectText(item) {
   if (!item.object_type) return "";
-  const id = item.object_type === "user" || item.object_type === "profile" ? item.object_id?.slice(0, 8) + "…" : item.object_id;
-  return `${OBJECT_LABELS[item.object_type] || item.object_type}: ${id}`;
+  const label = OBJECT_LABELS[item.object_type] || item.object_type;
+  // N7: у некоторых записей объекта нет (подписка на уведомления) — без «: null», для пушей — служба доставки
+  if (item.object_id == null || item.object_id === "" || item.object_id === "null") {
+    const host = typeof item.details?.host === "string" && /^[a-z0-9.-]{1,80}$/i.test(item.details.host) ? item.details.host : "";
+    return item.object_type === "push" && host ? `${label} (${host})` : label;
+  }
+  const id = item.object_type === "user" || item.object_type === "profile" ? item.object_id.slice(0, 8) + "…" : item.object_id;
+  return `${label}: ${id}`;
 }
 
 function reasonText(d) {
