@@ -12,7 +12,13 @@ export default async function AdminLayout({ children }) {
       <div className="row between wrap" style={{ marginBottom: 12 }}>
         <nav className="row wrap" aria-label="Разделы админки">
           <Link href="/admin" className="btn btn-small">
-            Заказы
+            Обзор
+          </Link>
+          <Link href="/admin/moderation" className="btn btn-small">
+            Модерация
+          </Link>
+          <Link href="/admin/notifications" className="btn btn-small">
+            Уведомления
           </Link>
           {auth.activeRole === "admin" && (
             <Link href="/admin/stats" className="btn btn-small">

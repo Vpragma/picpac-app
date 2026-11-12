@@ -498,7 +498,7 @@ test("обращение по заказу: создаётся с ответом
 
 test("RLS: публичный ключ Supabase (anon) не видит ни одной строки и ни одного файла", async () => {
   const anon = supabaseAnon();
-  for (const table of ["projects", "project_photos", "cart_items", "orders", "order_items", "interactions", "interaction_messages", "promo_codes", "products", "audit_log", "profiles"]) {
+  for (const table of ["projects", "project_photos", "cart_items", "orders", "order_items", "interactions", "interaction_messages", "promo_codes", "products", "audit_log", "profiles", "notifications", "erp_events", "staff_notifications", "staff_notification_reads", "moderation_reviews"]) {
     const { data, error } = await anon.from(table).select("*").limit(5);
     assert.ok(error || (data || []).length === 0, `${table}: anon видит строки`);
   }
@@ -594,8 +594,8 @@ test("удалить мои фото: фото заказов в работе �
 });
 
 test("статусы демо-заказа (S02d): оплата → Модерация → автоодобрение → … → Завершён без дублей; миниатюры по подписанным ссылкам", async () => {
-  // Как будто с оплаты прошло 5 минут: шаги догоняются по таймеру (30 с на шаг)
-  const past = new Date(Date.now() - 5 * 60_000).toISOString();
+  // Как будто с оплаты прошло 10 минут: симулятор ERP догоняет шаги (30 с на шаг, доставка 60 с)
+  const past = new Date(Date.now() - 10 * 60_000).toISOString();
   await admin.from("orders").update({ status_changed_at: past, paid_at: past }).eq("id", s.order.id);
   const [r, r2] = await Promise.all([A.client.req(`/api/v1/orders/${s.order.id}`), A.client.req(`/api/v1/orders/${s.order.id}`)]);
   assert.equal(r.status, 200, r.text);
@@ -607,7 +607,13 @@ test("статусы демо-заказа (S02d): оплата → Модера
   );
   assert.ok(o.timeline.every((t) => t.at), "у каждого шага есть время");
   assert.ok(o.history.some((h) => h.status === "production" && /Автоодобрение/.test(h.reason || "")));
-  assert.equal(o.history.length, 5, "два одновременных чтения не задвоили ленту: " + o.history.map((h) => h.status).join(","));
+  // Подэтапы производства — тоже строки ленты; два одновременных чтения не должны задвоить ни одну
+  const pairs = o.history.map((h) => `${h.status}|${h.substatus}`);
+  assert.equal(new Set(pairs).size, pairs.length, "два одновременных чтения не задвоили ленту: " + pairs.join(","));
+  assert.equal(o.history.filter((h) => h.status === "moderation").length, 1);
+  assert.equal(o.history.filter((h) => h.status === "done").length, 1);
+  assert.ok(o.substeps.every((x) => x.done), "все подэтапы производства пройдены");
+  assert.equal(o.progress, 100);
   assert.equal(r2.status, 200);
   const item = o.items[0];
   assert.ok(item.thumbs.length >= 1 && /^https?:/.test(item.thumbs[0].url || ""), "миниатюра по подписанной ссылке");

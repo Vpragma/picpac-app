@@ -8,6 +8,7 @@ import { cartCount, useCart } from "../lib/cart";
 import { startSync } from "../lib/sync";
 import { syncLargeTextFromCookie } from "../lib/textSize";
 import Pwa from "./Pwa";
+import NotificationBell from "./NotificationBell";
 
 const TABS = [
   { href: "/", label: "Каталог", icon: IconGrid, match: (p) => p === "/" || p.startsWith("/product") },
@@ -70,6 +71,7 @@ export default function Shell({ children, logo }) {
           <Link href="/help" className="help-btn" aria-label="Помощь" aria-current={path.startsWith("/help") ? "page" : undefined}>
             <IconHelp />
           </Link>
+          <NotificationBell />
           <Link href="/cart" className="cart-btn" aria-label={"Корзина, позиций: " + count}>
             <IconCart />
             {count > 0 && (

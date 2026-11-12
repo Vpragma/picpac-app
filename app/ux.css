@@ -101,7 +101,7 @@ html[data-text='lg'] { font-size: 125%; }
 .steps button { min-height: max(44px, 2.75rem); }
 .logo { display: inline-flex; align-items: center; min-height: 44px; }
 .topbar-actions { display: flex; align-items: center; gap: 4px; }
-.cart-btn, .help-btn {
+.cart-btn, .help-btn, .bell-btn {
   position: relative; display: inline-flex; align-items: center; justify-content: center;
   min-width: 44px; min-height: 44px; padding: 10px; color: var(--ds-color-text-strong); border-radius: 999px;
 }

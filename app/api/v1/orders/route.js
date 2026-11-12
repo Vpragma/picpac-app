@@ -6,7 +6,7 @@ import { calcTotals, etaRange, minskDayStart } from "@/lib/pricing";
 import { parseBody, rateLimited, requireUser, serverError, tooMany, z } from "@/lib/server/api";
 import { findDelivery, findPromo } from "@/lib/server/catalog";
 import { json, jsonError } from "@/lib/server/http";
-import { advanceDemoOrders, loadItemsForFlags } from "@/lib/server/orderFlow";
+import { advanceDemoOrders } from "@/lib/server/orderFlow";
 import { getOwnOrder, loadOrderFull, ORDER_FIELDS, shapeOrder } from "@/lib/server/orders";
 import { loadCart } from "@/lib/server/projects";
 import { trackServer } from "@/lib/server/analytics";
@@ -51,11 +51,10 @@ export async function GET(request) {
       .limit(100);
   let { data, error } = await list();
   if (error) return serverError();
-  // Демо-заказы: статусы двигаются по таймеру (lib/server/orderFlow.js)
+  // Демо-заказы: статусы двигает симулятор ERP (lib/server/orderFlow.js)
   const moving = data.filter((o) => o.is_demo && o.status !== "done");
   if (moving.length) {
-    const items = await loadItemsForFlags(ctx, moving.filter((o) => o.status === "moderation").map((o) => o.id));
-    if (await advanceDemoOrders(ctx, moving, items)) ({ data, error } = await list());
+    if (await advanceDemoOrders(ctx, moving)) ({ data, error } = await list());
     if (error) return serverError();
   }
   return json({

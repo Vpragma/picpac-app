@@ -53,6 +53,18 @@ export function Timeline({ order }) {
   const idx = STATUSES.indexOf(order.status);
   const history = order.history || [];
   return (
+    <>
+    {typeof order.progress === "number" && (
+      <div style={{ marginBottom: 12 }} data-testid="progress">
+        <div role="progressbar" aria-label="Готовность заказа" aria-valuemin={0} aria-valuemax={100} aria-valuenow={order.progress} style={{ height: 8, borderRadius: 4, background: "var(--ds-color-bg-muted)", overflow: "hidden" }}>
+          <span style={{ display: "block", height: "100%", width: `${order.progress}%`, background: "var(--ds-color-step-done)", transition: "width .4s" }} />
+        </div>
+        <div className="small" style={{ marginTop: 4 }}>
+          <b>Готовность {order.progress} %</b>
+          {order.substatus ? ` · ${order.substatus}` : ""}
+        </div>
+      </div>
+    )}
     <ol className="timeline" aria-label="Статус заказа">
       {STATUSES.map((s, i) => {
         const step = (order.timeline || []).find((t) => t.status === s);
@@ -65,14 +77,27 @@ export function Timeline({ order }) {
             {step?.at ? (
               <div className="muted small">
                 {minskTime(step.at)}
-                {h?.reason ? ` · ${h.reason}` : ""}
+                {h?.reason && s !== "production" ? ` · ${h.reason}` : ""}
               </div>
             ) : (
               i === idx + 1 && <div className="muted small">Следующий шаг</div>
+            )}
+            {s === "production" && i <= idx && !!order.substeps?.length && (
+              <div role="list" aria-label="Этапы производства" data-testid="substeps" style={{ marginTop: 4, display: "grid", gap: 2 }}>
+                {order.substeps.map((st) => (
+                  <div role="listitem" key={st.stage} className="small" data-done={st.done ? "1" : "0"} style={{ color: st.done ? "inherit" : "var(--ds-color-text-muted)" }}>
+                    <span aria-hidden="true">{st.done ? "✓ " : "○ "}</span>
+                    {st.label}
+                    <span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>{st.done ? " — готово" : " — впереди"}</span>
+                    {st.at ? <span className="muted"> · {minskTime(st.at)}</span> : null}
+                  </div>
+                ))}
+              </div>
             )}
           </li>
         );
       })}
     </ol>
+    </>
   );
 }
