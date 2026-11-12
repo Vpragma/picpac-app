@@ -3,10 +3,12 @@
 //   npm run cleanup:test                       резервная копия (npm run db:backup) → удаление → итог
 //   --min-age=45        записи моложе N минут не трогаем (параллельно идут тесты других дорожек)
 //   --files-min-age=60  файлы-сироты в хранилище — только старше N минут
+//   --include-example   удалять и прочие аккаунты на зарезервированных доменах (example.com…) без префикса автотестов —
+//                       по умолчанию их только показываем: это может быть новый демо-аккаунт другой ветки
 // Что считается мусором:
-//   • тестовые аккаунты: почта e2e-…, critic-…, night2-… или любой адрес на зарезервированных доменах (example.com/.org/.net,
-//     *.test, *.example, *.invalid) — кроме демо-аккаунтов client@, moderator@, admin@example.com и синтетики synthetic-…;
-//     без действий в журнале за последние --min-age минут. С ними — заказы (каскадом позиции, история, обращения,
+//   • тестовые аккаунты: почта e2e-…, critic-…, night2-… (с --include-example — и любой адрес на зарезервированных доменах
+//     example.com/.org/.net, *.test, *.example, *.invalid) — кроме демо-аккаунтов client@, moderator@, admin@example.com
+//     и синтетики synthetic-…; без действий в журнале за последние --min-age минут. С ними — заказы (каскадом позиции, история, обращения,
 //     уведомления, модерация), запросы на удаление данных, файлы, проекты, фото, корзины, подписки.
 //   • «ничьи» заказы (аккаунт уже удалён), если журнал показывает, что их оформил тестовый аккаунт;
 //   • «ничьи» запросы на удаление фото от удалённых тестовых аккаунтов (по журналу ±10 с);
@@ -32,11 +34,16 @@ const num = (name, def) => {
 };
 const MIN_AGE = num("min-age", 45);
 const FILES_MIN_AGE = num("files-min-age", 60);
+const INCLUDE_EXAMPLE = args.includes("--include-example");
 
 const DEMO = ["client@example.com", "moderator@example.com", "admin@example.com"];
 // Тестовый аккаунт (SQL): префиксы автотестов и агентов или зарезервированный домен, но не демо и не синтетика
-const TEST_USER_SQL = `(u.email ~* '^(e2e|critic|night2)-' or split_part(lower(u.email), '@', 2) in ('example.com','example.org','example.net')
-   or lower(u.email) ~ '\\.(test|example|invalid|localhost)$')
+const RESERVED_SQL = `(split_part(lower(u.email), '@', 2) in ('example.com','example.org','example.net')
+   or lower(u.email) ~ '\\.(test|example|invalid|localhost)$')`;
+const NOT_DEMO_SQL = `lower(u.email) <> all (array['${DEMO.join("','")}'])
+  and u.email !~* '^synthetic-'
+  and not exists (select 1 from public.profiles p where p.id = u.id and p.is_synthetic)`;
+const TEST_USER_SQL = `(u.email ~* '^(e2e|critic|night2)-'${INCLUDE_EXAMPLE ? ` or ${RESERVED_SQL}` : ""})
   and lower(u.email) <> all (array['${DEMO.join("','")}'])
   and u.email !~* '^synthetic-'
   and not exists (select 1 from public.profiles p where p.id = u.id and p.is_synthetic)`;
@@ -98,6 +105,10 @@ try {
     [MIN_AGE],
   );
   const ids = users.map((u) => u.id);
+  // Похожие на тестовые (зарезервированный домен, без префикса автотестов) — без флага только показываем
+  const lookalike = INCLUDE_EXAMPLE
+    ? []
+    : await sql.unsafe(`select u.id, u.email from auth.users u where ${RESERVED_SQL} and u.email !~* '^(e2e|critic|night2)-' and ${NOT_DEMO_SQL} order by u.created_at`);
   const of = async (q) => (ids.length ? await q : []);
   const uOrders = await of(sql`select id, number from public.orders where user_id = any (${ids}::uuid[]) and not is_synthetic`);
   const uInteractions = await of(sql`select id from public.interactions where user_id = any (${ids}::uuid[]) or order_id = any (${uOrders.map((o) => o.id)}::uuid[])`);
@@ -183,6 +194,7 @@ try {
   add("Файлы-сироты в хранилище (старше " + FILES_MIN_AGE + " мин, ни одна запись не ссылается)", orphanFiles);
   table(DRY ? "Только посчитать (--dry-run): будет удалено" : "План удаления", rows);
   console.log(`\nНе трогаем: тестовых аккаунтов моложе ${MIN_AGE} мин или с действиями за это время — ${busy[0].n}; «ничьих» заказов без признаков теста — ${unknownOrphans[0].n};`);
+  if (lookalike.length) console.log(`Аккаунты на зарезервированных доменах без префикса автотестов — ${lookalike.length} (не удаляем; удалить: --include-example): ${lookalike.slice(0, 5).map((u) => u.email).join(", ")}`);
   console.log(`уведомления центра клиента у admin@ и moderator@ — ${staffNotesOfStaff.length} (это данные демо-аккаунтов, только считаем).`);
   console.log(`Защищено: синтетика — ${before.synthetic_users} аккаунтов, ${before.synthetic_orders} заказов, ${before.synthetic_events} событий; демо-аккаунтов ${before.demo_accounts}; пуш-подписок client@ ${before.client_push}; позиций корзины client@ ${before.client_cart}; журнал — ${before.audit_log} записей.`);
   console.log(`Журнал действий: внешних ключей из audit_log — ${auditFks.length} (${keepAccounts ? "аккаунты не удаляем" : "удаление аккаунтов журнал не меняет"}).`);
