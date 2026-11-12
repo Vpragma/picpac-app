@@ -77,3 +77,19 @@ test("область круга в другом масштабе (печатна
   const cy = Math.round(op.cy * h) - box.y;
   assert.ok(lumAt(part, box.w, cx, cy) < 200, "в центре области больше нет солнца");
 });
+
+test("маленькая яркая точка (фонарь, отблеск) — не солнце, но блик", () => {
+  const w = 400;
+  const h = 300;
+  const d = new Uint8ClampedArray(w * h * 4);
+  for (let i = 0; i < d.length; i += 4) {
+    d[i] = 40;
+    d[i + 1] = 50;
+    d[i + 2] = 70;
+    d[i + 3] = 255;
+  }
+  for (let y = 148; y < 153; y++) for (let x = 98; x < 103; x++) d.set([255, 255, 240, 255], (y * w + x) * 4);
+  assert.equal(findSun(d, w, h), null);
+  const glare = findSun(d, w, h, { minCore: 0 });
+  assert.ok(glare && Math.abs(glare.cx * w - 100) < 6, JSON.stringify(glare));
+});

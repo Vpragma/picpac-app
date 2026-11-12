@@ -28,7 +28,7 @@ const LOCAL_ACTIONS = {
       const what = step.target === "sun" ? "солнце" : "блик";
       const img = cache.get(photo.id);
       if (!img) return { say: "Ещё открываем фото — повторите через секунду" };
-      const op = findSun(img.data, img.width, img.height);
+      const op = findSun(img.data, img.width, img.height, step.target === "glare" ? { minCore: 0 } : undefined);
       if (!op) return { say: `Не нашёл на фото яркого пятна — ${what} убрать не получится. Попробуйте «убери пересвет».` };
       const side = Math.max(img.width, img.height);
       const twice = (edits.ops || []).some((o) => o.kind === "heal" && Math.hypot((o.cx - op.cx) * img.width, (o.cy - op.cy) * img.height) < o.r * side);
