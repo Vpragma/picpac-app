@@ -1,6 +1,6 @@
 // PATCH /api/v1/projects/{id}/photos/order { order: [photoId, ...] } — новый порядок фото в проекте.
 // Список должен содержать ровно все фото проекта, без повторов.
-import { badId, notFound, parseBody, requireUser, serverError, uuid, z } from "@/lib/server/api";
+import { badId, limitWrite, notFound, parseBody, requireUser, serverError, uuid, z } from "@/lib/server/api";
 import { json, jsonError } from "@/lib/server/http";
 import { getOwnProject, listPhotos } from "@/lib/server/projects";
 
@@ -10,6 +10,8 @@ export async function PATCH(request, { params }) {
   const { id } = await params;
   const { ctx, response } = await requireUser(request);
   if (response) return response;
+  const limited = await limitWrite("photo-order", ctx.userId, 120, 60);
+  if (limited) return limited;
   if (badId(id)) return notFound("Проект");
   const { body, response: bad } = await parseBody(request, schema);
   if (bad) return bad;

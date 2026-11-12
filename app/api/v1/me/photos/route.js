@@ -2,12 +2,14 @@
 // Фото заказов в работе удалить сразу нельзя: на них создаётся запрос на удаление (data_requests),
 // фото удалятся после завершения заказа. Ответ: { deleted, kept, request }.
 import { deleteUserPhotos } from "@/lib/server/account";
-import { requireUser, serverError } from "@/lib/server/api";
+import { limitWrite, requireUser, serverError } from "@/lib/server/api";
 import { json, jsonError, sameOrigin } from "@/lib/server/http";
 
 export async function DELETE(request) {
   const { ctx, response } = await requireUser(request);
   if (response) return response;
+  const limited = await limitWrite("me-photos", ctx.userId, 10, 600);
+  if (limited) return limited;
   if (!sameOrigin(request)) return jsonError(403, "bad_origin", "Запрос отклонён: он пришёл с другого сайта.");
   try {
     const result = await deleteUserPhotos(ctx.admin, ctx.userId);

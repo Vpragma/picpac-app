@@ -1,6 +1,6 @@
 // POST /api/v1/cart/merge { items: [{ projectId, quantity }] } — перенести гостевую корзину в аккаунт.
 // Проекты гостя к этому моменту уже созданы в аккаунте (POST /api/v1/projects). Количества складываются (до 99).
-import { parseBody, requireUser, serverError, uuid, z } from "@/lib/server/api";
+import { limitWrite, parseBody, requireUser, serverError, uuid, z } from "@/lib/server/api";
 import { json } from "@/lib/server/http";
 import { loadCart, shapeCart } from "@/lib/server/projects";
 
@@ -11,6 +11,8 @@ const schema = z.strictObject({
 export async function POST(request) {
   const { ctx, response } = await requireUser(request);
   if (response) return response;
+  const limited = await limitWrite("cart-merge", ctx.userId, 30, 60);
+  if (limited) return limited;
   const { body, response: bad } = await parseBody(request, schema);
   if (bad) return bad;
   try {

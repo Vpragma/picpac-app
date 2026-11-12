@@ -1,5 +1,5 @@
 // DELETE /api/v1/projects/{id}/photos/{photoId} — удалить фото из проекта и файл из хранилища.
-import { badId, BUCKET, notFound, requireUser, serverError } from "@/lib/server/api";
+import { badId, BUCKET, limitWrite, notFound, requireUser, serverError } from "@/lib/server/api";
 import { json, jsonError, sameOrigin } from "@/lib/server/http";
 import { getOwnProject } from "@/lib/server/projects";
 
@@ -7,6 +7,8 @@ export async function DELETE(request, { params }) {
   const { id, photoId } = await params;
   const { ctx, response } = await requireUser(request);
   if (response) return response;
+  const limited = await limitWrite("photo-delete", ctx.userId, 240, 60);
+  if (limited) return limited;
   if (!sameOrigin(request)) return jsonError(403, "bad_origin", "Запрос отклонён: он пришёл с другого сайта.");
   if (badId(id) || badId(photoId)) return notFound("Фото");
 

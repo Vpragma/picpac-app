@@ -1,6 +1,6 @@
 // POST /api/v1/orders/{id}/pay-test { method: "card_test" | "erip_test" } — тестовая оплата.
 // Деньги не списываются, данные карты не запрашиваются. Повторная оплата не меняет заказ.
-import { notFound, parseBody, requireUser, serverError, z } from "@/lib/server/api";
+import { limitWrite, notFound, parseBody, requireUser, serverError, z } from "@/lib/server/api";
 import { json } from "@/lib/server/http";
 import { getOwnOrder, loadOrderFull } from "@/lib/server/orders";
 import { trackServer } from "@/lib/server/analytics";
@@ -11,6 +11,8 @@ export async function POST(request, { params }) {
   const { id } = await params;
   const { ctx, response } = await requireUser(request);
   if (response) return response;
+  const limited = await limitWrite("pay-test", ctx.userId, 30, 60);
+  if (limited) return limited;
   const { body, response: bad } = await parseBody(request, schema);
   if (bad) return bad;
 

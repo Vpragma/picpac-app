@@ -1,7 +1,7 @@
 // /api/v1/projects/{id} — один мой проект.
 // GET — проект с фото; PATCH { version, title?, options?, status? } — изменить (version защищает от затирания:
 // если проект уже изменили с другого устройства — 409); DELETE — удалить проект и его фото.
-import { badId, notFound, parseBody, requireUser, serverError, z } from "@/lib/server/api";
+import { badId, limitWrite, notFound, parseBody, requireUser, serverError, z } from "@/lib/server/api";
 import { findProduct, loadCatalog, normalizeOptions } from "@/lib/server/catalog";
 import { json, jsonError, sameOrigin } from "@/lib/server/http";
 import { getOwnProject, listPhotos, optionsSchema, PROJECT_FIELDS, removeFiles, shapeProject } from "@/lib/server/projects";
@@ -35,6 +35,8 @@ export async function PATCH(request, { params }) {
   const { id } = await params;
   const { ctx, response } = await requireUser(request);
   if (response) return response;
+  const limited = await limitWrite("project-write", ctx.userId, 300, 60);
+  if (limited) return limited;
   if (badId(id)) return notFound("Проект");
   const { body, response: bad } = await parseBody(request, patchSchema);
   if (bad) return bad;
@@ -80,6 +82,8 @@ export async function DELETE(request, { params }) {
   const { id } = await params;
   const { ctx, response } = await requireUser(request);
   if (response) return response;
+  const limited = await limitWrite("project-write", ctx.userId, 300, 60);
+  if (limited) return limited;
   if (!sameOrigin(request)) return jsonError(403, "bad_origin", "Запрос отклонён: он пришёл с другого сайта.");
   if (badId(id)) return notFound("Проект");
   const project = await getOwnProject(ctx, id);

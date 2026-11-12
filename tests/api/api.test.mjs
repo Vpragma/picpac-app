@@ -5,6 +5,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
+import zlib from "node:zlib";
 import { after, before, test } from "node:test";
 import { BASE, Client, createTestUser, deleteTestUser, supabaseAdmin, supabaseAnon } from "../helpers/client.mjs";
 
@@ -224,6 +225,34 @@ test("подделка: текст под видом JPEG отклоняется
   assert.equal(commit.json.error.code, "unsupported_format");
   const { data } = await admin.storage.from("photos").list(path.split("/").slice(0, 2).join("/"));
   assert.ok(!(data || []).some((f) => path.endsWith(f.name)), "файл подделки удалён из хранилища");
+});
+
+// PNG-«бомба»: заголовок 20000×20000 (400 Мп), сжатые нули — файл весит килобайты, а в памяти занял бы 1,6 ГБ
+function pngBomb(w, h) {
+  const chunk = (type, data) => {
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length);
+    const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(zlib.crc32(body) >>> 0);
+    return Buffer.concat([len, body, crc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(w, 0);
+  ihdr.writeUInt32BE(h, 4);
+  ihdr[8] = 8; // 8 бит, оттенки серого
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", ihdr), chunk("IDAT", zlib.deflateSync(Buffer.alloc((w + 1) * 64))), chunk("IEND", Buffer.alloc(0))]);
+}
+
+test("S12: PNG-«бомба» 20000×20000 (больше 100 Мп) → 400 too_many_pixels, файл удалён", async () => {
+  const bomb = pngBomb(20000, 20000);
+  assert.ok(bomb.length < 50_000, "бомба весит килобайты");
+  const { commit, path } = await uploadPhoto(A, s.project.id, bomb, "image/png");
+  assert.equal(commit.status, 400, commit.text);
+  assert.equal(commit.json.error.code, "too_many_pixels");
+  assert.match(commit.json.error.message, /100 мегапикселей/);
+  const { data } = await admin.storage.from("photos").list(path.split("/").slice(0, 2).join("/"));
+  assert.ok(!(data || []).some((f) => path.endsWith(f.name)), "файл бомбы удалён из хранилища");
 });
 
 test("IDOR: B не может зафиксировать путь A в своём проекте и получить ссылку на фото A", async () => {
@@ -510,6 +539,29 @@ test("лимит частоты: больше 20 проверок промоко
   assert.ok(limited, "нет ответа 429");
   assert.equal(limited.json.error.code, "rate_limited");
   assert.ok(limited.headers.get("retry-after"));
+});
+
+test("S12 (SEC-06): лимит частоты на изменяющих маршрутах — перенос корзины больше 30 раз за минуту → 429 с Retry-After", async () => {
+  let limited = null;
+  for (let attempt = 0; attempt < 2 && !limited; attempt++) {
+    const burst = await Promise.all(Array.from({ length: 36 }, () => B.client.req("/api/v1/cart/merge", { method: "POST", body: { items: [] } })));
+    limited = burst.find((r) => r.status === 429) || null;
+  }
+  assert.ok(limited, "нет ответа 429");
+  assert.equal(limited.json.error.code, "rate_limited");
+  assert.ok(Number(limited.headers.get("retry-after")) > 0);
+});
+
+test("S12 (SEC-05): строгие формы входа, регистрации и адреса доставки — лишние поля → 400", async () => {
+  const login = await guest.req("/api/v1/auth/login", { method: "POST", body: { email: "nobody@example.com", password: "x", role: "admin" } });
+  assert.equal(login.status, 400, login.text);
+  assert.equal(login.json.error.code, "invalid_input");
+  const reg = await guest.req("/api/v1/auth/register", { method: "POST", body: { name: "Т", email: `${RUN}-x@example.com`, password: "Длинный-пароль-1", roles: ["admin"] } });
+  assert.equal(reg.status, 400, reg.text);
+  assert.equal(reg.json.error.code, "invalid_input");
+  const addr = await order(A, `${RUN}-addr-extra`, { delivery: { code: "europost", address: { pickup_point: "Минск, пункт 1", price: 0 } } });
+  assert.equal(addr.status, 400, addr.text);
+  assert.equal(addr.json.error.code, "invalid_input");
 });
 
 // ───── Мои данные ─────

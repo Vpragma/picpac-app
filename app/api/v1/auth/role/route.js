@@ -3,6 +3,7 @@
 import { isRole, isStaffRole } from "@/lib/roles";
 import { clientIp, writeAudit } from "@/lib/server/audit";
 import { staffMfaRequired } from "@/lib/server/env";
+import { limitWrite } from "@/lib/server/api";
 import { json, jsonError, readMutation } from "@/lib/server/http";
 import { fitNext, getAuth, setActiveRole } from "@/lib/server/session";
 import { safeNext } from "@/lib/validate";
@@ -13,6 +14,8 @@ export async function POST(request) {
 
   const auth = await getAuth();
   if (!auth.user) return jsonError(401, "unauthorized", "Сначала войдите в аккаунт.");
+  const limited = await limitWrite("role", auth.user.id, 30, 60);
+  if (limited) return limited;
 
   const ip = clientIp(request.headers);
   const role = typeof body.role === "string" ? body.role : "";

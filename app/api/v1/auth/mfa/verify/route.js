@@ -4,7 +4,7 @@
 import { isStaffRole } from "@/lib/roles";
 import { clientIp, mfaBlocked, writeAudit } from "@/lib/server/audit";
 import { staffMfaRequired } from "@/lib/server/env";
-import { json, jsonError, readMutation } from "@/lib/server/http";
+import { json, jsonError, readMutation, withRetryAfter } from "@/lib/server/http";
 import { fitNext, getAuth, setActiveRole } from "@/lib/server/session";
 import { safeNext } from "@/lib/validate";
 
@@ -27,7 +27,7 @@ export async function POST(request) {
   if (!/^\d{6}$/.test(code)) return jsonError(400, "invalid_code", "Введите 6 цифр из приложения-аутентификатора.");
   if (await mfaBlocked({ userId: auth.user.id })) {
     await writeAudit({ ...base, result: "denied", details: { reason: "rate_limited" } });
-    return jsonError(429, "rate_limited", "Слишком много неверных кодов. Подождите 15 минут.");
+    return withRetryAfter(jsonError(429, "rate_limited", "Слишком много неверных кодов. Подождите 15 минут."), 900);
   }
 
   const mfa = auth.supabase.auth.mfa;

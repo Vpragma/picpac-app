@@ -1,8 +1,8 @@
 // POST /api/v1/projects/{id}/photos { path, edits?, quality?, nsfw? } — зафиксировать загруженное фото.
 // Сервер сам читает первые байты файла из хранилища: это должен быть JPEG или PNG, до 25 МБ.
 // Размеры кадра берём из файла, а не со слов клиента. Чужой путь или подделка — отказ и удаление файла.
-import { sniffImage } from "@/lib/imageMeta";
-import { badId, BUCKET, MAX_PHOTO_BYTES, notFound, parseBody, requireUser, serverError, z } from "@/lib/server/api";
+import { sniffImage, tooManyPixels } from "@/lib/imageMeta";
+import { badId, BUCKET, limitWrite, MAX_PHOTO_BYTES, notFound, parseBody, requireUser, serverError, z } from "@/lib/server/api";
 import { json, jsonError } from "@/lib/server/http";
 import { getOwnProject, needsModeration, PHOTO_FIELDS, shapePhoto } from "@/lib/server/projects";
 
@@ -19,6 +19,8 @@ export async function POST(request, { params }) {
   const { id } = await params;
   const { ctx, response } = await requireUser(request);
   if (response) return response;
+  const limited = await limitWrite("photo-add", ctx.userId, 240, 60);
+  if (limited) return limited;
   if (badId(id)) return notFound("Проект");
   const { body, response: bad } = await parseBody(request, schema);
   if (bad) return bad;
@@ -70,10 +72,12 @@ export async function POST(request, { params }) {
       ? ["file_too_big", "Файл больше 25 МБ. Уменьшите фото или выберите другое."]
       : !meta.width
         ? ["unreadable_image", "Не получилось прочитать размеры фото. Откройте его в галерее телефона, сохраните копию и загрузите её."]
-        : null;
+        : tooManyPixels(meta)
+          ? ["too_many_pixels", "Фото больше 100 мегапикселей — такое мы не обработаем. Уменьшите его (например, до 12 000 точек по длинной стороне) и загрузите снова."]
+          : null;
   if (problem) {
     await ctx.admin.storage.from(BUCKET).remove([body.path]);
-    await ctx.audit("photo.add", "project", id, "denied", { reason: problem[0], bytes: total });
+    await ctx.audit("photo.add", "project", id, "denied", { reason: problem[0], bytes: total, ...(meta?.width ? { width: meta.width, height: meta.height } : {}) });
     return jsonError(400, problem[0], problem[1]);
   }
 

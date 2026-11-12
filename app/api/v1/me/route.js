@@ -4,7 +4,8 @@
 // заказы обезличиваются и остаются для отчётности.
 import { purgeBeforeAccountDelete } from "@/lib/server/account";
 import { clientIp, deleteBlocked, writeAudit } from "@/lib/server/audit";
-import { json, jsonError, readMutation } from "@/lib/server/http";
+import { limitWrite } from "@/lib/server/api";
+import { json, jsonError, readMutation, withRetryAfter } from "@/lib/server/http";
 import { clearAuthCookies, getAuth } from "@/lib/server/session";
 import { createSupabaseAdmin, createSupabaseStateless } from "@/lib/server/supabase";
 import { normName } from "@/lib/validate";
@@ -27,6 +28,8 @@ export async function PATCH(request) {
   if (response) return response;
   const auth = await getAuth();
   if (!auth.user) return jsonError(401, "unauthorized", "Нужно войти в аккаунт.");
+  const limited = await limitWrite("profile", auth.user.id, 30, 60);
+  if (limited) return limited;
 
   const name = normName(body.name);
   if (!name) return jsonError(400, "invalid_input", "Введите имя — от 1 до 100 символов.", { fields: { name: "Введите имя — от 1 до 100 символов." } });
@@ -57,7 +60,7 @@ export async function DELETE(request) {
   }
   if (await deleteBlocked({ userId: auth.user.id })) {
     await writeAudit({ ...base, result: "denied", details: { reason: "rate_limited" } });
-    return jsonError(429, "rate_limited", "Слишком много попыток. Подождите 15 минут.");
+    return withRetryAfter(jsonError(429, "rate_limited", "Слишком много попыток. Подождите 15 минут."), 900);
   }
 
   // Подтверждение паролем: проверяем его отдельным подключением, не трогая текущую сессию

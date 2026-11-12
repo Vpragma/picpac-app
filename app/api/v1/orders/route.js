@@ -16,7 +16,7 @@ const schema = z.strictObject({
   delivery: z.strictObject({
     code: z.string().regex(/^[a-z0-9-]{2,30}$/, "Выберите способ доставки."),
     address: z
-      .object({
+      .strictObject({
         city: text(80, "Город — до 80 символов.").optional(),
         street: text(120, "Улица — до 120 символов.").optional(),
         house: text(20, "Дом — до 20 символов.").optional(),

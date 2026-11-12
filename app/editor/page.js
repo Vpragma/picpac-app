@@ -520,7 +520,7 @@ function SortablePhoto({ p, i, n, thumb, readOnly, badges, upload }) {
   const style = { transform: transform ? `translate3d(${Math.round(transform.x)}px, ${Math.round(transform.y)}px, 0)` : undefined, transition };
   return (
     <div ref={setNodeRef} style={style} className={"photo-cell" + (isDragging ? " dragging" : "")} data-photo={p.name}>
-      {thumb ? <img src={thumb} alt={p.name} /> : <div className="bad">{p.supported ? "…" : p.tooBig ? "Больше 25 МБ" : "Формат не подходит"}</div>}
+      {thumb ? <img src={thumb} alt={p.name} /> : <div className="bad">{p.supported ? "…" : p.tooBig ? "Больше 25 МБ" : p.tooManyPixels ? "Больше 100 Мп" : "Формат не подходит"}</div>}
       <span className="num">{i + 1}</span>
       {upload && (
         <span className={"photo-upload photo-upload-" + upload} data-upload={upload}>

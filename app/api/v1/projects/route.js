@@ -1,6 +1,6 @@
 // /api/v1/projects — мои проекты (черновики книг и печати).
 // GET — список; POST { productSlug, title?, options? } — новый проект. Только для роли client.
-import { parseBody, requireUser, serverError, z } from "@/lib/server/api";
+import { limitWrite, parseBody, requireUser, serverError, z } from "@/lib/server/api";
 import { findProduct, loadCatalog, normalizeOptions } from "@/lib/server/catalog";
 import { json, jsonError } from "@/lib/server/http";
 import { optionsSchema, PROJECT_FIELDS, shapeProject } from "@/lib/server/projects";
@@ -30,6 +30,8 @@ export async function GET(request) {
 export async function POST(request) {
   const { ctx, response } = await requireUser(request);
   if (response) return response;
+  const limited = await limitWrite("project-create", ctx.userId, 60, 60);
+  if (limited) return limited;
   const { body, response: bad } = await parseBody(request, createSchema);
   if (bad) return bad;
 

@@ -2,7 +2,7 @@
 // GET — позиции с ценами (сервер считает сам); ?delivery=code&promo=CODE — ещё и итог с доставкой и скидкой.
 // PUT { items: [{ projectId, quantity }] } — заменить корзину целиком.
 import { calcTotals } from "@/lib/pricing";
-import { parseBody, requireUser, serverError, uuid, z } from "@/lib/server/api";
+import { limitWrite, parseBody, requireUser, serverError, uuid, z } from "@/lib/server/api";
 import { findDelivery, findPromo } from "@/lib/server/catalog";
 import { json, jsonError } from "@/lib/server/http";
 import { loadCart, shapeCart } from "@/lib/server/projects";
@@ -34,6 +34,8 @@ export async function GET(request) {
 export async function PUT(request) {
   const { ctx, response } = await requireUser(request);
   if (response) return response;
+  const limited = await limitWrite("cart", ctx.userId, 120, 60);
+  if (limited) return limited;
   const { body, response: bad } = await parseBody(request, schema);
   if (bad) return bad;
 
