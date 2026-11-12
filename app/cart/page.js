@@ -268,6 +268,12 @@ export default function CartPage() {
       notify(`Заказ ${order.number} оформлен`, "success");
     } catch (e) {
       lock.current = false;
+      // Отказ по существу (например, слишком много правок по выделению на фото): честный текст и ссылка на правки,
+      // кнопка остаётся «Подтвердить заказ» — повтор без исправления ничего не даст
+      if (e?.final) {
+        setFailure({ text: e.message, final: true, href: e.projectId ? `/editor?project=${encodeURIComponent(e.projectId)}&step=edits` : null });
+        return;
+      }
       setFailure(
         e.message === "offline"
           ? "Нет связи с сервером. Данные формы сохранены — нажмите «Повторить», когда появится интернет. Второй заказ не создастся."
@@ -553,12 +559,17 @@ export default function CartPage() {
         )}
         {client && <p className="muted small">Заказ оформляется на {me.user.name || me.user.email}.</p>}
         {failure && (
-          <p className="err-text small" role="alert">
-            {failure}
+          <p className="err-text small" role="alert" data-final={failure.final ? "true" : undefined}>
+            {failure.text || failure}{" "}
+            {failure.href && (
+              <Link href={failure.href} className="btn btn-small">
+                Открыть правки
+              </Link>
+            )}
           </p>
         )}
         <button className="btn btn-primary btn-block" onClick={confirm} disabled={busy} aria-busy={busy} style={{ marginTop: 8 }}>
-          {busy ? (pending.length ? "Загружаем фото…" : printing ? `Готовим фото к печати: ${printing.done} из ${printing.total}` : "Оформляем…") : failure ? "Повторить" : "Подтвердить заказ"}
+          {busy ? (pending.length ? "Загружаем фото…" : printing ? `Готовим фото к печати: ${printing.done} из ${printing.total}` : "Оформляем…") : failure && !failure.final ? "Повторить" : "Подтвердить заказ"}
         </button>
       </section>
     </div>

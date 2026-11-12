@@ -437,3 +437,5 @@ body:has(.sticky-bar) .net-banner { bottom: calc(var(--tabbar-h) + var(--sticky-
 .pe-select-row .btn[aria-pressed="true"] { background: var(--ds-color-bg-inverse); color: var(--ds-color-text-inverse); border-color: var(--ds-color-bg-inverse); }
 .pe-progress { width: 100%; max-width: 360px; height: 8px; accent-color: var(--ds-color-accent); }
 .pe-upscale { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pe-erase { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.pe-erase .small { flex: 1 1 100%; }
