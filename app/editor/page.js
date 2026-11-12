@@ -528,6 +528,22 @@ const PROBLEM = {
   overexposed: "пересвет", "color-cast": "оттенок", blurry: "размыто", "low-resolution": "маленькое", tilted: "завален горизонт", duplicate: "дубль",
 };
 
+// Фото, выбранные в галерее по умолчанию: первые 12. N7: среди них должно быть хотя бы одно маленькое (≤ 1500 точек
+// по длинной стороне — предел «Резкости для печати ×2», UPSCALE_MAX_SIDE в lib/photo/upscale.js), чтобы функцию было
+// видно сразу: маленькая версия кадра заменяет большую того же кадра (nesvizh-small.jpg вместо nesvizh.jpg)
+const GALLERY_DEFAULT = 12;
+const SHARPEN_MAX_SIDE = 1500;
+function defaultGalleryPicks(list) {
+  const first = list.slice(0, GALLERY_DEFAULT);
+  const small = (x) => Math.max(x.width || 0, x.height || 0) <= SHARPEN_MAX_SIDE;
+  if (first.some(small)) return first;
+  const extra = list.find(small);
+  if (!extra) return first;
+  const i = first.findIndex((x) => x.original && x.original === extra.original);
+  first[i >= 0 ? i : first.length - 1] = extra;
+  return first;
+}
+
 function GalleryPanel({ busy, progress, onAdd }) {
   const [items, setItems] = useState(null);
   const [failed, setFailed] = useState(false);
@@ -540,7 +556,7 @@ function GalleryPanel({ busy, progress, onAdd }) {
         if (!alive) return;
         setItems(list);
         setFailed(false);
-        setPicked(Object.fromEntries(list.slice(0, 12).map((x) => [x.file, true])));
+        setPicked(Object.fromEntries(defaultGalleryPicks(list).map((x) => [x.file, true])));
       })
       .catch(() => alive && setFailed(true));
     return () => {
@@ -881,6 +897,8 @@ function CheckStep({ draft, thumbs, product, price, goPhotos, goSharpen, readOnl
   const { issues } = useMemo(() => runChecks(draft, product), [draft, product]);
   const replaceRef = useRef(null);
   const [replaceId, setReplaceId] = useState(null);
+  const adding = useRef(false); // N7: двойное нажатие «В корзину» — одна позиция и одно уведомление
+  const [addingNow, setAddingNow] = useState(false);
   const acks = draft.acks || {};
   const open = issues.filter((i) => !acks[i.key]);
   const blocking = issues.some((i) => i.blocking);
@@ -923,7 +941,9 @@ function CheckStep({ draft, thumbs, product, price, goPhotos, goSharpen, readOnl
   }
 
   function addToCart() {
-    if (readOnly) return;
+    if (readOnly || adding.current) return;
+    adding.current = true;
+    setAddingNow(true);
     const usable = draft.photos.filter((p) => p.supported);
     const firstThumb = usable[0] && thumbs[usable[0].id];
     const finish = (cover) => {
@@ -952,6 +972,8 @@ function CheckStep({ draft, thumbs, product, price, goPhotos, goSharpen, readOnl
         })
         .catch((e) => {
           console.error(e);
+          adding.current = false;
+          setAddingNow(false);
           notify("Не получилось добавить в корзину. Попробуйте ещё раз.", "error");
         });
     };
@@ -1068,7 +1090,7 @@ function CheckStep({ draft, thumbs, product, price, goPhotos, goSharpen, readOnl
           <span className="price">{money(price)}</span>
         </div>
         <EtaLine product={product} />
-        <button className="btn btn-primary btn-block" style={{ marginTop: 8 }} disabled={readOnly || blocking || open.length > 0} onClick={addToCart}>
+        <button className="btn btn-primary btn-block" style={{ marginTop: 8 }} disabled={readOnly || blocking || open.length > 0} aria-busy={addingNow || undefined} onClick={addToCart}>
           {draft.status === "in_cart" ? "Обновить в корзине" : "В корзину"}
         </button>
         {open.length > 0 && !blocking && <p className="muted small" style={{ marginTop: 6 }}>Осталось решить: {open.length}</p>}

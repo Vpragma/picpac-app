@@ -8,7 +8,7 @@ import LogoutButton from "./LogoutButton";
 const ROLE_NOTES = {
   client: "Каталог, фотокниги, заказы",
   moderator: "Очередь заказов и статусы",
-  admin: "Всё, что модератор, плюс журнал действий",
+  admin: "Всё, что модератор, плюс заказы, пользователи, каталог, статистика, промокоды, сезон и журнал действий",
 };
 
 export default function RoleChooser({ roles, activeRole, next, name, email, mfaRequired }) {

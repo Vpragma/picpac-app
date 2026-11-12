@@ -68,7 +68,7 @@ export default async function ProfilePage() {
       <ThemeSetting initial={theme} />
       <TextSizeSetting initial={largeText} />
       {auth.user && <PushToggle />}
-      <AutoEnhanceSetting />
+      <AutoEnhanceSetting account={!!auth.user && auth.activeRole === "client"} />
       <InstallCard />
       <section className="card">
         <h3>Поддержка</h3>

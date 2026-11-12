@@ -6,13 +6,15 @@
 //        Снимок заказа (order_items.snapshot.photos[].edits) берёт правки отсюда — печать получает и правки, и файл.
 //   PUT  { path: null } — правки сняли: печатаем оригинал; { path: null, edits } — файл не собрался, правки параметрами.
 //   Правки фото — не больше PHOTO_EDITS_MAX (20 КБ, lib/photo/edits.js), иначе 400 edits_too_large и файл удаляется.
+//   N7: сохраняются только общие параметры правок — маски выделения и координаты местных правок сервер не хранит
+//   (они уже «впечатаны» в файл печатной версии, собранный на устройстве).
 //   После сохранения в папке печатных версий фото остаётся один файл — прежние и брошенные удаляются.
 import { after } from "next/server";
 import { sniffImage } from "@/lib/imageMeta";
 import { badId, BUCKET, MAX_PHOTO_BYTES, notFound, parseBody, rateLimited, requireUser, serverError, tooMany, z } from "@/lib/server/api";
 import { json, jsonError, sameOrigin } from "@/lib/server/http";
 import { PHOTO_EDITS_MAX, editsBytes } from "@/lib/photo/edits";
-import { getOwnProject } from "@/lib/server/projects";
+import { getOwnProject, photoEditsForServer } from "@/lib/server/projects";
 import { checkPhotoById } from "@/lib/server/moderationCheck";
 
 // N4: новая печатная версия — сервер проверяет и её (в печать идёт она, а не оригинал)
@@ -107,7 +109,7 @@ export async function PUT(request, { params }) {
   // Без файла: правки сняли — печатаем оригинал; или файл не собрался на устройстве — правки записываются
   // параметрами (печать применит их сама)
   if (body.path === null) {
-    const edits = body.edits && Object.keys(body.edits).length ? body.edits : {};
+    const edits = photoEditsForServer(body.edits);
     const { error } = await ctx.admin.from("project_photos").update({ print_path: null, edits }).eq("id", photoId).eq("user_id", ctx.userId);
     if (error) return serverError();
     await removeOld(null);
@@ -156,7 +158,7 @@ export async function PUT(request, { params }) {
     return jsonError(400, problem[0], problem[1]);
   }
   const print = { path: body.path, width: meta.width, height: meta.height, bytes: total, at: new Date().toISOString() };
-  const edits = { ...(body.edits || {}), print };
+  const edits = { ...photoEditsForServer(body.edits), print };
   const { error } = await ctx.admin.from("project_photos").update({ print_path: body.path, edits }).eq("id", photoId).eq("user_id", ctx.userId);
   if (error) {
     await ctx.admin.storage.from(BUCKET).remove([body.path]).catch(() => {});

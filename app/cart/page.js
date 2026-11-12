@@ -536,7 +536,14 @@ export default function CartPage() {
             </button>
           </div>
         ) : (
-          <div className="promo-row">
+          // N7: форма — Enter на компьютере и «Go»/«Применить» на клавиатуре телефона применяют код
+          <form
+            className="promo-row"
+            onSubmit={(e) => {
+              e.preventDefault();
+              applyPromoCode();
+            }}
+          >
             <input
               className="input"
               id="f-promo"
@@ -549,12 +556,12 @@ export default function CartPage() {
               autoCapitalize="characters"
               spellCheck={false}
               maxLength={30}
-              onKeyDown={(e) => e.key === "Enter" && applyPromoCode()}
+              enterKeyHint="go"
             />
-            <button className="btn btn-small" onClick={() => applyPromoCode()}>
+            <button className="btn btn-small" type="submit">
               Применить
             </button>
-          </div>
+          </form>
         )}
         {promoMsg && !(form.promo && promoNow && !promoNow.ok) && (
           <p id="promo-msg" className={"note small promo-msg " + (promoMsg.ok ? "note-ok" : "note-error")} role="status" data-testid="promo-msg">

@@ -57,8 +57,9 @@ test("промокод в корзине → заказ → открытка с 
     await apply.click();
     await expect(msg).toHaveText(/^Истёк: промокод действовал до 31 августа 2025/);
     await expect(msg).toHaveClass(/note-error/);
+    // N7: Enter в поле (на телефоне — «Go») тоже применяет код
     await promo.fill("BIGBOOK30");
-    await apply.click();
+    await promo.press("Enter");
     await expect(msg).toHaveText(/минимальная сумма заказа .*200,00 BYN/);
     await promo.fill("NOSUCH42");
     await apply.click();
@@ -67,7 +68,7 @@ test("промокод в корзине → заказ → открытка с 
 
   await test.step("код применён — скидка видна в итоге", async () => {
     await promo.fill(code.toLowerCase());
-    await apply.click();
+    await promo.press("Enter");
     await expect(page.getByTestId("promo-applied")).toContainText(code);
     await expect(msg).toHaveClass(/note-ok/);
     await expect(page.getByTestId("sum-discount")).toContainText(`по коду ${code}`);
