@@ -18,6 +18,8 @@ const GALLERY_DIR = path.resolve("public/demo-gallery");
 let admin;
 let user;
 
+// W-15: подмена результата классификатора nsfwjs — «чистое» фото (настоящая модель на CPU в headless ≈ 3 с на фото)
+test.beforeEach(async ({ page }) => page.addInitScript(() => (window.__PICPAC_TEST__ = { ...(window.__PICPAC_TEST__ || {}), nsfw: "clean" })));
 test.beforeEach(async ({}, info) => {
   admin = supabaseAdmin();
   user = await createTestUser(admin, ["client"], "e2e" + info.parallelIndex + Date.now().toString(36).slice(-4));
@@ -153,7 +155,8 @@ test("обязательный путь: каталог → проект → 12 
     await login(page);
     await expect(page).toHaveURL(/\/cart/);
     await expect(page.getByLabel("Имя и фамилия")).toBeVisible();
-    await expect.poll(async () => (await user.client.req("/api/v1/cart")).json?.cart?.items?.length, { timeout: 60_000 }).toBe(1);
+    // Сеть площадки ~1,4 Мбит/с: 14 фото переносятся в аккаунт дольше минуты — ждём до 3 минут (проверка та же)
+    await expect.poll(async () => (await user.client.req("/api/v1/cart")).json?.cart?.items?.length, { timeout: 180_000 }).toBe(1);
   });
 
   await test.step("AC-1 получатель, TEST10, доставка, тестовая оплата", async () => {

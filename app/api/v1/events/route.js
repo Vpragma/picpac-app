@@ -3,7 +3,7 @@
 // Лимит частоты (→ 429): 30 пачек в минуту на сеанс и 300 в минуту с одного IP (IP — только хешем в ключе лимита).
 import { parseBody, rateLimited, serverError, tooMany, z } from "@/lib/server/api";
 import { CLIENT_EVENTS, EDITOR_STEPS } from "@/lib/analyticsCore";
-import { ipKey, userHash } from "@/lib/server/analytics";
+import { ipKey, isTestEmail, userHash } from "@/lib/server/analytics";
 import { clientIp } from "@/lib/server/audit";
 import { json } from "@/lib/server/http";
 import { getAuth } from "@/lib/server/session";
@@ -39,9 +39,11 @@ export async function POST(request) {
   if (await rateLimited(`events:${ip}:${body.sid}`, PER_SESSION, 60)) return tooMany();
 
   let uh = null;
+  let test = false;
   try {
     const auth = await getAuth();
     uh = userHash(auth.user?.id);
+    test = isTestEmail(auth.user?.email);
   } catch {
     uh = null;
   }
@@ -52,6 +54,7 @@ export async function POST(request) {
     step: e.step || null,
     duration_ms: e.durationMs ?? null,
     props: e.props || {},
+    is_test: test,
   }));
   const { error } = await createSupabaseAdmin().from("analytics_events").insert(rows);
   if (error) {

@@ -12,6 +12,7 @@ import { IconImage, IconTrash } from "../../components/icons";
 import { clearAfterOrder, moveLocalToServer, removeLine, retryMove, setLineQuantity, useCart } from "../../lib/cart";
 import { FIELD_LABELS, PICKUP_POINTS, formatPhone, needsDate, validateCheckout } from "../../lib/checkout";
 import { kvDel, kvGet, kvSet, markOrdered, useDraft } from "../../lib/draft";
+import ModerationNotice, { flaggedCount } from "../../components/ModerationNotice";
 import { isClient, refreshMe, useMe } from "../../lib/me";
 // Печатные версии: обычный import (не import()) — без сети на «Подтвердить» кусок кода не догрузится,
 // а нужна понятная ошибка «нет связи». Тяжёлая часть (воркер) грузится только при сборке.
@@ -307,9 +308,13 @@ export default function CartPage() {
     </label>
   );
 
+  // W-15: фото с флагом цензуры в проектах корзины — плашка «Это фото проверит модератор»
+  const flagged = lines.reduce((n, l) => n + flaggedCount(projects[l.localProjectId]?.photos), 0);
+
   return (
     <div>
       <h1>Корзина</h1>
+      <ModerationNotice count={flagged} compact />
       {cart.error && (
         <p className="warn-text small" role="alert">
           {cart.error}{" "}

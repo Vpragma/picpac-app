@@ -35,6 +35,8 @@ import { useOnline } from "../../components/Pwa";
 import DraftError from "../../components/DraftError";
 import { IconAlert, IconCheck, IconLeft, IconRight, IconTrash, IconUpload } from "../../components/icons";
 import { photoBadges } from "../../lib/photo/badges";
+import ModerationNotice, { flaggedCount } from "../../components/ModerationNotice";
+import ModerationDemoButton from "../../components/ModerationDemoButton";
 import { ANALYSIS_VERSION, findDuplicates } from "../../lib/photo/analyze";
 import { useStepTimer } from "@/lib/analytics";
 
@@ -821,6 +823,8 @@ function CheckStep({ draft, thumbs, product, price, goPhotos, readOnly }) {
 
   return (
     <div>
+      <ModerationNotice count={flaggedCount(draft.photos)} />
+      <ModerationDemoButton draft={draft} />
       {issues.length === 0 ? (
         <div className="card issue ok">
           <div className="row">

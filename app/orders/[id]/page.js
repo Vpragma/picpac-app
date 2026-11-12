@@ -203,6 +203,8 @@ export default function OrderPage() {
 }
 
 const TOPICS = ["Где мой заказ?", "Изменить доставку", "Брак печати — нужна перепечатка", "Другой вопрос"];
+// A7: у завершённого заказа — перепечатка с причиной
+const REPRINT = ["Перепечатка: брак печати", "Перепечатка: ошибка в макете"];
 
 // Обращения по заказу: список, переписка и «Написать в поддержку» (первый ответ — бот, дальше оператор, S06)
 function Support({ order: o, onCreated }) {
@@ -217,7 +219,7 @@ function Support({ order: o, onCreated }) {
     e.preventDefault();
     setBusy(true);
     setError("");
-    const kind = topic.startsWith("Брак") ? "reprint" : "support";
+    const kind = topic.startsWith("Брак") || topic.startsWith("Перепечатка") ? "reprint" : "support";
     const r = await callApi(`/api/v1/orders/${o.id}/interactions`, { body: { topic, kind, message } });
     setBusy(false);
     if (!r.ok) return setError(r.error?.message || "Не получилось отправить. Попробуйте ещё раз.");
@@ -282,15 +284,39 @@ function Support({ order: o, onCreated }) {
         </div>
       ))}
       {!open ? (
-        <button type="button" className="btn btn-primary btn-block" style={{ marginTop: 12 }} onClick={() => setOpen(true)}>
-          Написать в поддержку
-        </button>
+        <>
+          <button
+            type="button"
+            className="btn btn-primary btn-block"
+            style={{ marginTop: 12 }}
+            onClick={() => {
+              setTopic(TOPICS[0]);
+              setOpen(true);
+            }}
+          >
+            Написать в поддержку
+          </button>
+          {o.status === "done" && (
+            <button
+              type="button"
+              className="btn btn-block"
+              style={{ marginTop: 8 }}
+              data-testid="reprint"
+              onClick={() => {
+                setTopic(REPRINT[0]);
+                setOpen(true);
+              }}
+            >
+              Перепечатка
+            </button>
+          )}
+        </>
       ) : (
         <form className="stack" style={{ marginTop: 12 }} onSubmit={send}>
           <label className="field">
             <span>Тема</span>
             <select className="input" value={topic} onChange={(e) => setTopic(e.target.value)}>
-              {TOPICS.map((t) => (
+              {[...(o.status === "done" ? REPRINT : []), ...TOPICS].map((t) => (
                 <option key={t}>{t}</option>
               ))}
             </select>
