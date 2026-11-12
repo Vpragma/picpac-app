@@ -2,7 +2,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { IconBook, IconCart, IconGrid, IconHelp, IconPackage, IconUser } from "./icons";
+import { IconBell, IconBook, IconCart, IconCheck, IconGrid, IconHelp, IconImage, IconPackage, IconUser } from "./icons";
+import { useMe } from "../lib/me";
 import { SUPPORT } from "../lib/support";
 import { cartCount, useCart } from "../lib/cart";
 import { startSync } from "../lib/sync";
@@ -43,10 +44,22 @@ function Toasts({ hidden = false }) {
   );
 }
 
+// В роли сотрудника внизу — разделы админки, а не клиентское меню (каталог, книги, заказы клиента)
+const STAFF_TABS = [
+  { href: "/admin", label: "Обзор", icon: IconPackage, match: (p) => p === "/admin" || p.startsWith("/admin/orders") || p.startsWith("/admin/support") },
+  { href: "/admin/moderation", label: "Модерация", icon: IconImage, match: (p) => p.startsWith("/admin/moderation") },
+  { href: "/admin/notifications", label: "Уведомления", icon: IconBell, match: (p) => p.startsWith("/admin/notifications") },
+  { href: "/admin/stats", label: "Статистика", icon: IconCheck, match: (p) => p.startsWith("/admin/stats") || p.startsWith("/admin/audit") || p.startsWith("/admin/reminders"), adminOnly: true },
+  { href: "/profile", label: "Профиль", icon: IconUser, match: (p) => p.startsWith("/profile") || p.startsWith("/login") },
+];
+
 // logo — картинка логотипа, собранная на сервере (getImageProps в app/layout.js): без лишнего JS в браузере
 export default function Shell({ children, logo }) {
   const path = usePathname() || "/";
   const count = cartCount(useCart());
+  const me = useMe();
+  const staffRole = me?.authenticated && (me.activeRole === "admin" || me.activeRole === "moderator") ? me.activeRole : null;
+  const tabs = staffRole ? STAFF_TABS.filter((t) => !t.adminOnly || staffRole === "admin") : TABS;
   // Проекты вошедшего клиента синхронизируются с аккаунтом (гость работает только на устройстве)
   useEffect(() => {
     startSync();
@@ -82,8 +95,8 @@ export default function Shell({ children, logo }) {
           </Link>
         </div>
       </header>
-      <nav className="tabbar" aria-label="Главное меню">
-        {TABS.map((t) => {
+      <nav className="tabbar" aria-label={staffRole ? "Меню админки" : "Главное меню"}>
+        {tabs.map((t) => {
           const active = t.match(path);
           const I = t.icon;
           return (

@@ -28,9 +28,20 @@ export default function AuthForms({ next = "", reason = "", initialMode = "login
         </div>
         {mode === "login" ? <LoginForm next={next} /> : <RegisterForm next={next} />}
       </div>
-      <Link href={reason === "checkout" ? "/cart" : "/"} className="btn btn-block">
-        Продолжить как гость
-      </Link>
+      {reason === "checkout" ? (
+        <>
+          <Link href="/cart" className="btn btn-block">
+            Вернуться в корзину
+          </Link>
+          <p className="muted small" style={{ textAlign: "center" }}>
+            Без входа заказ не оформить, но корзина, форма и черновик сохранятся на этом устройстве.
+          </p>
+        </>
+      ) : (
+        <Link href="/" className="btn btn-block">
+          Продолжить как гость
+        </Link>
+      )}
       <p className="muted small" style={{ textAlign: "center" }}>
         Данные для входа жюри — в README проекта.
       </p>
