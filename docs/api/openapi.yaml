@@ -34,6 +34,7 @@ tags:
   - name: Аккаунт
   - name: Админ
   - name: Статистика
+  - name: ИИ
 security:
   - session: []
 paths:
@@ -770,6 +771,104 @@ paths:
         "400": { description: Неверные данные (в том числе лишние поля) }
         "403": { description: Запрос с чужого сайта }
         "429": { description: Слишком часто, заголовок Retry-After }
+
+  /api/v1/ai/cloud:
+    get:
+      tags: [ИИ]
+      summary: Облачный ИИ — состояние для вошедшего клиента
+      description: |
+        D6 (SEC-20). Включён ли облачный ИИ (Cloudflare Workers AI), есть ли согласие, сколько облачных правок осталось
+        сегодня (20 в сутки по UTC). Ключи Cloudflare есть только на сервере и в ответах не бывают. Без входа — 401.
+      responses:
+        "200": { description: Состояние, content: { application/json: { example: { ok: true, available: true, consent: false, consentText: "Фото отправится в Cloudflare для обработки и не сохраняется.", used: 0, limit: 20, left: 20, limits: { perMinute: 10, detectSide: 768, editSide: 512 } } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/ai/consent:
+    post:
+      tags: [ИИ]
+      summary: Дать согласие на облачный ИИ (один раз на аккаунт)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false, required: [accept], properties: { accept: { type: boolean, const: true } } }
+      responses:
+        "200": { description: Согласие сохранено, в журнале ai.cloud_consent }
+        "400": { description: "accept не true или лишние поля" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Запрос с чужого сайта }
+        "429": { $ref: "#/components/responses/TooMany" }
+    delete:
+      tags: [ИИ]
+      summary: Отозвать согласие на облачный ИИ
+      responses:
+        "200": { description: "Согласие отозвано — облачные вызовы снова 403" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/ai/command:
+    post:
+      tags: [ИИ]
+      summary: Свободная команда, которую не понял словарь на устройстве (gpt-oss-120b)
+      description: |
+        Только текст команды (до 300 символов). Модель `@cf/openai/gpt-oss-120b` возвращает только операции, которые редактор
+        уже умеет: adjust (свет и цвет, ±60), auto, blur_background, lighten_selection, darken_selection, remove/find
+        (английское слово-цель), creative, undo, reset. Ответ модели проверяется строго (zod), непонятный → 422.
+        Порядок проверок: вход → 10 запросов в минуту → схема → согласие (403 ai_consent_required) → квота
+        (20 в сутки на пользователя и 8 000 нейронов в сутки на всё приложение, 429) → вызов (тайм-аут 30 с, 503) → журнал
+        (модель, байты, нейроны, время — без текста команды).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false, required: [text], properties: { text: { type: string, minLength: 1, maxLength: 300 } } }
+            example: { text: "сделай как в старом кино" }
+      responses:
+        "200": { description: Операции редактора, content: { application/json: { example: { ok: true, ops: [{ op: adjust, exposure: -10, contrast: 30, warmth: 10, saturation: -20 }], say: "Винтажный вид старого кино", left: 19 } } } }
+        "400": { description: Неверные данные }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: "Нет согласия (ai_consent_required) или запрос с чужого сайта" }
+        "422": { description: "Ответ модели не прошёл проверку (ai_not_understood)" }
+        "429": { description: "Лимит облачных правок на сегодня исчерпан (ai_quota_exhausted / ai_budget_exhausted) или слишком часто; Retry-After" }
+        "503": { description: "Облако недоступно, тайм-аут или не настроено (ai_unavailable, ai_timeout, ai_not_configured)" }
+  /api/v1/ai/detect:
+    post:
+      tags: [ИИ]
+      summary: Найти предмет по слову (Moondream detect)
+      description: |
+        Кадр — `data:image/jpeg;base64`, не больше 1024 точек по длинной стороне (браузер шлёт 768) и 1 МБ; сервер ещё раз
+        вырезает EXIF/GPS/комментарии. Слово-цель по-русски переводится словарём, иначе через gpt-oss-120b.
+        Ответ — рамки в долях 0…1 (до 3, крупные первыми); по ним редактор выделяет предмет на устройстве (SlimSAM).
+        Если модель вернула пустой ответ — 503 ai_detect_unavailable, правка возвращается, 10 минут вызовы не делаются.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false, required: [image, target], properties: { image: { type: string, maxLength: 1400000 }, target: { type: string, minLength: 1, maxLength: 60 } } }
+      responses:
+        "200": { description: Рамки, content: { application/json: { example: { ok: true, boxes: [{ x0: 0.3, y0: 0.4, x1: 0.62, y1: 0.86 }], target: car, left: 18 } } } }
+        "400": { description: "Не JPEG, больше 1024 точек или 1 МБ, лишние поля" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Нет согласия или чужой сайт }
+        "413": { description: Тело больше 1,5 МБ }
+        "429": { description: Лимит на сегодня или слишком часто }
+        "503": { description: "Облако или модель поиска недоступны (ai_unavailable, ai_detect_unavailable)" }
+  /api/v1/ai/edit:
+    post:
+      tags: [ИИ]
+      summary: Творческая правка вырезки (FLUX.2 klein 4B) — только сервер, в редакторе не подключена
+      description: |
+        Вырезка JPEG ≤ 512 точек и 500 КБ, задание до 200 символов (русское переводит gpt-oss-120b). Ответ — PNG/JPEG
+        base64 размером 256…512 (стороны кратны 16). Вклейка только внутри маски — задача редактора (не сделано, D6 ⚠️).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false, required: [image, prompt], properties: { image: { type: string, maxLength: 700000 }, prompt: { type: string, minLength: 3, maxLength: 200 } } }
+      responses:
+        "200": { description: "Картинка: { ok, image: data URL, width, height, left }" }
+        "400": { description: Неверная вырезка или задание }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Нет согласия или чужой сайт }
+        "429": { description: Лимит на сегодня или слишком часто }
+        "503": { description: Облако недоступно }
 
 components:
   securitySchemes:
