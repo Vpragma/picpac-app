@@ -81,7 +81,9 @@ async function addLabels(order) {
     const o = it.options || {};
     const size = product?.sizes.find((x) => x.id === o.size || x.code === o.size);
     const parts = [];
-    if (o.size) parts.push(`Размер ${String(o.size).replace("x", "×")}${size?.label ? ` (${size.label.toLowerCase()})` : ""}`);
+    // «Как лист А4» → «как лист А4»: строчной делаем только первую букву, «А4» остаётся
+    const sizeLabel = size?.label ? size.label.charAt(0).toLowerCase() + size.label.slice(1) : "";
+    if (o.size) parts.push(`Размер ${String(o.size).replace("x", "×")}${sizeLabel ? ` (${sizeLabel})` : ""}`);
     if (o.pages) parts.push(`${o.pages} стр.`);
     for (const [g, label] of Object.entries(GROUP_LABELS)) {
       if (o[g] == null) continue;

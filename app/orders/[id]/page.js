@@ -9,7 +9,7 @@ import { useCallback, useEffect, useState } from "react";
 import { callApi } from "../../../lib/api";
 import { getMe } from "../../../lib/me";
 import { notify } from "../../../lib/store";
-import { StatusChip, Timeline, byn, minskDay, minskTime } from "../../../components/OrderBits";
+import { StatusChip, Timeline, byn, minskDay, minskDayRange, minskTime } from "../../../components/OrderBits";
 import { IconChat } from "../../../components/icons";
 
 const POLL_MS = 10000;
@@ -101,8 +101,7 @@ export default function OrderPage() {
         <StatusChip status={o.status} />
       </div>
       <p className="muted small">
-        Оформлен {minskTime(o.createdAt, true)} · доставим ориентировочно {minskDay(o.eta?.from)}
-        {o.eta?.to && o.eta.to !== o.eta.from ? `–${minskDay(o.eta.to)}` : ""}
+        Оформлен {minskTime(o.createdAt, true)} · доставим ориентировочно {minskDayRange(o.eta?.from, o.eta?.to)}
       </p>
 
       <section className="card">

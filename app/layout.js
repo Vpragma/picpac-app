@@ -9,6 +9,9 @@ import Shell from "../components/Shell";
 const jost = Jost({
   subsets: ["latin", "cyrillic"],
   weight: ["400", "500"],
+  // Без preload: при переходах между страницами Next повторно вставлял <link rel=preload> уже загруженных файлов шрифта,
+  // и браузер писал в консоль «preloaded but not used». Шрифт всё равно грузится сразу из CSS (display: swap).
+  preload: false,
   variable: "--font-jost",
   display: "swap",
 });

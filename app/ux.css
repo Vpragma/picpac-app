@@ -194,6 +194,10 @@ body:has(.sticky-bar) .site-footer { padding-bottom: calc(var(--tabbar-h) + var(
   .product-page { display: grid; grid-template-columns: minmax(0, 1fr) minmax(20rem, 26rem); gap: 0 2rem; align-items: start; }
   .product-aside { position: sticky; top: calc(var(--topbar-h) + 1rem); padding-top: calc(44px + 8px); }
   .product-aside .sticky-bar { position: static; margin-top: 0; }
+  /* A9: справа одна карточка с ценой — «Итого»; под ней только кнопка (без второй карточки с той же ценой) */
+  .product-aside .sticky-bar { min-height: 0; padding: 0; border: 0; box-shadow: none; background: transparent; }
+  .product-aside .sticky-bar > div:first-child { display: none; }
+  .product-aside .sticky-bar .btn { width: 100%; }
 
   /* узкие экраны-формы не растягиваем */
   .narrow { max-width: 40rem; }
@@ -203,3 +207,23 @@ body:has(.sticky-bar) .site-footer { padding-bottom: calc(var(--tabbar-h) + var(
 @media (min-width: 1440px) {
   .catalog-grid { grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr)); }
 }
+
+/* ── 9. Фото продуктов (W-04, K-10) ─────────────────────────────────── */
+.product-cover.has-photo { height: auto; aspect-ratio: 16 / 10; padding: 0; overflow: hidden; background: var(--ds-color-bg-muted); }
+.product-cover picture, .product-gallery picture { display: block; width: 100%; height: 100%; }
+.product-cover img, .product-gallery img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.product-gallery {
+  display: grid; grid-auto-flow: column; grid-auto-columns: 86%; gap: 8px; margin: 12px 0; padding: 0 0 4px;
+  list-style: none; overflow-x: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: contain;
+}
+.product-gallery li { scroll-snap-align: start; aspect-ratio: 4 / 3; border-radius: var(--ds-radius-lg); overflow: hidden; background: var(--ds-color-bg-muted); }
+@media (min-width: 1024px) {
+  .product-cover.has-photo { aspect-ratio: 4 / 3; }
+  .product-gallery { grid-auto-flow: row; grid-template-columns: repeat(6, minmax(0, 1fr)); grid-auto-columns: auto; overflow: visible; }
+  .product-gallery li:first-child { grid-column: 1 / -1; }
+  .product-gallery li:not(:first-child) { border-radius: var(--ds-radius-md); }
+}
+
+/* A8: миниатюры фото в карточке заказа (админка) */
+.admin-thumbs { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 6px 0 0; padding: 0; align-items: center; }
+.admin-thumbs img, .admin-thumb-empty { display: block; width: 72px; height: 72px; border-radius: 8px; object-fit: cover; background: var(--ds-color-bg-muted); }

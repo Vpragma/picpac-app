@@ -213,3 +213,15 @@ test("чат оператора: админ видит обращение с м�
 });
 
 test("сервер ERP отвечает на адресе " + BASE, () => assert.ok(BASE));
+
+test("A8/A5: карточка заказа в админке — миниатюры фото по подписанным ссылкам, без внутренних кодов", async () => {
+  const r = await ADM.client.req(`/admin/orders/${s.order.id}`, { method: "GET" });
+  assert.equal(r.status, 200, r.text?.slice(0, 300));
+  assert.match(r.text, /data-testid="admin-order-thumbs"/);
+  assert.match(r.text, /<img[^>]+src="https:\/\/[^"]+\/storage\/v1\/object\/sign\/photos\//);
+  assert.match(r.text, /Данные клиента скрыты/);
+  assert.doesNotMatch(r.text, /SEC-14/);
+  // модератору карточка заказа недоступна (данные клиента — только админу)
+  const m = await MOD.client.req(`/admin/orders/${s.order.id}`, { method: "GET" });
+  assert.ok([401, 403].includes(m.status), String(m.status));
+});
