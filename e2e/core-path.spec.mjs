@@ -153,7 +153,8 @@ test("обязательный путь: каталог → проект → 12 
     await login(page);
     await expect(page).toHaveURL(/\/cart/);
     await expect(page.getByLabel("Имя и фамилия")).toBeVisible();
-    await expect.poll(async () => (await user.client.req("/api/v1/cart")).json?.cart?.items?.length, { timeout: 60_000 }).toBe(1);
+    // фото галереи теперь 3000 точек (~750 КБ): на сети площадки (~1,4 Мбит/с) перенос 14 фото — минуты
+    await expect.poll(async () => (await user.client.req("/api/v1/cart")).json?.cart?.items?.length, { timeout: 300_000 }).toBe(1);
   });
 
   await test.step("AC-1 получатель, TEST10, доставка, тестовая оплата", async () => {

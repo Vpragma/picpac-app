@@ -71,7 +71,7 @@ test("правки фото уходят в аккаунт и возвращаю
   await gallery.getByRole("button", { name: "Добавить 2 фото" }).click();
   await expect.poll(() => page.locator('.photo-cell[data-photo="cat-dark.jpg"] .pe-badge').allTextContents(), { timeout: 60_000 }).toEqual(["Темно", "Улучшено"]);
   // X-5 (S07): у вошедшего клиента на фото видно, что они загружены в аккаунт
-  await expect(page.locator('.photo-cell[data-photo="mir-castle.jpg"] [data-upload]')).toHaveText("Загружено", { timeout: 60_000 });
+  await expect(page.locator('.photo-cell[data-photo="mir-castle.jpg"] [data-upload]')).toHaveText("Загружено", { timeout: 300_000 });
 
   await page.getByRole("button", { name: "Правки", exact: true }).click();
   await page.locator('[data-edit-photo="cat-dark.jpg"]').click();
