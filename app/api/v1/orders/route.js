@@ -2,18 +2,34 @@
 // GET — список. POST — оформить заказ из корзины на сервере. Заголовок Idempotency-Key обязателен:
 // повтор с тем же ключом вернёт тот же заказ, второй не создастся. Цены и итог считает сервер —
 // суммы из запроса не читаются. Оплата только тестовая, деньги не списываются.
+// Промокод (N8) проверяет сервер по корзине (срок, сезон, продукты, сумма, личный код, лимиты), а применение
+// записывается атомарно вместе с заказом (create_order_promo): двойное нажатие и повтор не тратят лимит дважды.
+// К каждому новому заказу — открытка с личным кодом на следующий заказ (order.card).
 import { calcTotals, etaRange, minskDayStart } from "@/lib/pricing";
 import { parseBody, rateLimited, requireUser, serverError, tooMany, z } from "@/lib/server/api";
-import { findDelivery, findPromo } from "@/lib/server/catalog";
+import { findDelivery } from "@/lib/server/catalog";
 import { json, jsonError } from "@/lib/server/http";
 import { advanceDemoOrders } from "@/lib/server/orderFlow";
 import { getOwnOrder, loadOrderFull, ORDER_FIELDS, shapeOrder } from "@/lib/server/orders";
 import { loadCart } from "@/lib/server/projects";
+import { cardsByOrder, cardTerms, currentSeason, findPromoFull, issueCard, promoUsage } from "@/lib/server/promo";
 import { trackServer } from "@/lib/server/analytics";
 import { checkProjectsBeforeOrder } from "@/lib/server/moderationCheck";
 
 // Перед созданием заказа сервер сам проверяет фото моделями модерации (N4): до 45 с на непроверенные фото
 export const maxDuration = 120;
+
+// Отказы базы при применении кода (вторая линия, create_order_promo) → понятный текст
+const PROMO_DB_ERRORS = {
+  promo_not_found: "Не подходит: такого промокода нет. Уберите его или введите другой.",
+  promo_disabled: "Не подходит: этот промокод больше не действует.",
+  promo_not_started: "Не подходит: промокод ещё не действует.",
+  promo_expired: "Истёк: срок действия промокода закончился.",
+  promo_not_yours: "Не подходит: это личный код другого клиента.",
+  promo_used: "Код уже использован: личный код из открытки действует один раз.",
+  promo_limit: "Лимит использований исчерпан: промокод уже применили максимальное число раз.",
+  promo_limit_user: "Код уже использован: вы применили его максимальное число раз.",
+};
 
 const text = (max, msg) => z.string().trim().max(max, msg);
 const schema = z.strictObject({
@@ -61,12 +77,15 @@ export async function GET(request) {
     if (await advanceDemoOrders(ctx, moving)) ({ data, error } = await list());
     if (error) return serverError();
   }
+  // Открытки с личными кодами (N8): код виден и в «Мои заказы»
+  const cards = await cardsByOrder(ctx.userId, data.map((o) => o.id), ctx.admin).catch(() => ({}));
   return json({
     ok: true,
     items: data.map((o) => ({
       ...shapeOrder(o),
       itemsCount: o.order_items?.length || 0,
       titles: (o.order_items || []).map((i) => i.title),
+      card: cards[o.id] || null,
     })),
   });
 }
@@ -86,7 +105,7 @@ export async function POST(request) {
   const { data: existing } = await ctx.db.from("orders").select(ORDER_FIELDS).eq("user_id", ctx.userId).eq("idempotency_key", key).maybeSingle();
   if (existing) {
     await ctx.audit("order.create", "order", existing.number, "success", { replayed: true });
-    return json({ ok: true, replayed: true, order: await loadOrderFull(ctx, existing) });
+    return json({ ok: true, replayed: true, order: await withCard(ctx, await loadOrderFull(ctx, existing)) });
   }
   if (await rateLimited(`order:${ctx.userId}`, 10, 60)) return tooMany();
 
@@ -112,14 +131,20 @@ export async function POST(request) {
   }
 
   let promo = null;
+  let check = {};
   if (body.promoCode) {
-    promo = await findPromo(body.promoCode);
+    promo = await findPromoFull(body.promoCode);
     if (!promo) return jsonError(422, "promo_not_found", "Не подходит: такого промокода нет. Уберите его или введите другой.");
+    const [usage, season] = await Promise.all([promoUsage(promo.code, ctx.userId), promo.season ? currentSeason() : null]);
+    check = { userId: ctx.userId, usage, season, products: cart.catalog.products };
   }
   const now = new Date();
-  const lines = cart.items.map((i) => ({ lineKop: i.lineTotalKop }));
-  const totals = calcTotals({ lines, method, promo, now });
-  if (promo && !totals.promo.ok) return jsonError(422, `promo_${totals.promo.reason}`, totals.promo.message);
+  const lines = cart.items.map((i) => ({ lineKop: i.lineTotalKop, slug: i.product.slug }));
+  const totals = calcTotals({ lines, method, promo, now, check });
+  if (promo && !totals.promo.ok) {
+    await ctx.audit("order.create", "order", null, "denied", { reason: `promo_${totals.promo.reason}`, promo: promo.code });
+    return jsonError(422, `promo_${totals.promo.reason}`, totals.promo.message);
+  }
 
   const printDays = Math.max(...cart.items.map((i) => i.product?.printDays || 0));
   const eta = etaRange(now, printDays, method.minDays, method.maxDays);
@@ -168,7 +193,13 @@ export async function POST(request) {
     console.error("Проверка фото перед заказом:", e?.message);
   }
 
-  const { data: rows, error } = await ctx.admin.rpc("create_order", { _user: ctx.userId, _key: key, _order: orderRow, _items: items });
+  // Номер заказа ещё не известен — в подписи открытки он появится по коду; условия открытки решает сервер
+  const { data: rows, error } = await ctx.admin.rpc("create_order_promo", { _user: ctx.userId, _key: key, _order: orderRow, _items: items, _card: cardTerms("") });
+  if (PROMO_DB_ERRORS[error?.message]) {
+    // Код закончился или выключен, пока оформляли (параллельный заказ занял последний лимит)
+    await ctx.audit("order.create", "order", null, "denied", { reason: error.message, promo: orderRow.promo_code });
+    return jsonError(422, error.message, PROMO_DB_ERRORS[error.message]);
+  }
   if (error?.message === "cart_changed") {
     // Параллельный заказ уже оформил эти проекты или корзина изменилась, пока считали цену
     await ctx.audit("order.create", "order", null, "denied", { reason: "cart_changed" });
@@ -181,6 +212,8 @@ export async function POST(request) {
   }
   const { order_id: orderId, created } = rows[0];
   const order = await getOwnOrder(ctx, orderId);
+  // Код открытки совпал с существующим (почти невозможно) — выдать другим кодом; повтор вернёт тот же
+  if (created && !rows[0].card_code) await issueCard(ctx.userId, orderId, order.number, ctx.admin).catch((e) => console.error(e?.message));
   await ctx.audit("order.create", "order", order.number, "success", {
     replayed: !created,
     total_kop: order.total_kop,
@@ -189,5 +222,11 @@ export async function POST(request) {
     delivery: order.delivery_code,
   });
   if (created) await trackServer("order_created", ctx.userId, { product: cart.items[0]?.product?.slug || null, items: cart.items.length }, ctx.email);
-  return json({ ok: true, replayed: !created, order: await loadOrderFull(ctx, order) }, created ? 201 : 200);
+  return json({ ok: true, replayed: !created, order: await withCard(ctx, await loadOrderFull(ctx, order)) }, created ? 201 : 200);
+}
+
+// Заказ + его открытка (личный код на следующий заказ)
+async function withCard(ctx, full) {
+  const cards = await cardsByOrder(ctx.userId, [full.id], ctx.admin).catch(() => ({}));
+  return { ...full, card: cards[full.id] || null };
 }

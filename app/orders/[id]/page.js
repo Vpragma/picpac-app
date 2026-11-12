@@ -11,6 +11,7 @@ import { getMe } from "../../../lib/me";
 import { notify } from "../../../lib/store";
 import { StatusChip, Timeline, byn, minskDay, minskDayRange, minskTime } from "../../../components/OrderBits";
 import { IconChat } from "../../../components/icons";
+import Postcard from "../../../components/promo/Postcard";
 
 const POLL_MS = 10000;
 const PAY = { card_test: "Карта (тест)", erip_test: "ЕРИП (тест)" };
@@ -185,6 +186,16 @@ export default function OrderPage() {
           Оплата: {PAY[o.payment?.method] || "тестовая"} — {o.payment?.status === "paid_test" ? "оплачено (тест)" : "ждёт оплаты"}. Деньги не списываются.
         </p>
       </section>
+
+      {o.card && (
+        <section className="card" aria-labelledby="card-h">
+          <h3 id="card-h">Открытка к заказу</h3>
+          <p className="muted small" style={{ marginTop: 0 }}>
+            Личный код на следующий заказ: один раз и только для вас. Введите его в корзине.
+          </p>
+          <Postcard card={o.card} orderNumber={o.number} compact hideHeading />
+        </section>
+      )}
 
       <section className="card">
         <h3>Получатель и доставка</h3>

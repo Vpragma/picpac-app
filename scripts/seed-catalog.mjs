@@ -1,7 +1,9 @@
 // Наполняет каталог в базе: продукты, размеры, опции, способы доставки, тестовые промокоды.
 // Все цифры — из docs/superpicpac/superpicpac.md (снято 11.11.2026).
 // Повторный запуск безопасен: строки обновляются по ключу (on conflict do update), дублей нет.
+// Демо-промокоды N8 (сезонные и для показа ошибок) — только добавлением: существующий код не меняется (правки админки целы).
 // Запуск: npm run seed:catalog (адрес базы — POSTGRES_URL_NON_POOLING из .env.local).
+// Только добавить новые демо-промокоды, не трогая каталог: npm run seed:catalog -- --promos-only
 import postgres from "postgres";
 
 const url = process.env.POSTGRES_URL_NON_POOLING;
@@ -84,7 +86,45 @@ const promos = [
   ["OLD2025", "percent", 15, 0, "2025-01-01T00:00:00+03:00", "2025-12-31T23:59:59+03:00", "−15% (акция 2025 года)"],
 ];
 
+// N8: демо-коды с условиями (сезон, продукты, лимиты). Только добавление (on conflict do nothing).
+// Сезонные работают, только когда в админке включён их сезон (если сезон известен) и не истёк срок.
+const BOOKS = ["pages-book", "layflat", "photopaper-book"];
+const demoPromos = [
+  { code: "OSEN2026", kind: "percent", value: 15, min: 0, from: "2026-09-01T00:00:00+03:00", to: "2026-11-30T23:59:59+03:00", label: "−15% на фотокниги этой осенью", season: "autumn", products: BOOKS },
+  { code: "BLACK2026", kind: "percent", value: 20, min: 3000, from: "2026-11-01T00:00:00+03:00", to: "2026-12-01T23:59:59+03:00", label: "−20% на всё в Чёрную пятницу, заказ от 30 BYN", season: "blackfriday" },
+  { code: "NEWYEAR2027", kind: "amount", value: 1000, min: 6000, from: "2026-11-01T00:00:00+03:00", to: "2027-01-10T23:59:59+03:00", label: "−10 BYN на новогодний заказ от 60 BYN", season: "newyear" },
+  // Для показа ошибок: «истёк» и «минимальная сумма»
+  { code: "LETO2025", kind: "percent", value: 20, min: 0, from: "2025-06-01T00:00:00+03:00", to: "2025-08-31T23:59:59+03:00", label: "−20% летом 2025 (акция закончилась)" },
+  { code: "BIGBOOK30", kind: "amount", value: 3000, min: 20000, from: null, to: null, label: "−30 BYN на фотокниги от 200 BYN", products: BOOKS },
+];
+
+async function addDemoPromos(tx) {
+  let added = 0;
+  for (const p of demoPromos) {
+    const rows = await tx`
+      insert into public.promo_codes (code, kind, value, min_total_kop, valid_from, valid_to, label, active, is_synthetic, season, product_slugs, max_uses, max_uses_per_user)
+      values (${p.code}, ${p.kind}, ${p.value}, ${p.min}, ${p.from}, ${p.to}, ${p.label}, true, true, ${p.season || null}, ${p.products || []}, ${p.maxUses || null}, ${p.perUser || null})
+      on conflict (code) do nothing
+      returning code`;
+    added += rows.length;
+  }
+  return added;
+}
+
 const sql = postgres(url, { max: 1, connect_timeout: 30, onnotice: () => {} });
+if (process.argv.includes("--promos-only")) {
+  try {
+    const added = await sql.begin((tx) => addDemoPromos(tx));
+    const [{ n: codes }] = await sql`select count(*)::int n from public.promo_codes where owner_user_id is null`;
+    console.log(`Готово: добавлено демо-промокодов ${added} (уже были — не менялись), общих промокодов всего ${codes}.`);
+  } catch (e) {
+    console.error("Ошибка добавления промокодов:", e?.message || e);
+    process.exitCode = 1;
+  } finally {
+    await sql.end({ timeout: 5 });
+  }
+  process.exit();
+}
 try {
   await sql.begin(async (tx) => {
     for (const b of books) {
@@ -142,6 +182,7 @@ try {
         on conflict (code) do update set kind = excluded.kind, value = excluded.value, min_total_kop = excluded.min_total_kop,
           valid_from = excluded.valid_from, valid_to = excluded.valid_to, label = excluded.label, active = true`;
     }
+    await addDemoPromos(tx);
   });
   const [{ n: products }] = await sql`select count(*)::int n from public.products where active`;
   const [{ n: sizes }] = await sql`select count(*)::int n from public.product_sizes`;

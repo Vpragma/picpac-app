@@ -5,6 +5,7 @@ import { loadCatalog } from "@/lib/server/catalog";
 import CatalogView from "@/components/CatalogView";
 import ProductPhoto from "@/components/ProductPhoto";
 import Onboarding from "@/components/Onboarding";
+import SeasonPromo from "@/components/promo/SeasonPromo";
 import { AiBlock, HomeHero, HowItWorks, Trust } from "@/components/home/HomeSections";
 import { PRODUCT_PHOTOS } from "@/lib/productPhotos";
 
@@ -28,6 +29,7 @@ export default async function HomePage() {
   return (
     <>
       <HomeHero />
+      <SeasonPromo place="home" />
       <HowItWorks />
       <CatalogView initial={catalog} covers={covers} />
       <AiBlock />
