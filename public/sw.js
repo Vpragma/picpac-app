@@ -6,6 +6,11 @@
 // - страницы — сначала сеть, без сети — сохранённая копия или страница «Нет сети» (/offline.html).
 //   Копию храним только у страниц без данных пользователя в разметке: главная, карточки, «Мои книги», редактор,
 //   корзина (черновики и корзина гостя живут в IndexedDB/localStorage устройства, а не в HTML);
+// - N5: оболочка при повторном входе — мгновенно: если у такой страницы есть копия ЭТОЙ ЖЕ версии сборки
+//   (заголовок X-App-Version = версия воркера), отдаём её сразу и обновляем копию в фоне. Копию другой версии
+//   не отдаём и не храним (её файлы /_next/static могли исчезнуть) — тогда как раньше: сначала сеть.
+//   Новая версия на сервере → её номер записываем в кэш picpac-meta, components/Pwa.js регистрирует воркер новой
+//   версии → тост «Есть новая версия — Обновить», как и раньше;
 // - каталог (/api/v1/catalog, общий для всех) — показываем сохранённый и обновляем в фоне;
 // - модели ИИ (/models/, /ort/) — сначала кэш, по запросу, переживают обновления версии;
 // - всё остальное API (вход, корзина, заказы, проекты, фото) и чужие сайты (хранилище фото) — только сеть,
@@ -15,6 +20,8 @@ const STATIC = "picpac-static-" + VERSION;
 const PAGES = "picpac-pages-" + VERSION;
 const DATA = "picpac-data-" + VERSION;
 const MODELS = "picpac-models-v1";
+const META = "picpac-meta"; // N5: последняя версия сборки, которую видел воркер (ключ LATEST) — читает components/Pwa.js
+const LATEST = "/__picpac/latest-version";
 const OFFLINE = "/offline.html";
 const SHELL = ["/", "/books", "/editor", "/cart", "/help"]; // /help — телефон поддержки доступен и без сети
 const SHELL_ASSETS = [OFFLINE, "/manifest.webmanifest", "/logo.svg", "/icon.svg", "/favicon.ico", "/icons/icon-192.png", "/icons/icon-512.png"];
@@ -39,19 +46,40 @@ async function put(cacheName, url) {
   if (res.ok && res.type === "basic") await cache.put(url, res);
 }
 
-async function precache() {
+// Версия сборки страницы (заголовок из next.config.mjs). Нет заголовка (старый сервер) — считаем своей версией.
+const versionOf = (res) => res.headers.get("x-app-version") || VERSION;
+
+// N5: запомнить версию с сервера, если она новее нашей, — Pwa.js при следующем запуске зарегистрирует новый воркер
+async function noteVersion(res) {
+  const v = versionOf(res);
+  if (v === VERSION) return;
+  const meta = await caches.open(META);
+  await meta.put(LATEST, new Response(v, { headers: { "Content-Type": "text/plain" } }));
+}
+
+// Скачать страницу оболочки в кэш (только своей версии) и её файлы сборки
+async function cachePage(path) {
+  const res = await fetch(path, { credentials: "same-origin" });
+  if (!res.ok || res.redirected) return;
+  await noteVersion(res);
+  if (versionOf(res) !== VERSION) return;
+  const html = await res.clone().text();
   const pages = await caches.open(PAGES);
+  await pages.put(new URL(path, self.location.origin).href, res);
+  await Promise.allSettled(assetsOf(html).map((u) => put(STATIC, u)));
+}
+
+async function precache() {
   // Каталог (общий для всех) нужен редактору и карточкам без сети
   await Promise.allSettled([...SHELL_ASSETS.map((u) => put(STATIC, u)), put(DATA, "/api/v1/catalog")]);
-  await Promise.allSettled(
-    SHELL.map(async (path) => {
-      const res = await fetch(path, { credentials: "same-origin" });
-      if (!res.ok || res.redirected) return;
-      const html = await res.clone().text();
-      await pages.put(new URL(path, self.location.origin).href, res);
-      await Promise.allSettled(assetsOf(html).map((u) => put(STATIC, u)));
-    }),
-  );
+  await Promise.allSettled(SHELL.map(cachePage));
+}
+
+// N5: тема или «Крупный текст» сменились (cookie) — перекачать сохранённые страницы, чтобы копия была в новом виде
+async function refreshPages() {
+  const pages = await caches.open(PAGES);
+  const keys = await pages.keys();
+  await Promise.allSettled(keys.map((req) => cachePage(new URL(req.url).pathname)));
 }
 
 self.addEventListener("install", (event) => {
@@ -63,7 +91,11 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     (async () => {
-      const keep = [STATIC, PAGES, DATA, MODELS];
+      const keep = [STATIC, PAGES, DATA, MODELS, META];
+      // Запись о «новой версии» — это мы: стираем (если на сервере уже ещё более новая — запись остаётся)
+      const meta = await caches.open(META);
+      const latest = await meta.match(LATEST);
+      if (latest && (await latest.text()) === VERSION) await meta.delete(LATEST);
       for (const key of await caches.keys()) if (key.startsWith("picpac-") && !keep.includes(key)) await caches.delete(key);
       await self.clients.claim();
     })(),
@@ -73,6 +105,7 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("message", (event) => {
   const msg = event.data || {};
   if (msg.type === "SKIP_WAITING") self.skipWaiting();
+  if (msg.type === "REFRESH_PAGES") event.waitUntil(refreshPages());
   // Страница присылает файлы, загруженные до того, как воркер начал её обслуживать (первый визит)
   if (msg.type === "CACHE_URLS" && Array.isArray(msg.urls)) {
     const urls = msg.urls
@@ -104,15 +137,25 @@ async function cacheFirst(request, cacheName) {
   return res;
 }
 
-async function page(request, url) {
+async function page(event, request, url) {
   const keep = isShellPage(url.pathname);
-  const cache = await caches.open(PAGES);
   const key = pageKey(url);
+  let stored = null;
   const net = fetch(request).then((res) => {
-    if (keep && res.ok && res.type === "basic" && !res.redirected) cache.put(key, res.clone());
+    if (keep && res.ok && res.type === "basic" && !res.redirected) {
+      // Храним только копию своей версии: её файлы сборки лежат в кэше этого воркера (работает и без сети).
+      // Ответ не ждёт записи в кэш — HTML идёт в страницу потоком.
+      const copy = versionOf(res) === VERSION ? res.clone() : null;
+      stored = Promise.allSettled([noteVersion(res), copy && caches.open(PAGES).then((c) => c.put(key, copy))]);
+    }
     return res;
   });
-  net.catch(() => {});
+  // Воркер живёт, пока не дописана свежая копия (и в фоне после ответа из кэша)
+  event.waitUntil(net.then(() => stored, () => null));
+  const cache = await caches.open(PAGES);
+  // N5: повторный вход — оболочка из кэша сразу (той же версии), свежая копия — в фоне для следующего раза
+  const saved = keep && (await cache.match(key));
+  if (saved && versionOf(saved) === VERSION) return saved;
   try {
     // Медленная сеть: через 4 с отдаём сохранённую копию, если она есть
     const first = await Promise.race([net, new Promise((r) => setTimeout(() => r(null), NET_TIMEOUT))]);
@@ -146,7 +189,7 @@ self.addEventListener("fetch", (event) => {
   if (!sameOrigin(url)) return;
   const path = url.pathname;
   if (request.mode === "navigate") {
-    event.respondWith(page(request, url));
+    event.respondWith(page(event, request, url));
     return;
   }
   // Данные страниц для переходов внутри приложения (RSC) — только сеть: без сети Next.js сам откроет страницу целиком

@@ -128,8 +128,20 @@ export default function Pwa() {
       if ("cancelIdleCallback" in window) window.cancelIdleCallback(idleId);
       else window.clearTimeout(idleId);
     };
-    function register() {
-    sw.register("/sw.js?v=" + encodeURIComponent(version), { scope: "/", updateViaCache: "none" })
+    // N5: страница могла прийти из кэша воркера (оболочка мгновенно), а на сервере уже новая версия — воркер
+    // записал её номер в кэш picpac-meta (public/sw.js). Тогда регистрируем воркер новой версии → тост «Обновить».
+    async function latestVersion() {
+      try {
+        const hit = await caches.match("/__picpac/latest-version", { cacheName: "picpac-meta" });
+        const v = hit ? (await hit.text()).trim() : "";
+        return /^[\w.-]{1,40}$/.test(v) ? v : version;
+      } catch {
+        return version;
+      }
+    }
+    async function register() {
+    const v = await latestVersion();
+    sw.register("/sw.js?v=" + encodeURIComponent(v), { scope: "/", updateViaCache: "none" })
       .then((reg) => {
         const track = (w) =>
           w?.addEventListener("statechange", () => {
