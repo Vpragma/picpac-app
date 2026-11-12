@@ -30,7 +30,13 @@ const LOCAL_ACTIONS = {
       const img = cache.get(photo.id);
       if (!img) return { say: "Ещё открываем фото — повторите через секунду" };
       const op = findSun(img.data, img.width, img.height, step.target === "glare" ? { minCore: 0 } : undefined);
-      if (!op) return { say: `Не нашёл на фото яркого пятна — ${what} убрать не получится. Попробуйте «убери пересвет».` };
+      if (!op)
+        return {
+          say:
+            step.target === "sun"
+              ? "Не нашёл солнце на этом фото — ничего не меняю. Если небо слишком светлое, попробуйте «убери пересвет»."
+              : "Не нашёл бликов на этом фото — ничего не меняю. Попробуйте «убери пересвет».",
+        };
       const side = Math.max(img.width, img.height);
       const twice = (edits.ops || []).some((o) => o.kind === "heal" && Math.hypot((o.cx - op.cx) * img.width, (o.cy - op.cy) * img.height) < o.r * side);
       if (twice) return { say: `${what[0].toUpperCase() + what.slice(1)} уже убрано. «Отменить» вернёт как было.` };
@@ -40,6 +46,7 @@ const LOCAL_ACTIONS = {
       say: `Убрать «${step.target}» пока не умею — ластик появится вместе с выделением касанием. Сейчас работают свет и цвет и «убери солнце».`,
     };
   },
+  keep: (step) => ({ say: step.say }),
   creative: () => ({ say: "Творческие правки (небо, снег) появятся в облачном редакторе. Сейчас работают свет и цвет: «ярче», «теплее», «убери пересвет»." }),
 };
 
@@ -151,7 +158,7 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
       }
     }
     if (next !== saved) commit(next);
-    setAnswer({ ok: next !== saved, say: said.join(". ") });
+    setAnswer({ ok: next !== saved || r.steps.every((s) => s.kind === "keep"), say: said.join(". ") });
     setCmd("");
   }
 

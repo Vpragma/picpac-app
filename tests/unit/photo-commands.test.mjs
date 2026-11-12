@@ -160,3 +160,43 @@ test("ответ «ещё» без «ещё ещё»", () => {
   assert.equal(b.say, "Сделали ещё ярче");
   assert.doesNotMatch(b.say, /ещё ещё/);
 });
+
+// S12 (критик S03, круг 2): отрицание после слова и жалобы не должны делать наоборот
+const S12_CASES = [
+  ["ярче не надо", { kind: "keep" }],
+  ["теплее не надо", { kind: "keep" }],
+  ["контраста не надо", { kind: "keep" }],
+  ["темнее не надо", { kind: "keep" }],
+  ["светлее не надо", { kind: "keep" }],
+  ["ярче не нужно", { kind: "keep" }],
+  ["перебор с яркостью", { exposure: -1 }],
+  ["многовато тепла", { warmth: -1 }],
+  ["очень жёлтое", { warmth: -1 }],
+  ["очень тёмное", { exposure: 1 }],
+  ["очень яркое", { exposure: -1 }],
+  ["переборщили с контрастом", { contrast: -1 }],
+  ["многовато синевы", { warmth: 1 }],
+  ["желтизны не надо", { warmth: -1 }],
+  ["сделай очень ярким", { exposure: 1 }],
+  ["сделай небо закатным", { kind: "creative" }],
+  ["закатное небо", { kind: "creative" }],
+];
+for (const [phrase, want] of S12_CASES) {
+  test(`S12: «${phrase}»`, () => {
+    const r = parseCommand(phrase);
+    assert.equal(r.ok, true, `не разобрано: ${r.say}`);
+    if (want.kind) {
+      assert.ok(r.steps.some((x) => x.kind === want.kind), `нет шага ${want.kind}: ${JSON.stringify(r.steps)}`);
+      if (want.kind === "keep") assert.match(r.say, /оставляю как есть/);
+      return;
+    }
+    const adj = r.steps.find((x) => x.kind === "adjust");
+    assert.ok(adj, `нет правки: ${JSON.stringify(r.steps)}`);
+    for (const [k, sign] of Object.entries(want)) assert.equal(Math.sign(adj.deltas[k] || 0), sign, `${k}: ${JSON.stringify(adj.deltas)}`);
+  });
+}
+
+test("S12: «Размыть фон» нет среди подсказок, пока функции нет", async () => {
+  const { SUGGESTIONS } = await import("../../lib/photo/commands.js");
+  assert.ok(!SUGGESTIONS.some((s) => /размыть/i.test(s)), SUGGESTIONS.join(", "));
+});

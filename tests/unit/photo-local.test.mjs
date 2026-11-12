@@ -93,3 +93,50 @@ test("маленькая яркая точка (фонарь, отблеск) �
   const glare = findSun(d, w, h, { minCore: 0 });
   assert.ok(glare && Math.abs(glare.cx * w - 100) < 6, JSON.stringify(glare));
 });
+
+// S12 (критик S03, круг 2): солнце — только на фото с солнцем. Фото галереи уменьшаются, как в превью редактора (1280).
+import { createRequire } from "node:module";
+const sharp = createRequire(import.meta.url)("sharp");
+async function galleryPixels(name, side = 1280) {
+  const { data, info } = await sharp(new URL(`../../public/demo-gallery/${name}`, import.meta.url).pathname)
+    .rotate()
+    .resize(side, side, { fit: "inside", withoutEnlargement: true })
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  return { d: new Uint8ClampedArray(data.buffer, data.byteOffset, data.length), w: info.width, h: info.height };
+}
+for (const name of ["sunset-sun.jpg", "sunset-sun-tilted.jpg", "winter-field.jpg"]) {
+  test(`S12: солнце находится — ${name}`, async () => {
+    const { d, w, h } = await galleryPixels(name);
+    const op = findSun(d, w, h);
+    assert.ok(op, "солнце не найдено");
+    assert.ok(op.cy < 0.6, `солнце в верхней части кадра: ${op.cy}`);
+  });
+}
+for (const name of [
+  "mir-castle.jpg",
+  "nesvizh.jpg",
+  "nesvizh-small.jpg",
+  "braslav-lake.jpg",
+  "braslav-lake-bright.jpg",
+  "night-street.jpg",
+  "cake.jpg",
+  "cat.jpg",
+  "beach.jpg",
+  "flowers.jpg",
+  "autumn-forest.jpg",
+  "bison.jpg",
+  "bison-yellow.jpg",
+  "dog.jpg",
+  "dog-blurry.jpg",
+  "cat-dark.jpg",
+  "flowers-2.jpg",
+]) {
+  test(`S12: без солнца — не находит (ничего не правим) — ${name}`, async () => {
+    for (const side of [1280, 512]) {
+      const { d, w, h } = await galleryPixels(name, side);
+      assert.equal(findSun(d, w, h), null, `${name} @${side}`);
+    }
+  });
+}
