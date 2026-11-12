@@ -5,7 +5,7 @@
 import { readSeason } from "@/lib/server/season";
 
 export async function GET(request) {
-  const season = await readSeason({ maxAgeMs: 3000 });
+  const season = await readSeason();
   const withSession = /(?:^|;\s*)sb-/.test(request.headers.get("cookie") || "");
   return Response.json({ season }, { headers: { "Cache-Control": withSession ? "private, no-store" : "public, max-age=5, s-maxage=5" } });
 }
