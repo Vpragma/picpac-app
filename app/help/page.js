@@ -51,6 +51,27 @@ export default async function HelpPage() {
         </p>
       </section>
 
+      <section className="card" id="install" aria-labelledby="help-install">
+        <h2 id="help-install">Как установить на телефон</h2>
+        <h3 style={{ fontSize: 16 }}>iPhone (iOS 16.4 и новее)</h3>
+        <ol>
+          <li>Откройте сайт PicPac в Safari.</li>
+          <li>Нажмите «Поделиться» (квадрат со стрелкой вверх) → «На экран „Домой“» → «Добавить».</li>
+          <li>Откройте PicPac со значка на экране «Домой».</li>
+          <li>Профиль → «Уведомления» → «Разрешить».</li>
+        </ol>
+        <h3 style={{ fontSize: 16 }}>Android</h3>
+        <ol>
+          <li>Откройте сайт PicPac в Chrome.</li>
+          <li>Нажмите ⋮ → «Установить приложение».</li>
+          <li>Откройте PicPac со значка.</li>
+          <li>Профиль → «Уведомления» → «Разрешить».</li>
+        </ol>
+        <p className="muted small" style={{ margin: 0 }}>
+          На iPhone уведомления работают только в установленном приложении. Если уведомления запрещены — включите их в настройках телефона для PicPac. QR-код для телефона — на странице <Link href="/qr">/qr</Link>.
+        </p>
+      </section>
+
       <section className="card faq" aria-labelledby="help-faq">
         <h2 id="help-faq">Короткие ответы</h2>
         <details>

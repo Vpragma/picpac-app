@@ -41,6 +41,7 @@
     "nsfwjs": "^4.3.0",
     "onnxruntime-web": "^1.31.1",
     "postgres": "^4.1.1",
+    "qrcode": "^1.5.4",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "upscaler": "^1.0.0",

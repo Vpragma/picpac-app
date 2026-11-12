@@ -33,6 +33,7 @@
 | @upscalerjs/esrgan-slim | 1.0.0 | MIT | рабочая |  |
 | buffer | 6.0.3 | MIT | рабочая |  |
 | idb | 8.0.4 | ISC | рабочая |  |
+| qrcode | 1.5.4 | MIT | рабочая | QR-код на сервере (/qr, «Открыть на телефоне»), D9 |
 | lucide-react | 1.72.0 | ISC | рабочая |  |
 | next | 16.4.6 | MIT | рабочая |  |
 | nsfwjs | 4.3.0 | MIT | рабочая |  |

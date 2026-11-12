@@ -3,6 +3,7 @@
 // Только по согласию и нажатию; отключить — одной кнопкой. Если пуши недоступны — честно объясняем почему:
 // новости всё равно видны в разделе «Уведомления».
 import { useEffect, useState } from "react";
+import { callApi } from "@/lib/api";
 import { currentSubscription, disablePush, enablePush, pushSupport } from "@/lib/push";
 
 const REASONS = {
@@ -47,6 +48,16 @@ export default function PushToggle() {
     }
   }
 
+  // D9: «Проверить уведомления» — тестовый пуш себе (сервер пускает раз в минуту)
+  async function check() {
+    if (busy) return;
+    setBusy(true);
+    setMsg("Отправляем тестовое уведомление…");
+    const r = await callApi("/api/v1/push/test", { body: {} });
+    setBusy(false);
+    setMsg(r.ok ? r.text + " Уведомление «PicPac: уведомления работают» придёт через несколько секунд." : r.text || r.error?.message || "Не получилось. Попробуйте ещё раз.");
+  }
+
   async function disable() {
     if (busy) return;
     setBusy(true);
@@ -66,9 +77,17 @@ export default function PushToggle() {
         <>
           <p className="muted small">Только важное: заказ готов или передан в доставку, ответ поддержки, книга ждёт в корзине. Ночью (22:00–09:00) напоминаний нет.</p>
           {on ? (
-            <button type="button" className="btn btn-block" onClick={disable} disabled={busy}>
-              {busy ? "Отключаем…" : "Отключить уведомления"}
-            </button>
+            <>
+              <p className="small" data-testid="push-state" style={{ fontWeight: 600 }}>
+                Включены на этом устройстве
+              </p>
+              <button type="button" className="btn btn-primary btn-block" onClick={check} disabled={busy}>
+                Проверить уведомления
+              </button>
+              <button type="button" className="btn btn-block" onClick={disable} disabled={busy} style={{ marginTop: 8 }}>
+                {busy ? "Подождите…" : "Отключить уведомления"}
+              </button>
+            </>
           ) : (
             <button type="button" className="btn btn-primary btn-block" onClick={enable} disabled={busy}>
               {busy ? "Включаем…" : "Сообщать о заказах и важном"}
@@ -77,9 +96,25 @@ export default function PushToggle() {
         </>
       )}
       {support === "ios-install" && (
-        <p className="muted small">На iPhone уведомления работают в приложении с экрана «Домой» (iOS 16.4+): «Поделиться» → «На экран „Домой“», затем откройте PicPac со значка и включите здесь.</p>
+        <>
+          <p className="small" data-testid="push-state" style={{ fontWeight: 600 }}>
+            Сначала установите приложение (iPhone)
+          </p>
+          <p className="muted small">
+            Уведомления на iPhone работают в приложении с экрана «Домой» (iOS 16.4+): в Safari нажмите «Поделиться» <span aria-hidden="true">(квадрат со стрелкой ↑)</span> → «На экран „Домой“» → «Добавить», откройте PicPac со значка и включите здесь. <a href="/help#install">Подробнее</a>
+          </p>
+        </>
       )}
-      {support === "denied" && <p className="muted small">{REASONS.denied}</p>}
+      {support === "denied" && (
+        <>
+          <p className="small" data-testid="push-state" style={{ fontWeight: 600 }}>
+            Запрещены в настройках телефона
+          </p>
+          <p className="muted small">
+            Как включить: настройки телефона → PicPac (или браузер) → «Уведомления» → разрешить, затем вернитесь сюда. Новости заказа всё равно видны в разделе «Уведомления». <a href="/help#install">Подробнее</a>
+          </p>
+        </>
+      )}
       {support === "unsupported" && <p className="muted small">Этот браузер не умеет уведомления — новости видны в разделе «Уведомления».</p>}
       {msg && (
         <p className="small" role="status" style={{ marginBottom: 0 }}>
