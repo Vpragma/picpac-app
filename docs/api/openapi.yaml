@@ -230,6 +230,65 @@ paths:
         "400": { $ref: "#/components/responses/Invalid" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /api/v1/projects/{id}/photos/{photoId}/print:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: photoId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [Фото]
+      summary: Ссылка для загрузки печатной версии изменённого фото (S03e)
+      description: |
+        Печатная версия — JPEG полного разрешения со всеми правками, собранный на устройстве при оформлении заказа
+        (`lib/photo/print.js`, воркер с OffscreenCanvas). Оригинал не меняется и хранится отдельно.
+        Путь `{user_id}/{project_id}/print/{photoId}/{uuid}.jpg` выдаёт сервер; загрузка — `PUT upload.url`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [bytes], properties: { bytes: { type: integer, minimum: 1, maximum: 26214400 } } }
+            example: { bytes: 3250000 }
+      responses:
+        "200":
+          description: Ссылка на 2 часа
+          content:
+            application/json:
+              example: { ok: true, upload: { path: "9b1…/4c2…/print/7d0…/0f3….jpg", url: "https://…", method: PUT, headers: { content-type: image/jpeg, x-upsert: "false" }, expiresIn: 7200 } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: "Проект уже в заказе (project_ordered)" }
+        "429": { $ref: "#/components/responses/TooMany" }
+    put:
+      tags: [Фото]
+      summary: Зафиксировать печатную версию (или снять её)
+      description: |
+        `{ path, edits }` — сервер читает начало файла: JPEG, размеры кадра как у оригинала (±2 точки, поворот допускается);
+        записывает `print_path` и правки фото (`edits.print = { path, width, height, bytes, at }`). Снимок заказа
+        (`order_items.snapshot.photos[].edits`) получает и правки, и путь печатной версии.
+        `{ path: null }` — правки сняли, печатается оригинал; `{ path: null, edits }` — файл не собрался на устройстве,
+        правки записываются параметрами.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path]
+              properties:
+                path: { type: string, nullable: true }
+                edits: { type: object, description: "photo.edits: { v, auto, autoOff, manual, ops }" }
+            example: { path: "9b1…/4c2…/print/7d0…/0f3….jpg", edits: { v: 1, auto: null, autoOff: false, manual: { exposure: 20 }, ops: [{ kind: heal, cx: 0.4, cy: 0.12, r: 0.1 }] } }
+      responses:
+        "200":
+          description: Сохранено
+          content:
+            application/json:
+              example: { ok: true, print: { path: "9b1…/print/7d0…/0f3….jpg", width: 1600, height: 1200, bytes: 325900, at: "2026-11-12T00:47:00Z" } }
+        "400": { description: "invalid_path (чужой путь), unsupported_format (не JPEG), size_mismatch (другой размер кадра), file_too_big" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: "Запрос с другого сайта (bad_origin)" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: "Проект уже в заказе (project_ordered)" }
+
   /api/v1/projects/{id}/photos/{photoId}:
     parameters:
       - { $ref: "#/components/parameters/Id" }
