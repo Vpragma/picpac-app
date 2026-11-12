@@ -15,12 +15,14 @@ import { seasonForRequest } from "@/lib/server/season";
 import SeasonSync from "../components/season/SeasonSync";
 import MotionFx from "../components/MotionFx";
 
+// Jost — свои файлы с нашего сайта (next/font скачивает их при сборке, к Google в работе сайта запросов нет):
+// подмножества латиница + кириллица (один переменный файл на подмножество — и 400, и 500), font-display: swap.
+// N5: preload — браузер качает оба файла сразу вместе с HTML, а не после разбора CSS (заголовок первого экрана —
+// LCP — не ждёт смены шрифта).
 const jost = Jost({
   subsets: ["latin", "cyrillic"],
   weight: ["400", "500"],
-  // Без preload: при переходах между страницами Next повторно вставлял <link rel=preload> уже загруженных файлов шрифта,
-  // и браузер писал в консоль «preloaded but not used». Шрифт всё равно грузится сразу из CSS (display: swap).
-  preload: false,
+  preload: true,
   variable: "--font-jost",
   display: "swap",
 });

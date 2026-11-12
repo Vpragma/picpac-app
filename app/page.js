@@ -4,7 +4,7 @@
 import { loadCatalog } from "@/lib/server/catalog";
 import CatalogView from "@/components/CatalogView";
 import ProductPhoto from "@/components/ProductPhoto";
-import Onboarding from "@/components/Onboarding";
+import OnboardingLazy from "@/components/OnboardingLazy";
 import { AiBlock, HomeHero, HowItWorks, Trust } from "@/components/home/HomeSections";
 import { PRODUCT_PHOTOS } from "@/lib/productPhotos";
 import { seasonForRequest } from "@/lib/server/season";
@@ -14,7 +14,7 @@ import SeasonPromo from "@/components/season/SeasonPromo";
 import { seasonPhotos } from "@/components/season/seasonPhotos";
 
 // Обложки карточек — фото продуктов, собранные на сервере (getImageProps + <picture>): JS главной не растёт.
-// Все лениво: приоритет на главной — у первого фото коллажа (LCP).
+// Приоритет на главной — у первого фото коллажа; обложки — ниже первого экрана, лениво.
 const COVER_SIZES = "(min-width: 1440px) 22rem, (min-width: 1024px) 30vw, (min-width: 768px) 45vw, 100vw";
 
 export const revalidate = 60;
@@ -27,6 +27,7 @@ export default async function HomePage() {
     // База недоступна — экран сам запросит каталог через API и покажет «Повторить»
     console.error(e?.message);
   }
+  // Обложки — ниже первого экрана, поэтому все лениво (N5: приоритет — только первому экрану)
   const covers = Object.fromEntries(
     Object.entries(PRODUCT_PHOTOS).map(([slug, photos]) => [slug, <ProductPhoto key={slug} photo={photos[0]} alt="" sizes={COVER_SIZES} />]),
   );
@@ -43,7 +44,7 @@ export default async function HomePage() {
       <CatalogView initial={catalog} covers={covers} />
       <AiBlock />
       <Trust />
-      <Onboarding />
+      <OnboardingLazy />
     </>
   );
 }

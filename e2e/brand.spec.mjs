@@ -16,11 +16,17 @@ test("светлая тема по умолчанию даже при тёмно
   await expect(hero.locator(".btn-primary")).toHaveCount(1);
   const btn = await hero.locator(".btn-primary").evaluate((el) => ({ bg: getComputedStyle(el).backgroundColor, img: getComputedStyle(el).backgroundImage, color: getComputedStyle(el).color }));
   expect(btn).toEqual({ bg: RED, img: "none", color: "rgb(255, 255, 255)" });
-  // коллаж: фото с размерами, приоритет только у первого
+  // коллаж: фото с размерами, приоритет только у первого. N5: весь коллаж — первый экран, без ленивой загрузки;
+  // пока фото грузится — подложка цвета поверхности (не белая)
   const imgs = hero.locator(".collage img");
   expect(await imgs.count()).toBeGreaterThanOrEqual(3);
   await expect(imgs.first()).toHaveAttribute("fetchpriority", "high");
-  await expect(imgs.nth(1)).toHaveAttribute("loading", "lazy");
+  for (const i of [1, 2]) {
+    await expect(imgs.nth(i)).toHaveAttribute("loading", "eager");
+    await expect(imgs.nth(i)).not.toHaveAttribute("fetchpriority");
+  }
+  const under = await hero.locator(".collage picture").evaluateAll((els) => els.map((el) => getComputedStyle(el).backgroundColor));
+  expect(under.every((c) => c !== "rgb(255, 255, 255)" && c !== "rgba(0, 0, 0, 0)")).toBe(true);
   // каталог с плашками: Classic — «выбор pic pac» и «180°»
   const classic = page.locator('a[href="/product/layflat"]').first();
   await expect(classic.locator(".tag-choice")).toHaveText(/выбор pic pac/i);
@@ -104,6 +110,8 @@ for (const theme of ["light", "dark"]) {
     const AxeBuilder = (await import("@axe-core/playwright")).default;
     if (theme === "dark") await page.context().addCookies([{ name: "pp_theme", value: "dark", url: test.info().project.use.baseURL }]);
     await page.goto("/help");
+    // N5: под нагрузкой гидратация идёт и после networkidle — ждём, пока React «привяжет» main (свойство __reactFiber…)
+    await page.waitForFunction(() => Object.keys(document.querySelector("main") || {}).some((k) => k.startsWith("__reactFiber")));
     await expect(page.locator("html")).toHaveAttribute("data-color-scheme", theme);
     // N2: образцы вставляем после гидратации — иначе React при гидратации main убирает чужие узлы (тест иногда падал)
     await page.waitForLoadState("networkidle");

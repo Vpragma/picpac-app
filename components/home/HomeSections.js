@@ -1,6 +1,8 @@
 // Главная (N1): первый экран про воспоминания, «как это работает», ИИ-редактор, доверие. Серверные компоненты —
 // без JS в браузере (бюджет главной). Фото коллажа — из тестовой галереи (Wikimedia Commons, свободные лицензии;
-// авторы — на странице «Лицензии и авторы»). Первое фото — с приоритетом (LCP), остальные — лениво.
+// авторы — на странице «Лицензии и авторы»). N5: весь коллаж — первый экран, поэтому без ленивой загрузки;
+// высокий приоритет — только у первого (самого крупного) фото. Пока фото грузится, на месте снимка — подложка
+// цвета поверхности из токенов (не белая), рамки коллажа фиксированы — сдвига нет.
 import Link from "next/link";
 import { getImageProps } from "next/image";
 import LineArt from "../LineArt";
@@ -10,17 +12,21 @@ import dog from "@/public/demo-gallery/dog.jpg";
 import castle from "@/public/demo-gallery/mir-castle.jpg";
 
 const PRINTS = [
-  { cls: "print-a", src: sunset, sizes: "(min-width: 1024px) 320px, 58vw", eager: true },
+  { cls: "print-a", src: sunset, sizes: "(min-width: 1024px) 320px, 58vw", lcp: true },
   { cls: "print-b", src: flowers, sizes: "(min-width: 1024px) 210px, 38vw" },
   { cls: "print-c", src: dog, sizes: "(min-width: 1024px) 250px, 46vw" },
-  { cls: "print-d", src: castle, sizes: "170px" },
+  { cls: "print-d", src: castle, sizes: "170px", wideOnly: true },
 ];
 
-function Print({ cls, src, sizes, eager }) {
-  const { props } = getImageProps({ src, alt: "", sizes, quality: 70, loading: eager ? "eager" : "lazy", fetchPriority: eager ? "high" : undefined });
+// Прозрачная точка 1×1: четвёртое фото на телефоне скрыто — браузер не качает его вовсе
+const EMPTY_GIF = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+
+function Print({ cls, src, sizes, lcp = false, wideOnly = false }) {
+  const { props } = getImageProps({ src, alt: "", sizes, quality: 70, loading: "eager", fetchPriority: lcp ? "high" : undefined });
   return (
     <figure className={"print " + cls}>
       <picture>
+        {wideOnly && <source media="(max-width: 1023px)" srcSet={EMPTY_GIF} />}
         <img {...props} alt="" decoding="async" />
       </picture>
     </figure>
