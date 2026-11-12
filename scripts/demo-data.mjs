@@ -4,7 +4,7 @@
 //                            320 обращений с темами и SLA, события воронки. Детерминированно (seed 20261112).
 //   npm run seed:demo      — синтетический набор + «живые» демо-аккаунты жюри (проекты, заказы во всех статусах, обращение с ответом).
 //   npm run reset:demo     — удалить is_demo/is_synthetic строки, синтетических, e2e- и critic-пользователей с их файлами,
-//                            затем снова загрузить демо. С флагом --clean — только удалить.
+//                            затем снова загрузить демо. С флагом --clean — только удалить, --dry-run — только посчитать.
 // Повторный запуск любой команды безопасен: старые синтетические и демо-строки сначала удаляются.
 // Пароли демо-аккаунтов не меняются (их создаёт npm run seed).
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -17,6 +17,8 @@ import postgres from "postgres";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const mode = process.argv[2] || "demo";
 const cleanOnly = process.argv.includes("--clean");
+const dryRun = process.argv.includes("--dry-run");
+const allUsers = process.argv.includes("--all");
 
 const need = (...names) => {
   for (const n of names) if (process.env[n]) return process.env[n];
@@ -444,9 +446,25 @@ async function seedDemoAccounts(cat, existingUsers) {
 // ───── Сброс ─────
 async function reset(existingUsers) {
   const isTest = (e) => /^(synthetic-\d+|e2e-[a-z0-9-]+|critic-[a-z0-9-]+)@example\.com$/i.test(e || "");
-  const victims = existingUsers.filter((u) => isTest(u.email));
+  // Тестовых пользователей моложе 30 минут не трогаем (тест или проверка критика могут ещё идти); --all — удалить и их
+  const fresh = (u) => !/^synthetic-/.test(u.email) && Date.now() - new Date(u.created_at).getTime() < 30 * 60000;
+  const tests = existingUsers.filter((u) => isTest(u.email));
+  const victims = tests.filter((u) => allUsers || !fresh(u));
+  const keepIds = tests.filter((u) => !victims.includes(u)).map((u) => u.id);
+  if (keepIds.length) console.log(`Пропущено свежих тестовых пользователей (< 30 мин): ${keepIds.length}. Удалить и их: npm run reset:demo -- --all`);
   const ids = victims.map((u) => u.id);
-  const o1 = await sql`delete from public.orders where is_demo or is_synthetic or user_id = any(${ids}::uuid[]) returning id`;
+  if (dryRun) {
+    const [c] = await sql`select
+      (select count(*) from public.orders where (is_demo or is_synthetic or user_id = any(${ids}::uuid[])) and (user_id is null or not user_id = any(${keepIds}::uuid[]))) as orders,
+      (select count(*) from public.projects where is_demo) as projects,
+      (select count(*) from public.analytics_events where is_synthetic) as events`;
+    const kinds = { synthetic: 0, e2e: 0, critic: 0 };
+    for (const u of victims) kinds[u.email.split("-")[0]]++;
+    console.log(`Пробный сброс (ничего не удалено): заказов ${c.orders}, демо-проектов ${c.projects}, событий ${c.events}, пользователей: синтетических ${kinds.synthetic}, e2e ${kinds.e2e}, critic ${kinds.critic}`);
+    return;
+  }
+  const o1 = await sql`delete from public.orders where (is_demo or is_synthetic or user_id = any(${ids}::uuid[]))
+    and (user_id is null or not user_id = any(${keepIds}::uuid[])) returning id`;
   const demoProjects = await sql`select id, user_id from public.projects where is_demo`;
   for (const p of demoProjects) await removeFiles(`${p.user_id}/${p.id}`, 2);
   await sql`delete from public.projects where is_demo`;
@@ -467,7 +485,7 @@ try {
   let users = await listAllUsers();
   if (mode === "reset") {
     await reset(users);
-    if (!cleanOnly) {
+    if (!cleanOnly && !dryRun) {
       users = await listAllUsers();
       await seedSynthetic(cat, users);
       users = await listAllUsers();
