@@ -111,6 +111,23 @@ async function tallClip(page, name, device) {
   const vw = page.viewportSize().width;
   await page.screenshot({ path: path.join(OUT, `${name}-${device}.png`), fullPage: true, clip: { x: 0, y: box.top, width: vw, height: box.bottom - box.top } });
 }
+// N11 (если влит): «посмотреть книгу целиком» — листаемое превью (кнопка на «Автомакете» или «Проверке»)
+async function tryBookPreview(page, device) {
+  const flip = page.getByRole("button", { name: /книг[ау] целиком|Листать книгу|Посмотреть книгу|Превью книги/i });
+  if (!(await flip.count())) return false;
+  try {
+    await flip.first().click();
+    await page.waitForTimeout(2500);
+    await snap(page, "10b-prevyu-knigi-listat", device);
+    log(`ok   10b-prevyu-knigi-listat-${device}`);
+    await page.keyboard.press("Escape").catch(() => {});
+    await page.waitForTimeout(500);
+    return true;
+  } catch (e) {
+    log(`FAIL 10b-prevyu-knigi-listat-${device}: ${e.message.split("\n")[0].slice(0, 160)}`);
+    return false;
+  }
+}
 async function say(page, text) {
   const cmd = page.locator("#pe-cmd");
   await cmd.fill(text);
@@ -161,6 +178,7 @@ async function editorScreens(browser, device) {
   const page = await ctx.newPage();
   watch(page, `${device} editor`);
   const answer = page.locator(".pe-answer");
+  let bookShot = false;
   try {
     const opened = await step("_redaktor-otkryt", device, async () => {
       await page.goto(BASE + "/product/layflat", { waitUntil: "load", timeout: 90_000 });
@@ -254,15 +272,7 @@ async function editorScreens(browser, device) {
       await scrollToEl(page, nav(page), device === "phone" ? 70 : 90);
       await settle(page, 1200);
       await snap(page, "10-prevyu-knigi", device);
-      // N11 (если влит): «посмотреть книгу целиком» — листаемое превью
-      const flip = page.getByRole("button", { name: /книг[ау] целиком|Листать|Посмотреть книгу|180/i });
-      if (await flip.count()) {
-        await flip.first().click();
-        await page.waitForTimeout(2500);
-        await snap(page, "10b-prevyu-knigi-listat", device);
-        log(`ok   10b-prevyu-knigi-listat-${device}`);
-        await page.keyboard.press("Escape").catch(() => {});
-      } else log(`skip 10b-prevyu-knigi-listat-${device}: в сборке нет листаемого превью книги (N11)`);
+      bookShot = await tryBookPreview(page, device);
     });
 
     await step("11-proverka", device, async () => {
@@ -271,6 +281,8 @@ async function editorScreens(browser, device) {
       await scrollToEl(page, nav(page), device === "phone" ? 70 : 90);
       await settle(page, 800);
       await snap(page, "11-proverka", device);
+      if (!bookShot) bookShot = await tryBookPreview(page, device);
+      if (!bookShot) log(`skip 10b-prevyu-knigi-listat-${device}: в сборке нет листаемого превью книги (N11)`);
     });
   } finally {
     await ctx.close();
@@ -305,6 +317,12 @@ async function orderScreens(browser, device) {
       await scrollToEl(page, "#h-promo", device === "phone" ? 80 : 100);
       await page.waitForTimeout(500);
       await snap(page, "12-korzina-promokod", device);
+      if (device === "phone" && (await page.locator("#h-total").count())) {
+        // на телефоне «Итого» со скидкой — ниже, отдельным кадром
+        await scrollToEl(page, "#h-total", 80);
+        await page.waitForTimeout(400);
+        await snap(page, "12b-korzina-itogo", device);
+      }
     });
     if (!cartOk) return;
 

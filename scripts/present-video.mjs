@@ -133,6 +133,14 @@ try {
       await warm.locator(".photo-cell img").first().waitFor({ timeout: 120_000 });
       await warm.getByRole("navigation", { name: "Шаги редактора" }).getByRole("button", { name: "Правки", exact: true }).click();
       await warm.locator(".pe-after[data-rendered]").waitFor({ timeout: 60_000 });
+      const pre = warm.locator("[data-ai-prefetch]");
+      if ((await pre.count()) && (await pre.getAttribute("data-ai-prefetch")) !== "ready") {
+        const btn = pre.getByRole("button", { name: /Скачать ИИ заранее/ });
+        if (await btn.count()) {
+          await btn.click();
+          await poll(async () => (await pre.getAttribute("data-ai-prefetch")) === "ready", 300_000, 1000).catch(() => log("прогрев: «Скачать ИИ заранее» не дошёл до ready"));
+        }
+      }
       const cmd = warm.locator("#pe-cmd");
       await cmd.fill("размой собаку");
       await cmd.press("Enter");
@@ -306,7 +314,9 @@ try {
   await hold(3200);
   // 9. Мои заказы
   await page.goto(BASE + "/orders", { waitUntil: "load", timeout: 90_000 });
+  await ff(() => page.locator("a[data-number]").first().waitFor({ timeout: 60_000 }).catch(() => {}), 6);
   await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => {});
+  await hold(300);
   await cap("«Мои заказы»: статус и код открытки");
   await hold(3200);
   const endT = now();
@@ -325,15 +335,28 @@ try {
   const raw = durs.reduce((a, b) => a + b, 0);
   const speed = Math.max(1, raw / TARGET);
   durs = durs.map((d) => (d / speed) * 1000);
+  // Прореживание: каждый кадр на экране не меньше 1/12 с — иначе кодировщик не успевает (ускоренные ожидания дают
+  // сотни кадров по несколько миллисекунд, он отстаёт и «съедает» следующие шаги). Склеенный кадр берёт последнюю картинку.
+  const MIN_MS = 1000 / 12;
+  const kept = [];
+  for (let i = 0; i < frames.length; i++) {
+    const last = kept[kept.length - 1];
+    if (last && last.d < MIN_MS) {
+      last.d += durs[i];
+      last.i = i;
+    } else kept.push({ i, d: durs[i] });
+  }
+  const order = kept.map((k) => k.i);
+  durs = kept.map((k) => k.d);
   const total = durs.reduce((a, b) => a + b, 0);
-  log(`кадров ${frames.length}, после сжатия ожиданий ${raw.toFixed(1)} с, общее ускорение ×${speed.toFixed(2)} → ролик ${(total / 1000).toFixed(1)} с`);
+  log(`кадров ${frames.length} → ${kept.length} после прореживания, после сжатия ожиданий ${raw.toFixed(1)} с, общее ускорение ×${speed.toFixed(2)} → ролик ${(total / 1000).toFixed(1)} с`);
 
   const enc = await browser.newContext({ viewport: { width: 320, height: 240 } });
   const rp = await enc.newPage();
   await rp.route("https://rec.invalid/**", async (route) => {
     const u = new URL(route.request().url());
     const m = u.pathname.match(/^\/f\/(\d+)$/);
-    if (m) return route.fulfill({ contentType: "image/jpeg", body: frames[Number(m[1])].buf });
+    if (m) return route.fulfill({ contentType: "image/jpeg", body: frames[order[Number(m[1])]].buf });
     return route.fulfill({ contentType: "text/html", body: "<!doctype html><meta charset=utf-8><body style=margin:0></body>" });
   });
   await rp.goto("https://rec.invalid/");
@@ -376,7 +399,7 @@ try {
       for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode(...buf.subarray(i, i + 0x8000));
       return btoa(s);
     },
-    { n: frames.length, durs, w: W, h: H },
+    { n: order.length, durs, w: W, h: H },
   );
   await enc.close();
   const webm = withDuration(Buffer.from(b64, "base64"), total);

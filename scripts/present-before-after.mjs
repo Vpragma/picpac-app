@@ -10,6 +10,7 @@
 //   --admin-before снимок админки «было» (PNG компьютера 1440×900 @2x; по умолчанию docs/presentation/screens/09-admin-overview.png
 //                  рядом с папкой проекта). Нет файла — пара админки пропускается.
 //   --devices desktop,phone    --only before,after,pairs
+//   --before-dir   папка с готовыми снимками «было» (тогда старый сайт заново не снимается)
 // В папке: before/…, after/…, пары NN-имя-устройство.png, журнал _log.txt. Аналитика в общую базу не уходит.
 import fs from "node:fs";
 import path from "node:path";
@@ -35,6 +36,14 @@ const ADMIN_BEFORE = [args["admin-before"], "../docs/presentation/screens/09-adm
   .find((p) => fs.existsSync(p));
 for (const d of ["before", "after"]) fs.mkdirSync(path.join(OUT, d), { recursive: true });
 const log = makeLog(path.join(OUT, "_log.txt"));
+// --before-dir: готовые снимки «было» (например, черновой прогон) — копируем и старый сайт не снимаем
+if (args["before-dir"] && path.resolve(args["before-dir"]) !== path.join(OUT, "before")) {
+  const src = path.resolve(args["before-dir"]);
+  const files = fs.existsSync(src) ? fs.readdirSync(src).filter((f) => f.endsWith(".png")) : [];
+  for (const f of files) fs.copyFileSync(path.join(src, f), path.join(OUT, "before", f));
+  log(`«было» взято из ${src}: ${files.length} снимков`);
+  if (files.length) ONLY.delete("before");
+}
 
 // Лёгкие фото тестовой галереи (старый сайт качает их с Vercel)
 const PHOTOS = ["cat", "flowers", "cake", "sunset-sun", "winter-field", "nesvizh", "mir-castle", "dog"].map((f) => f + ".jpg");

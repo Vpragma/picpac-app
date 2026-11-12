@@ -28,7 +28,8 @@
     "licenses:check": "node scripts/gen-licenses.mjs --check",
     "present:screens": "node --env-file-if-exists=.env.local scripts/present-screens.mjs",
     "present:before-after": "node --env-file-if-exists=.env.local scripts/present-before-after.mjs",
-    "present:video": "node --env-file-if-exists=.env.local scripts/present-video.mjs"
+    "present:video": "node --env-file-if-exists=.env.local scripts/present-video.mjs",
+    "present:all": "node --env-file-if-exists=.env.local scripts/present-all.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
