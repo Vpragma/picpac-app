@@ -276,8 +276,10 @@ paths:
         `{ path: null }` — правки сняли, печатается оригинал; `{ path: null, edits }` — файл не собрался на устройстве,
         правки записываются параметрами.
         D1: размер кадра — как у оригинала, или ровно ×2 по сторонам, если в правках `upscale: 2` («Резкость для печати»).
-        Правки по выделению касанием — `ops: [{ kind: "mask", act: "blurBg" | "lighten" | "darken" | "erase", id, mask: { w, h, rle } }]`
-        (маска ≤ 320 точек, RLE + base64); печатная версия уже собрана с ними на устройстве в полном разрешении.
+        N7: сохраняются только общие параметры правок — `{ v, auto, autoOff, manual, look?, upscale?, by?, local? }`
+        (`local` — число местных правок, без содержимого). Местные правки (маски выделения, ластик, «убери солнце» с координатами)
+        приложение не отправляет — печатная версия уже собрана с ними на устройстве в полном разрешении; если их пришлёт
+        старая версия приложения, сервер отбрасывает `ops` и `masks`.
       requestBody:
         required: true
         content:
@@ -287,8 +289,8 @@ paths:
               required: [path]
               properties:
                 path: { type: string, nullable: true }
-                edits: { type: object, description: "photo.edits: { v, auto, autoOff, manual, ops, upscale? }" }
-            example: { path: "9b1…/4c2…/print/7d0…/0f3….jpg", edits: { v: 1, auto: null, autoOff: false, manual: { exposure: 20 }, ops: [{ kind: heal, cx: 0.4, cy: 0.12, r: 0.1 }] } }
+                edits: { type: object, description: "общие параметры правок: { v, auto, autoOff, manual, look?, upscale?, by?, local? } — без масок и координат" }
+            example: { path: "9b1…/4c2…/print/7d0…/0f3….jpg", edits: { v: 1, auto: null, autoOff: false, manual: { exposure: 20 }, by: command, local: 1 } }
       responses:
         "200":
           description: Сохранено
@@ -1124,7 +1126,7 @@ paths:
     get:
       tags: [Админ]
       summary: Список заказов (N9, только admin) — поиск по номеру, фильтры, сортировка, страницы
-      description: Без персональных данных (имя, телефон, почта, адрес не отдаются) — только город. Лишний или неверный параметр → 400. Даты — по Минску.
+      description: Без персональных данных (имя, телефон, почта, адрес не отдаются) — только город. Лишний или неверный параметр → 400. Даты — по Минску. Номер страницы за пределами списка → 200 с пустым `items` (и `total`, `pages`), не ошибка.
       parameters:
         - { name: q, in: query, description: "часть номера: латинские буквы, цифры, дефис", schema: { type: string, maxLength: 40, pattern: "^[A-Za-z0-9-]*$" } }
         - { name: status, in: query, schema: { type: string, enum: [accepted, moderation, production, shipped, done] } }
@@ -1484,7 +1486,7 @@ components:
         paper: { type: string }
         print: { type: string }
         surface: { type: string }
-        settings: { type: object, description: "Настройки редактора и раскладки (до 50 КБ): quantity, acks (отметки «Продолжить всё равно»), placement {idФото: {fit, focus}}, edits {idФото: {v, auto, autoOff, manual, ops}} — неразрушающие правки ИИ-редактора (S03), оригинал фото не меняется" }
+        settings: { type: object, description: "Настройки редактора и раскладки (до 50 КБ): quantity, acks (отметки «Продолжить всё равно»), placement {idФото: {fit, focus}}, edits {idФото: {v, auto, autoOff, manual, look?, upscale?, by?, local?}} — общие параметры неразрушающих правок ИИ-редактора (S03), оригинал фото не меняется. N7: маски выделения и координаты местных правок (ops, masks) остаются на устройстве — сервер их не хранит, local — только их число" }
     Project:
       type: object
       properties:
