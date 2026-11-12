@@ -1,7 +1,7 @@
 // D5: тихие часы, правило напоминания о корзине, адрес подписки (SSRF), содержимое пуша — без сети и базы
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { allowedEndpoint, cartKeySource, cartReminderText, deviceLabel, dueCarts, isQuietHours, pushPayload } from "../../lib/notifyRules.js";
+import { allowedEndpoint, cartKeySource, cartReminderText, deviceLabel, dueCarts, isQuietHours, isTestEmail, pushPayload } from "../../lib/notifyRules.js";
 
 const minsk = (hhmm) => new Date(`2026-11-12T${hhmm}:00+03:00`);
 
@@ -65,4 +65,10 @@ test("пуш: свой путь, обрезка, метка устройства
   assert.equal(JSON.parse(pushPayload({ url: "/orders/1" })).url, "/orders/1");
   assert.equal(deviceLabel("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Version/17.0 Mobile/15E148 Safari/604.1"), "iPhone/iPad · Safari");
   assert.equal(deviceLabel("Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36"), "Android · Chrome");
+});
+
+test("N10: тестовый аккаунт — e2e-…, critic-…, night2-… (зеркало private.is_test_email)", () => {
+  for (const e of ["e2e-a-1234@example.com", "E2E-x@example.com", "critic-run1@example.com", "night2-promo@example.com"]) assert.equal(isTestEmail(e), true, e);
+  for (const e of ["client@example.com", "admin@example.com", "moderator@example.com", "synthetic-001@example.com", "anna.e2e-@mail.by", "", null, undefined])
+    assert.equal(isTestEmail(e), false, String(e));
 });
