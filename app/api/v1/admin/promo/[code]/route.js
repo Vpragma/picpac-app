@@ -1,10 +1,10 @@
 // PATCH /api/v1/admin/promo/{code} — изменить условия кода или выключить/включить его (N8). Только роль admin.
 // Код (название) не меняется; удалить нельзя — только { active: false }. Каждое изменение — в журнал действий
 // (что было → что стало). Выключенный код перестаёт работать сразу: сервер читает коды без кэша.
-import { limitWrite, parseBody, requireUser, serverError } from "@/lib/server/api";
+import { limitWrite, parseBody, requireUser, serverError, z } from "@/lib/server/api";
 import { json, jsonError } from "@/lib/server/http";
 import { normalizeCode, shapePromo } from "@/lib/promo";
-import { auditTerms, shapeAdminPromo, termsError, toDay, toRow, unknownProducts, updateSchema } from "@/lib/server/promoAdmin";
+import { auditTerms, checkBody, shapeAdminPromo, termsError, toDay, toRow, unknownProducts, updateSchema } from "@/lib/server/promoAdmin";
 
 export async function PATCH(request, { params }) {
   const { code: raw } = await params;
@@ -14,8 +14,10 @@ export async function PATCH(request, { params }) {
   if (limited) return limited;
   const code = normalizeCode(decodeURIComponent(raw || ""));
   if (!code) return jsonError(404, "not_found", "Промокод не найден.");
-  const { body, response: bad } = await parseBody(request, updateSchema);
+  const { body: input, response: bad } = await parseBody(request, z.unknown());
   if (bad) return bad;
+  const { body, response: invalid } = checkBody(updateSchema, input);
+  if (invalid) return invalid;
 
   const { data: before, error: e1 } = await ctx.admin.from("promo_codes").select("*").eq("code", code).maybeSingle();
   if (e1) return serverError();

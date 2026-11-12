@@ -2,10 +2,10 @@
 // GET ?type=general|personal — список со статистикой (сколько раз применён, сколькими клиентами, на какую сумму заказов)
 //   и плитки-итоги. POST — создать код. Удалять коды нельзя — только выключить (PATCH /api/v1/admin/promo/{code}).
 // Каждое изменение пишется в журнал действий.
-import { limitWrite, parseBody, requireUser, serverError } from "@/lib/server/api";
+import { limitWrite, parseBody, requireUser, serverError, z } from "@/lib/server/api";
 import { loadCatalog } from "@/lib/server/catalog";
 import { json, jsonError } from "@/lib/server/http";
-import { auditTerms, createSchema, shapeAdminPromo, toRow, unknownProducts } from "@/lib/server/promoAdmin";
+import { auditTerms, checkBody, createSchema, shapeAdminPromo, toRow, unknownProducts } from "@/lib/server/promoAdmin";
 
 const PERSONAL_LIMIT = 200;
 
@@ -69,8 +69,10 @@ export async function POST(request) {
   if (response) return response;
   const limited = await limitWrite("admin-promo", ctx.userId, 30, 60);
   if (limited) return limited;
-  const { body, response: bad } = await parseBody(request, createSchema);
+  const { body: raw, response: bad } = await parseBody(request, z.unknown());
   if (bad) return bad;
+  const { body, response: invalid } = checkBody(createSchema, raw);
+  if (invalid) return invalid;
   const unknown = await unknownProducts(body.productSlugs);
   if (unknown) return jsonError(400, "invalid_input", unknown, { fields: { productSlugs: unknown } });
   const row = { ...toRow(body), is_synthetic: false };

@@ -51,5 +51,7 @@
 }
 .check-chip:has(input:checked) { background: var(--ds-color-bg-selected); border-color: var(--ds-color-border-strong); }
 .check-chip input { width: 18px; height: 18px; accent-color: var(--ds-color-primary); }
-.promo-table .promo-code { letter-spacing: 0.04em; }
+.promo-table { min-width: 860px; } /* на телефоне таблица листается вбок внутри .table-wrap, колонки не сжимаются */
+.promo-table .promo-code { letter-spacing: 0.04em; white-space: nowrap; }
+.promo-actions { gap: var(--space-1); justify-content: flex-end; flex-wrap: nowrap; }
 .promo-table td { vertical-align: top; }

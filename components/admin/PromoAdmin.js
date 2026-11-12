@@ -8,6 +8,8 @@ import { KIND_LABELS, SEASON_LABELS, SEASONS, benefitText } from "../../lib/prom
 import "../promo/promo.css";
 
 const byn = (kop) => (kop / 100).toFixed(2).replace(".", ",") + " BYN";
+// Плитки: крупные суммы без копеек, с разрядами — «12 145 BYN»
+const bynShort = (kop) => new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(Math.round(kop / 100)) + " BYN";
 const STATUS = {
   active: ["ok", "Действует"],
   scheduled: ["pending", "Запланирован"],
@@ -84,13 +86,35 @@ export default function PromoAdmin() {
   }
   const set = (patch) => setForm((f) => ({ ...f, data: { ...f.data, ...patch }, errors: {} }));
 
+  // Проверка формы до отправки — те же правила, что на сервере (сервер проверит ещё раз)
+  function formErrors(d, value) {
+    const e = {};
+    if (form.mode === "new") {
+      const code = d.code.trim().toUpperCase();
+      if (!/^[A-Z0-9]{3,20}$/.test(code)) e.code = "Код — от 3 до 20 латинских букв и цифр, без пробелов.";
+      else if ((res?.items || []).some((i) => i.code === code)) e.code = "Такой код уже есть — придумайте другой или измените существующий.";
+    }
+    if (d.kind === "percent" && !(Number.isInteger(value) && value >= 1 && value <= 100)) e.value = "Процент скидки — целое число от 1 до 100.";
+    if (d.kind === "amount" && !(value >= 10)) e.value = "Сумма скидки — от 0,10 BYN.";
+    if (!(toKop(d.minTotal) >= 0)) e.minTotalKop = "Минимальная сумма — число, например 50 или 49,90.";
+    if (d.validFrom && d.validTo && d.validTo < d.validFrom) e.validTo = "Дата окончания раньше даты начала.";
+    if (d.maxUses !== "" && !(Number(d.maxUses) >= 1)) e.maxUses = "Лимит — от 1 (или пусто — без лимита).";
+    if (d.maxUsesPerUser !== "" && !(Number(d.maxUsesPerUser) >= 1)) e.maxUsesPerUser = "Лимит — от 1 (или пусто — без лимита).";
+    return e;
+  }
+
   async function save(e) {
     e.preventDefault();
     const d = form.data;
-    const value = d.kind === "percent" ? Math.round(Number(d.value)) : d.kind === "amount" ? toKop(d.value) : 0;
+    const value = d.kind === "percent" ? Number(String(d.value).replace(",", ".")) : d.kind === "amount" ? toKop(d.value) : 0;
+    const errs = formErrors(d, value);
+    if (Object.keys(errs).length) {
+      setForm((f) => ({ ...f, errors: errs, message: "Проверьте поля формы: " + Object.values(errs)[0] }));
+      return;
+    }
     const body = {
       kind: d.kind,
-      value: Number.isFinite(value) ? value : -1,
+      value: Number.isFinite(value) ? Math.round(value) : -1,
       minTotalKop: toKop(d.minTotal),
       validFrom: d.validFrom || null,
       validTo: d.validTo || null,
@@ -143,11 +167,11 @@ export default function PromoAdmin() {
           </div>
           <div className="stat-tile">
             <span className="muted small">Сумма заказов с кодами</span>
-            <b>{byn(s.totalKop)}</b>
+            <b>{bynShort(s.totalKop)}</b>
           </div>
           <div className="stat-tile">
             <span className="muted small">Скидки клиентам</span>
-            <b>{byn(s.discountKop)}</b>
+            <b>{bynShort(s.discountKop)}</b>
           </div>
           <div className="stat-tile">
             <span className="muted small">Открытки: выдано / применено</span>
@@ -359,7 +383,7 @@ export default function PromoAdmin() {
                       {p.stats.discountKop > 0 && <div className="muted small">скидка {byn(p.stats.discountKop)}</div>}
                     </td>
                     <td>
-                      <div className="row" style={{ gap: "var(--space-1)", justifyContent: "flex-end", flexWrap: "wrap" }}>
+                      <div className="row promo-actions">
                         {!p.personal && (
                           <button type="button" className="btn btn-small" onClick={() => startEdit(p)} aria-label={`Изменить ${p.code}`}>
                             Изменить
