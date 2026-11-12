@@ -58,7 +58,7 @@ test("админ переключает сезон в админке → гос�
   await page.getByLabel("Почта").fill(staff.email);
   await page.getByLabel("Пароль", { exact: true }).fill(staff.password);
   await page.getByRole("button", { name: "Войти", exact: true }).click();
-  await expect(page).toHaveURL(/\/admin\/season/);
+  await expect(page).toHaveURL(/\/admin\/season$/);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Сезон оформления");
   await expect(page.getByRole("link", { name: "Сезон" }).first()).toHaveAttribute("aria-current", "page");
   for (const s of ["none", "autumn", "blackfriday", "newyear"]) await expect(page.getByTestId(`season-option-${s}`)).toBeVisible();

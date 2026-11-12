@@ -50,7 +50,7 @@ function Preview({ season }) {
 export default function SeasonPanel({ initial }) {
   const [current, setCurrent] = useState(initial.season);
   const [picked, setPicked] = useState(initial.season);
-  const [meta, setMeta] = useState({ at: initial.updatedAt, by: initial.updatedBy });
+  const [meta, setMeta] = useState({ at: initial.updatedAt, by: initial.updatedBy, mine: false });
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(initial.error ? { err: true, text: "Не получилось прочитать текущий сезон. Обновите страницу." } : null);
 
@@ -66,7 +66,7 @@ export default function SeasonPanel({ initial }) {
       return;
     }
     setCurrent(r.season);
-    setMeta({ at: new Date().toISOString(), by: null });
+    setMeta({ at: new Date().toISOString(), by: null, mine: true });
     applySeason(r.season);
     setMsg({
       err: false,
@@ -85,7 +85,7 @@ export default function SeasonPanel({ initial }) {
         {meta.at && (
           <span className="muted small">
             включён {when(meta.at)}
-            {meta.by ? ` · ${meta.by}` : " · вами"}
+            {meta.by ? ` · ${meta.by}` : meta.mine ? " · вами" : ""}
           </span>
         )}
       </div>

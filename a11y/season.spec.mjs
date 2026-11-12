@@ -59,7 +59,7 @@ test("админка «Сезон»: нет серьёзных нарушени�
   await page.getByLabel("Почта").fill(staff.email);
   await page.getByLabel("Пароль", { exact: true }).fill(staff.password);
   await page.getByRole("button", { name: "Войти", exact: true }).click();
-  await expect(page).toHaveURL(/\/admin\/season/);
+  await expect(page).toHaveURL(/\/admin\/season$/);
   await expect(page.getByTestId("season-panel")).toBeVisible();
   const result = await new AxeBuilder({ page }).withTags(TAGS).analyze();
   const bad = report(result);
