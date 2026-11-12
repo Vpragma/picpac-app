@@ -50,6 +50,8 @@ try {
     [U.email, U.password],
   );
   log("вход в Chrome:", login);
+  // Подписка браузера могла остаться от прошлого запуска (постоянный профиль) — начинаем с чистого листа
+  await page.evaluate(() => navigator.serviceWorker.ready.then((r) => r.pushManager.getSubscription()).then((s) => s && s.unsubscribe()));
   await page.goto(BASE + "/profile");
   await page.evaluate(() => navigator.serviceWorker.ready.then(() => true));
   await page.getByRole("button", { name: "Сообщать о заказах и важном" }).click();
