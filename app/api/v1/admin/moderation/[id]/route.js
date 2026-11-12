@@ -2,9 +2,10 @@
 // «Вернуть на замену» — только с причиной из списка; клиент получает уведомление «Нужно заменить фото».
 // «Одобрить» — если других фото на проверке нет, заказ уходит в «Производство» (та же функция, что события ERP).
 // Повторное решение → 409 already_decided. Автоматика сама никогда не отклоняет.
+// Журнал: решение модератора и рядом решение модели (коды находок, без фото и без процентов).
 import { badId, limitWrite, notFound, parseBody, requireUser, serverError, z } from "@/lib/server/api";
 import { json, jsonError } from "@/lib/server/http";
-import { RETURN_REASONS } from "@/lib/moderation";
+import { findingCodes, RETURN_REASONS, reviewFindings } from "@/lib/moderation";
 
 const schema = z
   .strictObject({
@@ -29,6 +30,8 @@ export async function POST(request, { params }) {
   const limited = await limitWrite("moderation", ctx.userId, 120);
   if (limited) return limited;
   if (badId(id)) return notFound("Фото на проверке");
+  const { data: rev } = await ctx.admin.from("moderation_reviews").select("auto_scores, project_photos(moderation, nsfw)").eq("id", id).maybeSingle();
+  const model = rev ? findingCodes(reviewFindings({ verdict: rev.project_photos?.moderation, device: rev.project_photos?.nsfw ?? rev.auto_scores }).list) : [];
   const { data, error } = await ctx.admin.rpc("moderation_decide", {
     _review: id,
     _decision: body.decision,
@@ -47,6 +50,6 @@ export async function POST(request, { params }) {
     await ctx.audit(action, "moderation_review", id, "denied", { reason: data?.code });
     return jsonError(status, data?.code || "conflict", message, data?.code === "reason_required" ? { fields: { reason: message } } : {});
   }
-  await ctx.audit(action, "moderation_review", id, "success", { reason: body.reason || null, status: data.status });
+  await ctx.audit(action, "moderation_review", id, "success", { reason: body.reason || null, status: data.status, model });
   return json({ ok: true, decision: data.decision, orderStatus: data.status, waiting: !!data.waiting });
 }

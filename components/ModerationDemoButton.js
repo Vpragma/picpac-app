@@ -7,7 +7,8 @@ import { callApi } from "../lib/api";
 import { updateProjectMeta } from "../lib/draft";
 import { getMe } from "../lib/me";
 
-const FLAG = { porn: 0.88, hentai: 0.04, sexy: 0.05, neutral: 0.02, drawing: 0.01 };
+// Пометка «для показа модерации»: модератор увидит «Демо: фото помечено вручную…», а не выдуманную находку модели
+const FLAG = { v: 2, demo: 1 };
 
 export default function ModerationDemoButton({ draft }) {
   const [tools, setTools] = useState(false);

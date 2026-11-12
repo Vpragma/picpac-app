@@ -7,11 +7,16 @@
 //   PUT  { path: null } — правки сняли: печатаем оригинал; { path: null, edits } — файл не собрался, правки параметрами.
 //   Правки фото — не больше PHOTO_EDITS_MAX (20 КБ, lib/photo/edits.js), иначе 400 edits_too_large и файл удаляется.
 //   После сохранения в папке печатных версий фото остаётся один файл — прежние и брошенные удаляются.
+import { after } from "next/server";
 import { sniffImage } from "@/lib/imageMeta";
 import { badId, BUCKET, MAX_PHOTO_BYTES, notFound, parseBody, rateLimited, requireUser, serverError, tooMany, z } from "@/lib/server/api";
 import { json, jsonError, sameOrigin } from "@/lib/server/http";
 import { PHOTO_EDITS_MAX, editsBytes } from "@/lib/photo/edits";
 import { getOwnProject } from "@/lib/server/projects";
+import { checkPhotoById } from "@/lib/server/moderationCheck";
+
+// N4: новая печатная версия — сервер проверяет и её (в печать идёт она, а не оригинал)
+export const maxDuration = 120;
 
 const urlSchema = z.strictObject({
   bytes: z
@@ -161,5 +166,6 @@ export async function PUT(request, { params }) {
   }
   await removeOld(body.path);
   await ctx.audit("photo.print", "photo", photoId, "success", { bytes: total, width: meta.width, height: meta.height });
+  after(() => checkPhotoById(ctx, photoId).catch((e) => console.error("Фоновая проверка печатной версии:", e?.message)));
   return json({ ok: true, print });
 }

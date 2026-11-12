@@ -29,6 +29,15 @@ const nextConfig = {
     // Страницы 401 и 403 (app/unauthorized.js, app/forbidden.js) для отказа в доступе
     authInterrupts: true,
   },
+  // Модерация на сервере (N4, lib/server/moderationEngine.js): onnxruntime-web в Node (wasm, без нативных библиотек)
+  // подключается как обычный пакет, а его .wasm и загрузчик кладутся в функции, которые проверяют фото.
+  // Сами модели в функцию не попадают — сервер берёт их со своего же сайта (public/models/moderation).
+  serverExternalPackages: ["onnxruntime-web"],
+  outputFileTracingIncludes: {
+    "/api/v1/orders": ["./node_modules/onnxruntime-web/dist/ort.node.min.mjs", "./node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.{mjs,wasm}"],
+    "/api/v1/projects/*/photos": ["./node_modules/onnxruntime-web/dist/ort.node.min.mjs", "./node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.{mjs,wasm}"],
+    "/api/v1/projects/*/photos/*/print": ["./node_modules/onnxruntime-web/dist/ort.node.min.mjs", "./node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.{mjs,wasm}"],
+  },
   // Защитные заголовки для всех страниц
   async headers() {
     return [

@@ -1,20 +1,49 @@
 "use client";
-// Очередь модерации: фото по подписанной ссылке (10 минут), оценки классификатора, номер заказа, клиент — инициалы.
-// «Одобрить» или «Вернуть на замену» с обязательной причиной из списка. Опрос раз в 30 с.
-import { useCallback, useEffect, useState } from "react";
+// Очередь модерации (D4 → N4, N9): фото по подписанной ссылке (10 минут) размыто до «Показать»; вывод модели — словами
+// («Найдено: обнажённая грудь (высокая уверенность)»), без процентов; клиент — только инициалы.
+// «Одобрить» или «Вернуть на замену» с причиной из списка и шаблоном комментария. Клавиши на компьютере:
+// A — одобрить, R — вернуть, N — следующее, S — показать фото, Esc — отмена (можно выключить). Вверху — сколько ждёт
+// и среднее время проверки, вкладка «История решений» — решение модели и модератора без фото. Опрос раз в 30 с.
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { callApi } from "../../lib/api";
-import { RETURN_REASONS } from "../../lib/moderation";
+import { REASON_FOR_FINDING, RETURN_REASONS, RETURN_TEMPLATES } from "../../lib/moderation";
 import { minskTime } from "../OrderBits";
 
-const pct = (v) => (typeof v === "number" ? Math.round(v * 100) + " %" : "—");
+const SOURCE = { server: "по проверке на сервере", device: "по проверке на телефоне клиента" };
+const KEYS = { approve: ["a", "ф"], ret: ["r", "к"], next: ["n", "т", "j", "о"], show: ["s", "ы"] };
+const min = (v) => (v == null ? "—" : v < 1 ? "меньше минуты" : `${Math.round(v)} мин`);
 
-function Card({ item, onDone }) {
+function Findings({ item }) {
+  if (!item.findings?.length) {
+    return (
+      <p className="small muted" style={{ margin: 0 }} data-testid="moderation-findings">
+        Модель ничего не нашла: фото помечено вручную или старой проверкой. Посмотрите сами.
+      </p>
+    );
+  }
+  return (
+    <div data-testid="moderation-findings">
+      <ul style={{ margin: 0, paddingLeft: 18 }}>
+        {item.findings.map((f) => (
+          <li key={f.id} className={f.level === "high" ? "err-text" : "warn-text"}>
+            {f.text}
+          </li>
+        ))}
+      </ul>
+      {SOURCE[item.source] && <p className="small muted" style={{ margin: "4px 0 0" }}>{SOURCE[item.source]}. Решение за вами — автоматика никогда не отклоняет.</p>}
+    </div>
+  );
+}
+
+const Card = forwardRef(function Card({ item, active, onActivate, onDone }, ref) {
   const [mode, setMode] = useState(null); // null | "return"
   const [reason, setReason] = useState("");
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [show, setShow] = useState(false);
+  const box = useRef(null);
+  const select = useRef(null);
 
   async function decide(decision) {
     if (busy) return;
@@ -27,28 +56,76 @@ function Card({ item, onDone }) {
     onDone(decision === "approve" ? `Фото из заказа ${item.orderNumber} одобрено${r.waiting ? "" : " — заказ ушёл в производство"}.` : `Фото из заказа ${item.orderNumber} возвращено на замену.`);
   }
 
+  function pickReason(next) {
+    // Шаблон комментария: подставляем, если поле пустое или в нём шаблон прошлой причины
+    if (!comment.trim() || comment === (RETURN_TEMPLATES[reason] || "")) setComment(RETURN_TEMPLATES[next] || "");
+    setReason(next);
+  }
+
+  function openReturn() {
+    if (!reason) {
+      const hint = REASON_FOR_FINDING[item.findings?.[0]?.id] || "";
+      if (hint) {
+        setReason(hint);
+        if (!comment.trim()) setComment(RETURN_TEMPLATES[hint] || "");
+      }
+    }
+    setMode("return");
+    setTimeout(() => select.current?.focus(), 0);
+  }
+
+  useImperativeHandle(ref, () => ({
+    approve: () => mode !== "return" && decide("approve"),
+    ret: openReturn,
+    toggle: () => setShow((v) => !v),
+    cancel: () => setMode(null),
+    focus: () => {
+      box.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      box.current?.focus({ preventScroll: true });
+    },
+  }));
+
   return (
-    <section className="card stack" data-testid="moderation-item">
+    <section
+      ref={box}
+      tabIndex={-1}
+      className="card stack"
+      data-testid="moderation-item"
+      aria-current={active ? "true" : undefined}
+      onFocus={onActivate}
+      onClick={onActivate}
+      style={{ outline: active ? "2px solid var(--ds-color-accent)" : undefined, outlineOffset: 2 }}
+    >
       <div className="row between wrap">
         <b>
           Заказ {item.orderNumber} · фото № {(item.photoIndex ?? 0) + 1}
         </b>
-        <span className="muted small">ждёт с {minskTime(item.createdAt)}</span>
+        <span className="muted small">
+          ждёт с {minskTime(item.createdAt)} · клиент {item.client?.name || "—"}
+        </span>
       </div>
-      <button type="button" className="btn btn-small" onClick={() => setShow((v) => !v)} aria-pressed={show}>
+      <Findings item={item} />
+      <div className="row wrap" style={{ alignItems: "flex-start" }}>
+        {item.url ? (
+          <div style={{ position: "relative", width: "100%", maxWidth: 360, borderRadius: 8, overflow: "hidden" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element -- подписанная ссылка на 10 минут, оптимизатор не нужен */}
+            <img
+              src={item.url}
+              alt={show ? `Фото на проверке, заказ ${item.orderNumber}` : `Фото на проверке скрыто размытием, заказ ${item.orderNumber}`}
+              data-testid="moderation-photo"
+              data-blurred={show ? "false" : "true"}
+              style={{ display: "block", width: "100%", filter: show ? "none" : "blur(24px)", transform: show ? "none" : "scale(1.08)" }}
+            />
+          </div>
+        ) : (
+          <p className="muted small">Файл фото недоступен.</p>
+        )}
+      </div>
+      <button type="button" className="btn btn-small" onClick={() => setShow((v) => !v)} aria-pressed={show} data-testid="moderation-show">
         {show ? "Скрыть фото" : "Показать фото"}
       </button>
-      {item.url ? (
-        // eslint-disable-next-line @next/next/no-img-element -- подписанная ссылка на 10 минут, оптимизатор не нужен
-        <img src={item.url} alt={`Фото на проверке, заказ ${item.orderNumber}`} style={{ width: "100%", maxWidth: 360, borderRadius: 8, filter: show ? "none" : "blur(24px)" }} />
-      ) : (
-        <p className="muted small">Файл фото недоступен.</p>
-      )}
-      <p className="small" style={{ margin: 0 }}>
-        Классификатор: откровенное {pct((item.scores?.porn || 0) + (item.scores?.hentai || 0))}, «sexy» {pct(item.scores?.sexy)} · клиент {item.client?.name || "—"}
-      </p>
       {error && (
-        <p className="error-text" role="alert">
+        <p className="err-text" role="alert">
           {error}
         </p>
       )}
@@ -56,7 +133,7 @@ function Card({ item, onDone }) {
         <div className="stack">
           <label className="field">
             <span>Причина (обязательно)</span>
-            <select className="input" value={reason} onChange={(e) => setReason(e.target.value)} aria-invalid={!!error && !reason}>
+            <select ref={select} className="input" value={reason} onChange={(e) => pickReason(e.target.value)} aria-invalid={!!error && !reason}>
               <option value="">— выберите —</option>
               {Object.entries(RETURN_REASONS).map(([k, v]) => (
                 <option key={k} value={k}>
@@ -66,8 +143,8 @@ function Card({ item, onDone }) {
             </select>
           </label>
           <label className="field">
-            <span>Комментарий для клиента (по желанию)</span>
-            <textarea className="input" rows={2} maxLength={500} value={comment} onChange={(e) => setComment(e.target.value)} />
+            <span>Комментарий для клиента (шаблон можно поправить)</span>
+            <textarea className="input" rows={3} maxLength={500} value={comment} onChange={(e) => setComment(e.target.value)} />
           </label>
           <div className="row wrap">
             <button type="button" className="btn btn-primary" onClick={() => decide("return")} disabled={busy}>
@@ -83,19 +160,90 @@ function Card({ item, onDone }) {
           <button type="button" className="btn btn-primary" onClick={() => decide("approve")} disabled={busy}>
             {busy ? "Сохраняем…" : "Одобрить"}
           </button>
-          <button type="button" className="btn" onClick={() => setMode("return")} disabled={busy}>
+          <button type="button" className="btn" onClick={openReturn} disabled={busy}>
             Вернуть на замену
           </button>
         </div>
       )}
     </section>
   );
+});
+
+function Stats({ stats }) {
+  if (!stats) return null;
+  return (
+    <section className="stat-tiles" aria-label="Очередь коротко" data-testid="moderation-stats">
+      <div className="stat-tile">
+        <span className="small muted">В очереди</span>
+        <b>{stats.pending}</b>
+      </div>
+      <div className="stat-tile">
+        <span className="small muted">Среднее время проверки (7 дней)</span>
+        <b>{min(stats.avgMinutes)}</b>
+      </div>
+      <div className="stat-tile">
+        <span className="small muted">Решений за сутки</span>
+        <b>{stats.decided24h}</b>
+      </div>
+    </section>
+  );
+}
+
+function History() {
+  const [res, setRes] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    callApi("/api/v1/admin/moderation?view=history", { method: "GET" }).then((r) => alive && setRes(r));
+    return () => {
+      alive = false;
+    };
+  }, []);
+  if (!res) return <p className="muted">Загружаем историю…</p>;
+  if (!res.ok) return <p className="err-text">{res.error?.message || "Не получилось загрузить историю."}</p>;
+  if (!res.items.length) return <p className="muted">Решений пока нет.</p>;
+  return (
+    <div style={{ overflowX: "auto" }} data-testid="moderation-history">
+      <table className="stat-table">
+        <thead>
+          <tr>
+            <th scope="col">Когда</th>
+            <th scope="col">Заказ</th>
+            <th scope="col">Модель</th>
+            <th scope="col">Решение модератора</th>
+            <th scope="col">Проверка</th>
+          </tr>
+        </thead>
+        <tbody>
+          {res.items.map((h) => (
+            <tr key={h.id}>
+              <td>{minskTime(h.decidedAt)}</td>
+              <td>
+                {h.orderNumber}, фото № {(h.photoIndex ?? 0) + 1}
+              </td>
+              <td>{h.findings.length ? h.findings.map((f) => f.text).join("; ") : "ничего не нашла"}</td>
+              <td>
+                {h.decision === "approved" ? "Одобрено" : `Возвращено: ${h.reasonText || "—"}`}
+                {h.byMe ? " · вы" : ""}
+              </td>
+              <td>{min(h.minutes)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 export default function ModerationQueue() {
+  const [tab, setTab] = useState("queue");
   const [res, setRes] = useState(null);
   const [note, setNote] = useState("");
+  const [active, setActive] = useState(0);
+  const [keys, setKeys] = useState(true);
+  const [desktop, setDesktop] = useState(false);
+  const cards = useRef({});
   const load = useCallback(async () => setRes(await callApi("/api/v1/admin/moderation", { method: "GET" })), []);
+
   useEffect(() => {
     let alive = true;
     const tick = () => alive && load();
@@ -107,26 +255,95 @@ export default function ModerationQueue() {
     };
   }, [load]);
 
-  if (!res) return <p className="muted">Загружаем очередь…</p>;
-  if (!res.ok) return <p className="error-text">{res.error?.message || "Не получилось загрузить очередь."}</p>;
+  useEffect(() => {
+    const m = window.matchMedia("(hover: hover) and (pointer: fine)");
+    const upd = () => setDesktop(m.matches);
+    upd();
+    m.addEventListener?.("change", upd);
+    return () => m.removeEventListener?.("change", upd);
+  }, []);
+
+  const items = useMemo(() => (res?.ok ? res.items : []), [res]);
+  const current = items[Math.min(active, Math.max(0, items.length - 1))];
+
+  useEffect(() => {
+    if (!keys || !desktop || tab !== "queue") return;
+    const onKey = (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+      const t = e.target;
+      if (t?.closest?.("input, textarea, select, [contenteditable='true']")) {
+        if (e.key === "Escape") cards.current[current?.id]?.cancel();
+        return;
+      }
+      const k = (e.key || "").toLowerCase();
+      if (!current) return;
+      const card = cards.current[current.id];
+      if (KEYS.approve.includes(k)) card?.approve();
+      else if (KEYS.ret.includes(k)) card?.ret();
+      else if (KEYS.show.includes(k)) card?.toggle();
+      else if (k === "escape") card?.cancel();
+      else if (KEYS.next.includes(k)) {
+        const n = (Math.min(active, items.length - 1) + 1) % items.length;
+        setActive(n);
+        cards.current[items[n]?.id]?.focus();
+      } else return;
+      e.preventDefault();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [keys, desktop, tab, current, active, items]);
+
   return (
     <div className="stack" data-testid="moderation-queue">
-      {note && (
-        <p className="ok-text" role="status">
-          {note}
-        </p>
+      <Stats stats={res?.stats} />
+      <div className="steps" role="tablist" aria-label="Модерация" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))", maxWidth: 420 }}>
+        <button type="button" role="tab" aria-selected={tab === "queue"} className={tab === "queue" ? "active" : ""} onClick={() => setTab("queue")}>
+          Очередь{res?.stats ? ` (${res.stats.pending})` : ""}
+        </button>
+        <button type="button" role="tab" aria-selected={tab === "history"} className={tab === "history" ? "active" : ""} onClick={() => setTab("history")}>
+          История решений
+        </button>
+      </div>
+      {tab === "history" ? (
+        <History />
+      ) : (
+        <>
+          {desktop && (
+            <div className="row wrap small muted" data-testid="moderation-keys">
+              <span>
+                Клавиши: <kbd>A</kbd> — одобрить · <kbd>R</kbd> — вернуть · <kbd>N</kbd> — следующее · <kbd>S</kbd> — показать фото · <kbd>Esc</kbd> — отмена
+              </span>
+              <label className="row" style={{ gap: 6 }}>
+                <input type="checkbox" checked={keys} onChange={(e) => setKeys(e.target.checked)} /> включены
+              </label>
+            </div>
+          )}
+          {note && (
+            <p className="ok-text" role="status">
+              {note}
+            </p>
+          )}
+          {!res && <p className="muted">Загружаем очередь…</p>}
+          {res && !res.ok && <p className="err-text">{res.error?.message || "Не получилось загрузить очередь."}</p>}
+          {res?.ok && !items.length && <p className="muted">Очередь пуста — все фото проверены.</p>}
+          {items.map((it, i) => (
+            <Card
+              key={it.id}
+              ref={(el) => {
+                if (el) cards.current[it.id] = el;
+                else delete cards.current[it.id];
+              }}
+              item={it}
+              active={desktop && current?.id === it.id}
+              onActivate={() => setActive(i)}
+              onDone={(text) => {
+                setNote(text);
+                load();
+              }}
+            />
+          ))}
+        </>
       )}
-      {!res.items.length && <p className="muted">Очередь пуста — все фото проверены.</p>}
-      {res.items.map((it) => (
-        <Card
-          key={it.id}
-          item={it}
-          onDone={(text) => {
-            setNote(text);
-            load();
-          }}
-        />
-      ))}
     </div>
   );
 }
