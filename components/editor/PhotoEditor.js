@@ -29,6 +29,7 @@ import { setAutoEnhance, useAutoEnhance } from "../../lib/photo/settings";
 import AiPrefetch, { useAiOffline } from "./AiPrefetch";
 import { notify } from "../../lib/store";
 import { useSyncState } from "../../lib/sync";
+import { isClient, useMe } from "../../lib/me";
 import { track } from "@/lib/analytics";
 
 const PREVIEW_SIDE = 1280;
@@ -232,7 +233,9 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
   const [pendingErase, setPendingErase] = useState(null); // { photoId, opId } — «Убрать», нажатое в этом сеансе
   const aiOk = aiSupport().ok; // выделение касанием на этом устройстве возможно (иначе — честные ответы)
   const offline = useAiOffline(ai.status + ":" + (answer?.say || "")); // модели ИИ уже на устройстве — работает без интернета
-  const account = useSyncState().enabled; // вошедший клиент: проект и фото — в аккаунте (lib/sync.js)
+  const who = useMe();
+  const account = useSyncState().enabled || isClient(who); // вошедший клиент: проект и фото — в аккаунте (lib/sync.js)
+  const signedIn = !!who?.authenticated; // сотрудник в редакторе: синхронизации нет, фото на устройстве
   const fresh = useRef(null); // id открытого фото — для долгих операций (поиск предмета словом)
 
   // Память воркеров ИИ освобождаем, когда редактор закрыт
@@ -685,7 +688,9 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
         <span className="muted" style={{ display: "block" }}>
           {account
             ? "Сами фото хранятся в вашем аккаунте PicPac, в нашем защищённом хранилище, — так проект есть на всех ваших устройствах и его можно напечатать. Правки по выделению остаются на этом телефоне."
-            : "Пока вы не вошли, фото остаются на этом устройстве — к нам они попадут только с заказом, для печати."}
+            : signedIn
+              ? "Фото остаются на этом устройстве — к нам они попадут только с заказом, для печати."
+              : "Пока вы не вошли, фото остаются на этом устройстве — к нам они попадут только с заказом, для печати."}
         </span>
       </div>
       <p className="muted">Скажите, что изменить, или подвигайте ползунки — оригинал не меняется, всё можно вернуть.</p>
