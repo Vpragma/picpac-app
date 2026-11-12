@@ -1,11 +1,11 @@
 // npm run test:all — весь регресс-набор подряд (docs/night/plan.md, раздел 9):
-// lint → build → test:unit → (свой сервер next start на порту 3100, если BASE_URL не задан) → test:api → test:auth → e2e → test:a11y.
+// lint → build → test:unit → (свой сервер next start на порту TEST_PORT, по умолчанию 3100, если BASE_URL не задан) → test:api → test:auth → e2e → test:a11y.
 // test:mfa не входит: ему нужен отдельный ручной шаг (npm run test:mfa).
 // Итог — таблица «шаг · результат · время»; код выхода 1, если хоть один шаг упал.
 import { spawn, spawnSync } from "node:child_process";
 
 const external = process.env.BASE_URL?.replace(/\/$/, "");
-const PORT = 3100;
+const PORT = Number(process.env.TEST_PORT) || 3100;
 const base = external || `http://127.0.0.1:${PORT}`;
 const results = [];
 
