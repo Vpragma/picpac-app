@@ -61,6 +61,29 @@ test("печатная версия: чужой путь и файл друго�
   assert.equal(r.json.error.code, "size_mismatch");
 });
 
+test("печатная версия удаляется вместе с фото", async () => {
+  // Второй проект: фото + печатная версия → DELETE фото → обоих файлов в хранилище нет
+  const p = await C.client.req("/api/v1/projects", { method: "POST", body: { productSlug: "photo", options: { size: "10x15", settings: { quantity: 1 } } } });
+  assert.equal(p.status, 201, p.text);
+  const pid = p.json.project.id;
+  const u = await C.client.req(`/api/v1/projects/${pid}/photos/upload-url`, { method: "POST", body: { mime: "image/jpeg", bytes: JPEG.length } });
+  assert.ok((await fetch(u.json.upload.url, { method: "PUT", headers: u.json.upload.headers, body: JPEG })).ok);
+  const c = await C.client.req(`/api/v1/projects/${pid}/photos`, { method: "POST", body: { path: u.json.upload.path } });
+  assert.equal(c.status, 201, c.text);
+  const ph = c.json.photo.id;
+  const pu = await C.client.req(`/api/v1/projects/${pid}/photos/${ph}/print`, { method: "POST", body: { bytes: JPEG.length } });
+  assert.equal(pu.status, 200, pu.text);
+  assert.ok((await fetch(pu.json.upload.url, { method: "PUT", headers: pu.json.upload.headers, body: JPEG })).ok);
+  const sv = await C.client.req(`/api/v1/projects/${pid}/photos/${ph}/print`, { method: "PUT", body: { path: pu.json.upload.path, edits: EDITS } });
+  assert.equal(sv.status, 200, sv.text);
+  const del = await C.client.req(`/api/v1/projects/${pid}/photos/${ph}`, { method: "DELETE" });
+  assert.equal(del.status, 200, del.text);
+  for (const path of [u.json.upload.path, pu.json.upload.path]) {
+    const { data } = await admin.storage.from("photos").list(path.split("/").slice(0, -1).join("/"), { search: path.split("/").pop() });
+    assert.equal((data || []).length, 0, `файл остался: ${path}`);
+  }
+});
+
 test("печатная версия: файл того же размера + правки → в снимке заказа, оригинал отдельно", async () => {
   const u = await printUrl(C);
   assert.equal(u.status, 200, u.text);
