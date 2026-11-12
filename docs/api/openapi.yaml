@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: PicPac API
-  version: "1.3.0"
+  version: "1.4.0"
   summary: API мобильного приложения PicPac (трек 2 хакатона «Великий камень» × «Фотопринт»)
   description: |
     Все ответы — JSON. Успех: `{ "ok": true, ... }`. Ошибка — единый формат:
@@ -271,6 +271,9 @@ paths:
         (`order_items.snapshot.photos[].edits`) получает и правки, и путь печатной версии.
         `{ path: null }` — правки сняли, печатается оригинал; `{ path: null, edits }` — файл не собрался на устройстве,
         правки записываются параметрами.
+        D1: размер кадра — как у оригинала, или ровно ×2 по сторонам, если в правках `upscale: 2` («Резкость для печати»).
+        Правки по выделению касанием — `ops: [{ kind: "mask", act: "blurBg" | "lighten" | "darken" | "erase", id, mask: { w, h, rle } }]`
+        (маска ≤ 320 точек, RLE + base64); печатная версия уже собрана с ними на устройстве в полном разрешении.
       requestBody:
         required: true
         content:
@@ -280,7 +283,7 @@ paths:
               required: [path]
               properties:
                 path: { type: string, nullable: true }
-                edits: { type: object, description: "photo.edits: { v, auto, autoOff, manual, ops }" }
+                edits: { type: object, description: "photo.edits: { v, auto, autoOff, manual, ops, upscale? }" }
             example: { path: "9b1…/4c2…/print/7d0…/0f3….jpg", edits: { v: 1, auto: null, autoOff: false, manual: { exposure: 20 }, ops: [{ kind: heal, cx: 0.4, cy: 0.12, r: 0.1 }] } }
       responses:
         "200":
@@ -288,7 +291,7 @@ paths:
           content:
             application/json:
               example: { ok: true, print: { path: "9b1…/print/7d0…/0f3….jpg", width: 1600, height: 1200, bytes: 325900, at: "2026-11-12T00:47:00Z" } }
-        "400": { description: "invalid_path (чужой путь), unsupported_format (не JPEG), size_mismatch (другой размер кадра), file_too_big, too_many_pixels (кадр больше 100 мегапикселей — файл удаляется)" }
+        "400": { description: "invalid_path (чужой путь), unsupported_format (не JPEG), size_mismatch (другой размер кадра; с upscale: 2 — не ровно ×2), file_too_big, too_many_pixels (кадр больше 100 мегапикселей — файл удаляется)" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { description: "Запрос с другого сайта (bad_origin)" }
         "404": { $ref: "#/components/responses/NotFound" }

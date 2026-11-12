@@ -435,7 +435,10 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
           onUndoPoint={() => segment(ai.points.slice(0, -1))}
           onClear={() => segment([])}
           onAction={applyMask}
-          onDone={() => setAi(AI_OFF)}
+          onDone={() => {
+            setAi(AI_OFF);
+            if (!erasing.size) stopAi(); // «Готово» — освобождаем память воркера (на телефоне это до ~2 ГБ)
+          }}
         />
 
         {(lowDpiIds?.has(photo.id) || saved.upscale === 2) && (
@@ -615,7 +618,11 @@ function SelectPanel({ ai, hasMask, readOnly, onStart, onCancel, onMode, onUndoP
     return (
       <div className="pe-select" aria-busy="true">
         <p className="small" role="status" aria-live="polite">
-          {ai.stage === "load" ? `Загружаем выделение на устройство: ${pct}% (один раз, около 14 МБ)` : "Изучаем фото — 10–20 секунд, один раз для этого фото. Можно пока двигать ползунки."}
+          {ai.stage === "load"
+            ? pct < 100
+              ? `Загружаем выделение на устройство: ${pct}% (один раз, около 29 МБ)`
+              : "Запускаем нейросеть на устройстве…"
+            : "Изучаем фото — 10–20 секунд, один раз для этого фото. Можно пока двигать ползунки."}
         </p>
         <progress className="pe-progress" max={100} value={ai.stage === "load" ? pct : undefined} aria-label="Подготовка выделения" />
         <button type="button" className="btn btn-small" onClick={onCancel}>

@@ -14,7 +14,7 @@
 
 Таблица ниже сгенерирована скриптом из `node_modules` — обновить: `node scripts/gen-licenses.mjs` (печатает markdown; скрипт только читает `package.json`, `node_modules/*/package.json` и `package-lock.json`). Знак ⚠️ — лицензия вне списка MIT / Apache-2.0 / ISC / BSD / MPL-2.0 / OFL; пояснения — в разделе 7.
 
-Часть рабочих пакетов установлена заранее и **в коде пока не импортируется** (в сборку для браузера не попадает): `@huggingface/transformers`, `onnxruntime-web`, `@tensorflow/tfjs`, `nsfwjs`, `upscaler`, `@upscalerjs/esrgan-slim` (будущие ИИ-функции на устройстве), `web-push` (пуши), `idb`, `buffer`, `lucide-react`. Их лицензии тоже перечислены.
+С этапа D1 `@huggingface/transformers`, `onnxruntime-web`, `@tensorflow/tfjs`, `upscaler` и `@upscalerjs/esrgan-slim` используются в воркерах ИИ-редактора (только по нажатию). Часть пакетов установлена заранее и **в коде пока не импортируется**: `nsfwjs` (модерация), `web-push` (пуши), `idb`, `buffer`, `lucide-react`. Их лицензии тоже перечислены.
 
 Источник: `package.json` и `node_modules/*/package.json` проекта picpac-app (picpac-app 0.1.0).
 Собрано: 2026-11-12T02:49:37.113Z (скрипт `scripts/gen-licenses.mjs`).
@@ -90,7 +90,7 @@
 
 **Сейчас в приложении нет ни одной нейросетевой модели**: в `public/` нет файлов моделей, облачные модели не вызываются. Анализ фото, автоулучшение, команды и «убери солнце» — обычные алгоритмы в нашем коде (`lib/photo/`).
 
-Модели, выбранные для следующего шага (не подключены; лицензии весов проверены по карточкам моделей): SlimSAM-77 (Apache-2.0), MI-GAN (MIT, веса MIT), ESRGAN-slim из `@upscalerjs/esrgan-slim` (MIT), nsfwjs / GantMan `nsfw_model` (MIT), в облаке Cloudflare — `@cf/openai/gpt-oss-120b` (Apache-2.0), `@cf/black-forest-labs/flux-2-klein-4b` (Apache-2.0), `@cf/moondream/moondream3.1-9B-A2B` (Moondream Model License 1.0 — не OSI, с ограничениями; перед использованием перечитать с юристом). Обучающие наборы этих моделей (Places2, SA-1B, DIV2K и другие) юридически не разбирались.
+Модели на устройстве **подключены с этапа D1** (файлы в `public/models`, источники — `public/models/README.md`): SlimSAM-77 `slimsam-77-uniform-boxes` (Apache-2.0), MI-GAN `migan_pipeline_v2.onnx` (MIT, веса MIT, `public/models/migan/LICENSE.txt`), ESRGAN-slim ×2 из `@upscalerjs/esrgan-slim` (MIT), onnxruntime-web wasm (MIT). Выбраны для следующих этапов: nsfwjs / GantMan `nsfw_model` (MIT), в облаке Cloudflare — `@cf/openai/gpt-oss-120b` (Apache-2.0), `@cf/black-forest-labs/flux-2-klein-4b` (Apache-2.0), `@cf/moondream/moondream3.1-9B-A2B` (Moondream Model License 1.0 — не OSI, с ограничениями; перед использованием перечитать с юристом). Обучающие наборы этих моделей (Places2, SA-1B, DIV2K и другие) юридически не разбирались.
 
 ## 3. Шрифт и оформление
 
