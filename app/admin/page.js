@@ -84,7 +84,16 @@ export default async function AdminPage() {
         )}
       </section>
       <section className="card" aria-labelledby="orders-title">
-        <h2 id="orders-title" className="admin-h">Заказы</h2>
+        <div className="row between wrap">
+          <h2 id="orders-title" className="admin-h">
+            Заказы
+          </h2>
+          {isAdmin && (
+            <Link className="small" href="/admin/orders">
+              Все заказы, поиск и CSV →
+            </Link>
+          )}
+        </div>
         {!orderRows.length ? (
           <p className="muted">Заказов пока нет.</p>
         ) : (
