@@ -65,6 +65,7 @@
 
 /* ── 3. Линейная графика сезона: основная линия — --season-ink, акценты .s1….s5 ── */
 .season-art { color: var(--season-ink); }
+.season-art :is(path, circle, rect, ellipse) { vector-effect: non-scaling-stroke; }
 .season-art .s1 { color: var(--season-1); }
 .season-art .s2 { color: var(--season-2); }
 .season-art .s3 { color: var(--season-3); }

@@ -1,9 +1,9 @@
 // Сезонные композиции (N2): линейная графика вокруг фото коллажа баннера и превью в админке.
 // viewBox 500×400 = пропорции коллажа 5:4. «back» — под фото (рамки-кальки, ветки), «front» — поверх (листья, кружка).
-import { Bag, FirBranch, Gift, Leaf, Maple, Mug, Oak, Ornament, Plaid, Rowan, Snowflake, Spark, Star, Tag } from "./SeasonArt";
+import { ART_SVG, Bag, FirBranch, Gift, Leaf, Maple, Mug, Oak, Ornament, Plaid, Rowan, Snowflake, Spark, Star, Tag } from "./SeasonArt";
 
-const svgProps = { viewBox: "0 0 500 400", fill: "none", "aria-hidden": true, focusable: "false", preserveAspectRatio: "xMidYMid meet" };
-const frame = { fill: "none", stroke: "currentColor", strokeWidth: 1.5, vectorEffect: "non-scaling-stroke", strokeLinecap: "round" };
+const svgProps = { viewBox: "0 0 500 400", ...ART_SVG, "aria-hidden": true, focusable: "false", preserveAspectRatio: "xMidYMid meet" };
+const frame = { strokeWidth: 1.5 };
 
 function AutumnBack() {
   return (

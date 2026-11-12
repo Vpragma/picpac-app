@@ -3,7 +3,10 @@
 // классы .s1….s5 (app/season.css). Без хуков — можно и в серверных, и в клиентских компонентах.
 // Лицензия — наша (docs/licenses.md, «Иллюстрации»).
 
-const line = { fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round", vectorEffect: "non-scaling-stroke" };
+// Общие атрибуты линии (fill none, stroke currentColor, ширина 2, круглые концы) задаёт корневой <svg> — см. ART_SVG;
+// non-scaling-stroke — в CSS (.season-art). Так разметка баннера легче: атрибуты не повторяются на каждом пути.
+export const ART_SVG = { fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round" };
+const line = {};
 
 // Заострённый лист длиной len от основания (0,0) вправо
 const leafletD = (len, w = 0.34) => `M0 0 C${len * 0.3} ${-len * w} ${len * 0.72} ${-len * w} ${len} 0 C${len * 0.72} ${len * w} ${len * 0.3} ${len * w} 0 0 Z`;
@@ -279,7 +282,7 @@ export function Gift({ x = 0, y = 0, s = 1, r = 0 }) {
 
 // Маленький значок сезона для промо-плашки и превью (24×24)
 export function SeasonIcon({ season, className = "season-icon" }) {
-  const box = { viewBox: "0 0 100 100", className, "aria-hidden": true, focusable: "false" };
+  const box = { viewBox: "0 0 100 100", className, "aria-hidden": true, focusable: "false", ...ART_SVG };
   if (season === "autumn")
     return (
       <svg {...box}>
