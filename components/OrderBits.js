@@ -39,6 +39,18 @@ export function minskDay(iso) {
   return new Date(iso).toLocaleDateString("ru-RU", { timeZone: "Europe/Minsk", day: "numeric", month: "long" });
 }
 
+// «17–18 ноября»; разные месяцы — «30 ноября – 1 декабря»; один день — «17 ноября»
+export function minskDayRange(fromIso, toIso) {
+  if (!fromIso) return "";
+  const from = minskDay(fromIso);
+  if (!toIso) return from;
+  const to = minskDay(toIso);
+  if (from === to) return from;
+  const [d1, m1] = from.split(" ");
+  const [d2, m2] = to.split(" ");
+  return m1 === m2 ? `${d1}–${d2} ${m2}` : `${from} – ${to}`;
+}
+
 // Плашка статуса — пастельные заливки из брендбука
 export function StatusChip({ status }) {
   return (

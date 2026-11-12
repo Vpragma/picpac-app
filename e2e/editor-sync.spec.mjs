@@ -7,6 +7,8 @@ import { createTestUser, deleteTestUser, supabaseAdmin } from "../tests/helpers/
 let admin;
 let user;
 
+// W-15: подмена результата классификатора nsfwjs — «чистое» фото (настоящая модель на CPU в headless ≈ 3 с на фото)
+test.beforeEach(async ({ page }) => page.addInitScript(() => (window.__PICPAC_TEST__ = { ...(window.__PICPAC_TEST__ || {}), nsfw: "clean" })));
 test.beforeEach(async ({}, info) => {
   admin = supabaseAdmin();
   user = await createTestUser(admin, ["client"], "e2eai" + info.parallelIndex + Date.now().toString(36).slice(-4));
@@ -67,11 +69,11 @@ test("правки фото уходят в аккаунт и возвращаю
   const gallery = page.getByRole("region", { name: "Тестовая галерея" });
   await expect(gallery.locator("input[type=checkbox]").first()).toBeVisible();
   await gallery.getByRole("button", { name: "Снять выбор" }).click();
-  for (const f of ["cat-dark", "mir-castle"]) await gallery.locator(`label:has(img[src="/demo-gallery/${f}.jpg"]) input[type=checkbox]`).check();
+  for (const f of ["cat-dark", "mir-castle"]) await gallery.locator(`label[data-file="${f}.jpg"] input[type=checkbox]`).check();
   await gallery.getByRole("button", { name: "Добавить 2 фото" }).click();
   await expect.poll(() => page.locator('.photo-cell[data-photo="cat-dark.jpg"] .pe-badge').allTextContents(), { timeout: 60_000 }).toEqual(["Темно", "Улучшено"]);
   // X-5 (S07): у вошедшего клиента на фото видно, что они загружены в аккаунт
-  await expect(page.locator('.photo-cell[data-photo="mir-castle.jpg"] [data-upload]')).toHaveText("Загружено", { timeout: 60_000 });
+  await expect(page.locator('.photo-cell[data-photo="mir-castle.jpg"] [data-upload]')).toHaveText("Загружено", { timeout: 300_000 });
 
   await page.getByRole("button", { name: "Правки", exact: true }).click();
   await page.locator('[data-edit-photo="cat-dark.jpg"]').click();

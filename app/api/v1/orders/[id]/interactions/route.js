@@ -3,6 +3,7 @@
 import { notFound, parseBody, rateLimited, requireUser, serverError, tooMany, z } from "@/lib/server/api";
 import { json } from "@/lib/server/http";
 import { getOwnOrder, shapeInteraction } from "@/lib/server/orders";
+import { botReply } from "@/lib/supportBot";
 
 const schema = z.strictObject({
   topic: z.string().trim().min(1, "Выберите тему обращения.").max(120, "Тема — до 120 символов."),
@@ -19,7 +20,7 @@ export async function POST(request, { params }) {
   const { body, response: bad } = await parseBody(request, schema);
   if (bad) return bad;
 
-  const order = await getOwnOrder(ctx, id, "id, number");
+  const order = await getOwnOrder(ctx, id, "id, number, status, substatus, erp_stage, eta_from, eta_to");
   if (!order) {
     await ctx.audit("interaction.create", "order", String(id).slice(0, 60), "denied", { reason: "not_found_or_foreign" });
     return notFound("Заказ");
@@ -41,7 +42,8 @@ export async function POST(request, { params }) {
     .from("interaction_messages")
     .insert([
       { interaction_id: it.id, author_kind: "client", author_id: ctx.userId, body: body.message },
-      { interaction_id: it.id, author_kind: "bot", body: `Спасибо! Обращение по заказу ${order.number} получено. Оператор ответит до ${slaText}.` },
+      // Бот отвечает по данным этого заказа: на «Где мой заказ?» — статус, готовность и ориентировочная дата
+      { interaction_id: it.id, author_kind: "bot", body: botReply({ topic: body.topic, order, slaText }).body },
     ])
     .select("id, author_kind, body, created_at");
   if (e2) return serverError();

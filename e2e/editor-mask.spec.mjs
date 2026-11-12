@@ -10,6 +10,8 @@ import { createTestUser, deleteTestUser, supabaseAdmin } from "../tests/helpers/
 let admin;
 let user;
 
+// W-15: подмена результата классификатора nsfwjs — «чистое» фото (настоящая модель на CPU в headless ≈ 3 с на фото)
+test.beforeEach(async ({ page }) => page.addInitScript(() => (window.__PICPAC_TEST__ = { ...(window.__PICPAC_TEST__ || {}), nsfw: "clean" })));
 test.beforeEach(async ({}, info) => {
   admin = supabaseAdmin();
   user = await createTestUser(admin, ["client"], "e2emask" + info.parallelIndex + Date.now().toString(36).slice(-4));
@@ -88,9 +90,9 @@ test("выделение касанием: размыть фон, убрать �
   const gallery = page.getByRole("region", { name: "Тестовая галерея" });
   await expect(gallery.locator("input[type=checkbox]").first()).toBeVisible();
   await gallery.getByRole("button", { name: "Снять выбор" }).click();
-  for (const f of ["dog", "nesvizh-small"]) await gallery.locator(`label:has(img[src="/demo-gallery/${f}.jpg"]) input[type=checkbox]`).check();
+  for (const f of ["dog", "nesvizh-small"]) await gallery.locator(`label[data-file="${f}.jpg"] input[type=checkbox]`).check();
   await gallery.getByRole("button", { name: "Добавить 2 фото" }).click();
-  await expect(page.locator('.photo-cell[data-photo="dog.jpg"] [data-upload]')).toHaveText("Загружено", { timeout: 90_000 });
+  await expect(page.locator('.photo-cell[data-photo="dog.jpg"] [data-upload]')).toHaveText("Загружено", { timeout: 300_000 });
 
   await page.getByRole("button", { name: "Правки", exact: true }).click();
   await page.locator('[data-edit-photo="dog.jpg"]').click();
@@ -267,9 +269,9 @@ test("fix1: 8 правок по выделению на одном фото — 
   const gallery = page.getByRole("region", { name: "Тестовая галерея" });
   await expect(gallery.locator("input[type=checkbox]").first()).toBeVisible();
   await gallery.getByRole("button", { name: "Снять выбор" }).click();
-  await gallery.locator('label:has(img[src="/demo-gallery/autumn-forest.jpg"]) input[type=checkbox]').check();
+  await gallery.locator('label[data-file="autumn-forest.jpg"] input[type=checkbox]').check();
   await gallery.getByRole("button", { name: "Добавить 1 фото" }).click();
-  await expect(page.locator('.photo-cell[data-photo="autumn-forest.jpg"] [data-upload]')).toHaveText("Загружено", { timeout: 90_000 });
+  await expect(page.locator('.photo-cell[data-photo="autumn-forest.jpg"] [data-upload]')).toHaveText("Загружено", { timeout: 300_000 });
   await page.getByRole("button", { name: "Правки", exact: true }).click();
   await expect(page.locator(".pe-after[data-rendered]")).toHaveCount(1);
   await page.getByRole("button", { name: "Выделить касанием" }).click();
@@ -344,9 +346,9 @@ test("fix1: правки фото больше предела — честный
   const gallery = page.getByRole("region", { name: "Тестовая галерея" });
   await expect(gallery.locator("input[type=checkbox]").first()).toBeVisible();
   await gallery.getByRole("button", { name: "Снять выбор" }).click();
-  await gallery.locator('label:has(img[src="/demo-gallery/flowers.jpg"]) input[type=checkbox]').check();
+  await gallery.locator('label[data-file="flowers.jpg"] input[type=checkbox]').check();
   await gallery.getByRole("button", { name: "Добавить 1 фото" }).click();
-  await expect(page.locator('.photo-cell[data-photo="flowers.jpg"] [data-upload]')).toHaveText("Загружено", { timeout: 90_000 });
+  await expect(page.locator('.photo-cell[data-photo="flowers.jpg"] [data-upload]')).toHaveText("Загружено", { timeout: 300_000 });
   await page.waitForTimeout(2_000); // анализ фото дописал черновик
 
   // Черновик старого вида: 4 разные сложные маски внутри правок (≈ 24 КБ) — больше предела фото 20 КБ

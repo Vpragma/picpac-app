@@ -15,7 +15,7 @@
 
 Таблица ниже сгенерирована скриптом из `node_modules` — обновить: `node scripts/gen-licenses.mjs` (печатает markdown; проверка без таблицы — `npm run licenses:check`; скрипт только читает `package.json`, `node_modules/*/package.json` и `package-lock.json`). Знак ⚠️ — лицензия вне списка MIT / Apache-2.0 / ISC / BSD / MPL-2.0 / OFL; пояснения — в разделе 7.
 
-С этапа D1 `@huggingface/transformers`, `onnxruntime-web`, `@tensorflow/tfjs`, `upscaler` и `@upscalerjs/esrgan-slim` используются в воркерах ИИ-редактора (только по нажатию). С этапа D5 `web-push` (MPL-2.0) отправляет пуши на сервере. `nsfwjs` подключает этап D4 (модерация). Часть пакетов установлена заранее и в коде может не импортироваться (`idb`, `buffer`, `lucide-react`) — их лицензии тоже перечислены.
+С этапа D1 `@huggingface/transformers`, `onnxruntime-web`, `@tensorflow/tfjs`, `upscaler` и `@upscalerjs/esrgan-slim` используются в воркерах ИИ-редактора (только по нажатию). С этапа D5 `web-push` (MPL-2.0) отправляет пуши на сервере. `nsfwjs` проверяет фото на устройстве в воркере (W-15, модерация). Часть пакетов установлена заранее и в коде может не импортироваться (`idb`, `buffer`, `lucide-react`) — их лицензии тоже перечислены.
 
 Источник: `package.json` и `node_modules/*/package.json` проекта picpac-app (picpac-app 0.1.0).
 Собрано: 2026-11-12T09:09:28.858Z (скрипт `scripts/gen-licenses.mjs`).
@@ -99,7 +99,7 @@
 | **SlimSAM-77** — декодер с рамкой (int8) | [ArAnirudh/slimsam-77-uniform-boxes](https://huggingface.co/ArAnirudh/slimsam-77-uniform-boxes) `6a74f508b2cb129eda9f9519d67574f1ec27429f` | Apache-2.0 | Apache-2.0 | SA-1B | `slimsam-77-uniform-boxes/onnx/prompt_encoder_mask_decoder_quantized.onnx`, 4 751 034 Б | `45f97f705ff14a886f69bda2e7ba0e1016d6bbf7e82dfc3fb40d8c2216be01f1` |
 | **MI-GAN** — ластик | [andraniksargsyan/migan](https://huggingface.co/andraniksargsyan/migan) `406830d0fa60666da0071c342ad2fbc8f30c5c64`; проект Picsart-AI-Research/MI-GAN | MIT, © 2024 Picsart AI Research | MIT (`public/models/migan/LICENSE.txt`, 1 082 Б) | Places2 (свои исследовательские условия) | `migan/migan_pipeline_v2.onnx`, 28 079 181 Б | `6f1f3530a1a2324b19752018ce756088b07973cda8d7d890034ace5c8a48c40b` |
 | **ESRGAN-slim ×2** (UpscalerJS) — «Резкость для печати» | npm `@upscalerjs/esrgan-slim` 1.0.0; архитектура idealo ISR | MIT (пакет); Apache-2.0 (ISR) | MIT (в составе пакета) | DIV2K (свои исследовательские условия) | `upscaler/x2/model.json` 12 336 Б и `group1-shard1of1.bin` 888 300 Б | `8efb488c2caed0196a6163e3f06798f9245e92623ffd50654a26c372e09150ea`, `5cb464ae4d390ce0a771afd5feaf60fbfcdb18ab48a56db98cdf6b88202369de` |
-| **nsfwjs / MobileNetV2** — первичная проверка фото (этап D4) | npm `nsfwjs` 4.3.0; модель GantMan/nsfw_model | MIT | MIT (с оговоркой авторов о материалах третьих сторон) | данные авторов модели | `model.json` 117 928 Б и `group1-shard1of1` 2 619 461 Б (появятся в `public/models` с этапом D4) | `feffc6868d61e412a4e7a22657a3d07a8a48df6e11688a9e25b77c23cb7b45c9`, `8e7dddbb16acacc1bf1601b1b8a761e730ff934b7f2d7771312b2f000e5f5f13` |
+| **nsfwjs / MobileNetV2** — первичная проверка фото (этап D4) | npm `nsfwjs` 4.3.0; модель GantMan/nsfw_model | MIT | MIT (с оговоркой авторов о материалах третьих сторон) | данные авторов модели | `model.json` 117 928 Б и `group1-shard1of1` 2 619 461 Б (в `public/models/nsfw/`) | `feffc6868d61e412a4e7a22657a3d07a8a48df6e11688a9e25b77c23cb7b45c9`, `8e7dddbb16acacc1bf1601b1b8a761e730ff934b7f2d7771312b2f000e5f5f13` |
 
 Веса всех моделей — MIT или Apache-2.0. У наборов обучения (SA-1B, Places2, DIV2K) свои условия для исследований; на сами веса и их использование они в лицензиях моделей не переносятся, но перед пилотом это стоит проверить с юристом.
 
@@ -118,7 +118,6 @@
 | Модель | Лицензия | Примечание |
 |---|---|---|
 | `@cf/openai/gpt-oss-120b` | Apache-2.0 | разбор свободной фразы в команду |
-| `@cf/black-forest-labs/flux-2-klein-4b` | Apache-2.0 (веса FLUX.2 klein 4B) | старшие версии (klein 9B, dev) — только некоммерческие, их не используем |
 | `@cf/moondream/moondream3.1-9B-A2B` | Moondream Model License 1.0 (не из списка OSI) | коммерческое использование допускается с ограничениями; перед пилотом прочитать с юристом |
 
 ### Что сознательно не используем
@@ -126,7 +125,6 @@
 | Что | Почему |
 |---|---|
 | YOLO (Ultralytics) | AGPL-3.0 |
-| FLUX.2 klein 9B и dev | лицензия только для некоммерческого использования |
 
 ## 3. Шрифт и оформление
 
@@ -140,7 +138,7 @@
 
 | Что | Правообладатель | Как используем |
 |---|---|---|
-| Фото продуктов (Lite, Classic, Premium, печать фото) | © ООО «Фотопринт» | **в текущей версии приложения не используются** (карточки каталога без фото). Если будут добавлены — только сжатые копии и только для прототипа |
+| Фото продуктов (Lite, Classic, Premium, печать фото) и логотипы оплаты | © ООО «Фотопринт» (фото с сайта PicPac); логотипы — знаки платёжных систем | только в прототипе для хакатона, сжатые копии: `assets/products/` (30 фото WebP до 1200 px, ≈ 1,5 МБ), `public/payment/` (5 логотипов WebP 160 px). Делает `scripts/product-photos.mjs` из `docs/superpicpac/photos/` |
 | Названия продуктов, цены, сроки, способы доставки | ООО «Фотопринт», справочник super.picpac.by от 11.11.2026 | данные заказчика для прототипа. Коэффициенты цен размеров, кроме 20×20, и цены цифровой печати, кроме 10×15, — **тестовые, уточнить у Фотопринт** |
 
 Сохранённые страницы и скриншоты сайта заказчика в репозиторий не входят.

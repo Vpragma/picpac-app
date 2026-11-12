@@ -14,7 +14,7 @@ async function openEditorWithPhoto(page) {
   const gallery = page.getByRole("region", { name: "Тестовая галерея" });
   await expect(gallery.locator("input[type=checkbox]").first()).toBeVisible();
   await gallery.getByRole("button", { name: "Снять выбор" }).click();
-  await gallery.locator('label:has(img[src="/demo-gallery/mir-castle.jpg"]) input[type=checkbox]').check();
+  await gallery.locator('label[data-file="mir-castle.jpg"] input[type=checkbox]').check();
   await gallery.getByRole("button", { name: "Добавить 1 фото" }).click();
   await expect(page.locator(".photo-cell[data-photo]")).toHaveCount(1);
   await page.getByRole("button", { name: "Правки", exact: true }).click();

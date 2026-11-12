@@ -176,6 +176,6 @@ export async function POST(request) {
     promo: order.promo_code,
     delivery: order.delivery_code,
   });
-  if (created) await trackServer("order_created", ctx.userId, { product: cart.items[0]?.product?.slug || null, items: cart.items.length });
+  if (created) await trackServer("order_created", ctx.userId, { product: cart.items[0]?.product?.slug || null, items: cart.items.length }, ctx.email);
   return json({ ok: true, replayed: !created, order: await loadOrderFull(ctx, order) }, created ? 201 : 200);
 }

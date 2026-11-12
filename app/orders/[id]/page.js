@@ -9,7 +9,7 @@ import { useCallback, useEffect, useState } from "react";
 import { callApi } from "../../../lib/api";
 import { getMe } from "../../../lib/me";
 import { notify } from "../../../lib/store";
-import { StatusChip, Timeline, byn, minskDay, minskTime } from "../../../components/OrderBits";
+import { StatusChip, Timeline, byn, minskDay, minskDayRange, minskTime } from "../../../components/OrderBits";
 import { IconChat } from "../../../components/icons";
 
 const POLL_MS = 10000;
@@ -101,13 +101,15 @@ export default function OrderPage() {
         <StatusChip status={o.status} />
       </div>
       <p className="muted small">
-        Оформлен {minskTime(o.createdAt, true)} · доставим ориентировочно {minskDay(o.eta?.from)}
-        {o.eta?.to && o.eta.to !== o.eta.from ? `–${minskDay(o.eta.to)}` : ""}
+        Оформлен {minskTime(o.createdAt, true)} · доставим ориентировочно {minskDayRange(o.eta?.from, o.eta?.to)}
       </p>
 
       <section className="card">
         <h3>Статус</h3>
         <Timeline order={o} />
+        <p className="muted small" style={{ margin: "4px 0 0" }}>
+          Время в заказе — по Минску.
+        </p>
         {o.isDemo && o.status !== "done" && <p className="muted small">Демо-заказ: статусы присылает симулятор производства (события ERP), шаг ≈ 30 секунд после оплаты.</p>}
       </section>
 
@@ -203,6 +205,8 @@ export default function OrderPage() {
 }
 
 const TOPICS = ["Где мой заказ?", "Изменить доставку", "Брак печати — нужна перепечатка", "Другой вопрос"];
+// A7: у завершённого заказа — перепечатка с причиной
+const REPRINT = ["Перепечатка: брак печати", "Перепечатка: ошибка в макете"];
 
 // Обращения по заказу: список, переписка и «Написать в поддержку» (первый ответ — бот, дальше оператор, S06)
 function Support({ order: o, onCreated }) {
@@ -217,7 +221,7 @@ function Support({ order: o, onCreated }) {
     e.preventDefault();
     setBusy(true);
     setError("");
-    const kind = topic.startsWith("Брак") ? "reprint" : "support";
+    const kind = topic.startsWith("Брак") || topic.startsWith("Перепечатка") ? "reprint" : "support";
     const r = await callApi(`/api/v1/orders/${o.id}/interactions`, { body: { topic, kind, message } });
     setBusy(false);
     if (!r.ok) return setError(r.error?.message || "Не получилось отправить. Попробуйте ещё раз.");
@@ -264,7 +268,7 @@ function Support({ order: o, onCreated }) {
             <span className="chip">{it.status === "open" ? "Ждёт ответа" : it.status === "answered" ? "Есть ответ" : "Закрыто"}</span>
           </div>
           <div className="muted small">
-            {minskTime(it.createdAt)} · ответим до {minskTime(it.slaDue)}
+            {minskTime(it.createdAt)} · ответим до {minskTime(it.slaDue)} (по Минску)
           </div>
           <button type="button" className="btn btn-small" onClick={() => show(it.id)} aria-expanded={!!threads[it.id]}>
             {threads[it.id] ? "Скрыть переписку" : "Показать переписку"}
@@ -282,15 +286,39 @@ function Support({ order: o, onCreated }) {
         </div>
       ))}
       {!open ? (
-        <button type="button" className="btn btn-primary btn-block" style={{ marginTop: 12 }} onClick={() => setOpen(true)}>
-          Написать в поддержку
-        </button>
+        <>
+          <button
+            type="button"
+            className="btn btn-primary btn-block"
+            style={{ marginTop: 12 }}
+            onClick={() => {
+              setTopic(TOPICS[0]);
+              setOpen(true);
+            }}
+          >
+            Написать в поддержку
+          </button>
+          {o.status === "done" && (
+            <button
+              type="button"
+              className="btn btn-block"
+              style={{ marginTop: 8 }}
+              data-testid="reprint"
+              onClick={() => {
+                setTopic(REPRINT[0]);
+                setOpen(true);
+              }}
+            >
+              Перепечатка
+            </button>
+          )}
+        </>
       ) : (
         <form className="stack" style={{ marginTop: 12 }} onSubmit={send}>
           <label className="field">
             <span>Тема</span>
             <select className="input" value={topic} onChange={(e) => setTopic(e.target.value)}>
-              {TOPICS.map((t) => (
+              {[...(o.status === "done" ? REPRINT : []), ...TOPICS].map((t) => (
                 <option key={t}>{t}</option>
               ))}
             </select>
