@@ -150,7 +150,6 @@ body:has(.sticky-bar) .site-footer { padding-bottom: calc(var(--tabbar-h) + var(
 /* ── 7. Каталог и карточка продукта: сетка ──────────────────────────── */
 .catalog-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 .catalog-grid > .card { margin: 0; }
-@media (min-width: 768px) { .catalog-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* ── 8. Компьютер от 1024 px (W-02, K-08): боковое меню, широкое содержимое ── */
 @media (min-width: 1024px) {
