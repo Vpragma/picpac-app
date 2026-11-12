@@ -3,6 +3,7 @@
 // лента из 5 статусов по Минску, ориентировочная дата, обращения и «Написать в поддержку».
 // Пока заказ не завершён, экран обновляется раз в 10 секунд (демо-заказы двигаются по таймеру).
 import Link from "next/link";
+import { SUPPORT } from "@/lib/support";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { callApi } from "../../../lib/api";
@@ -65,8 +66,13 @@ export default function OrderPage() {
   if (!res.ok)
     return (
       <div className="card stack">
-        <h2>{res.status === 404 ? "Заказ не найден" : "Не получилось открыть заказ"}</h2>
+        <h1>{res.status === 404 ? "Заказ не найден" : "Не получилось открыть заказ"}</h1>
         <p className="muted">{res.status === 404 ? "Проверьте ссылку или откройте заказ из списка." : res.error?.message}</p>
+        {res.status !== 404 && (
+          <button type="button" className="btn btn-primary btn-block" onClick={() => load()}>
+            Повторить
+          </button>
+        )}
         <Link href="/orders" className="btn btn-block">
           Мои заказы
         </Link>
@@ -258,7 +264,7 @@ function Support({ order: o, onCreated }) {
             <textarea className="input" rows={4} maxLength={2000} required value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Опишите вопрос. Для брака приложите фото в ответе оператору." />
           </label>
           {error && (
-            <p className="error-text" role="alert">
+            <p className="err-text" role="alert">
               {error}
             </p>
           )}
@@ -273,7 +279,7 @@ function Support({ order: o, onCreated }) {
         </form>
       )}
       <p className="muted small" style={{ marginTop: 8 }}>
-        Или напрямую: support@picpac.by · +375 44 539-67-89, ежедневно 9:00–21:00
+        Или напрямую: <a href={SUPPORT.emailHref}>{SUPPORT.email}</a> · <a href={SUPPORT.phoneHref}>{SUPPORT.phone}</a>, ежедневно {SUPPORT.hours}
       </p>
     </section>
   );

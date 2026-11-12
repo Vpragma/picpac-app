@@ -5,6 +5,7 @@ import NextLink from "../components/auth/NextLink";
 export default function Unauthorized() {
   return (
     <div className="card stack" style={{ textAlign: "center", marginTop: 24 }}>
+      <title>Нужно войти — PicPac</title>
       <div>
         <span className="chip">Ошибка 401</span>
       </div>
