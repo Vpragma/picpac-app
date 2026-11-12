@@ -65,7 +65,7 @@ async function pickFromGallery(page, files) {
   const gallery = page.getByRole("region", { name: "Тестовая галерея" });
   await expect(gallery.locator("input[type=checkbox]").first()).toBeVisible();
   await gallery.getByRole("button", { name: "Снять выбор" }).click();
-  for (const f of files) await gallery.locator(`label:has(img[src="/demo-gallery/${f}.jpg"]) input[type=checkbox]`).check();
+  for (const f of files) await gallery.locator(`label[data-file="${f}.jpg"] input[type=checkbox]`).check();
   await gallery.getByRole("button", { name: `Добавить ${files.length} фото` }).click();
 }
 
@@ -85,6 +85,7 @@ async function login(page) {
 }
 
 test("обязательный путь: каталог → проект → 12 фото → корзина → номер заказа, AC-1…AC-5", async ({ page }) => {
+  test.slow(); // сеть площадки ~1,4 Мбит/с: 14 фото по 3000 точек скачиваются и уходят в аккаунт минутами — общий лимит ×3
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
 
@@ -169,8 +170,8 @@ test("обязательный путь: каталог → проект → 12 
     await login(page);
     await expect(page).toHaveURL(/\/cart/);
     await expect(page.getByLabel("Имя и фамилия")).toBeVisible();
-    // Перенос корзины ждёт загрузки всех фото в аккаунт: на сети площадки (~1,4 Мбит/с) 14 фото — 1–3 мин, поэтому 240 с
-    await expect.poll(async () => (await user.client.req("/api/v1/cart")).json?.cart?.items?.length, { timeout: 240_000 }).toBe(1);
+    // фото галереи теперь 3000 точек (~750 КБ): на сети площадки (~1,4 Мбит/с) перенос 14 фото — минуты
+    await expect.poll(async () => (await user.client.req("/api/v1/cart")).json?.cart?.items?.length, { timeout: 300_000 }).toBe(1);
   });
 
   await test.step("AC-1 получатель, TEST10, доставка, тестовая оплата", async () => {

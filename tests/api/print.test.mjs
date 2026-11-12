@@ -12,7 +12,7 @@ const admin = supabaseAdmin();
 const RUN = `e2e-print-${randomUUID().slice(0, 8)}`;
 const JPEG = readFileSync(new URL("../../public/demo-gallery/nesvizh-small.jpg", import.meta.url)); // 800×549
 const OTHER = readFileSync(new URL("../../public/demo-gallery/cat-dark.jpg", import.meta.url)); // другой размер
-const DOUBLE = readFileSync(new URL("../../public/demo-gallery/nesvizh.jpg", import.meta.url)); // 1600×1098 — ровно ×2
+const DOUBLE = readFileSync(new URL("../fixtures/nesvizh-1600.jpg", import.meta.url)); // 1600×1098 — ровно ×2 к nesvizh-small (галерея теперь 3000 точек)
 const recipient = { name: "Тест Тестович", phone: "+375 (29) 000-00-00" };
 const EDITS = { v: 1, auto: null, autoOff: false, manual: { exposure: 20, warmth: 10 }, ops: [], by: "command" };
 

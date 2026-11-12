@@ -1,4 +1,5 @@
 "use client";
+import { plural } from "../../lib/plural";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
@@ -116,6 +117,7 @@ export default function EditorPage() {
   // Шаг можно открыть ссылкой: /editor?project=<id>&step=edits (например, из корзины — «Открыть правки»)
   const urlStep = useSyncExternalStore(subscribeNone, () => new URLSearchParams(window.location.search).get("step") || "", () => "");
   const [chosenStep, setStep] = useState(null);
+  const [editPhoto, setEditPhoto] = useState(null); // «Улучшить резкость для печати» на «Проверке» → это фото в «Правках»
   const step = chosenStep || (STEPS.some((s) => s.id === urlStep && s.id !== "status") ? urlStep : "photos");
   useStepTimer(step);
   useAnalysis(draft);
@@ -213,9 +215,22 @@ export default function EditorPage() {
       {step === "photos" && <PhotosStep draft={draft} thumbs={thumbs} product={product} uploads={uploads} readOnly={ordered} lowDpi={lowDpi} dups={dups} />}
       {step === "layout" && <LayoutStep draft={draft} thumbs={thumbs} product={product} />}
       {step === "edits" && (
-        <PhotoEditor draft={draft} thumbs={thumbs} readOnly={ordered} lowDpiIds={lowDpi} dupIds={dups} extra={(photo) => <PlacementCard photo={photo} thumb={thumbs[photo.id]} readOnly={ordered} />} />
+        <PhotoEditor key={editPhoto || "edits"} draft={draft} thumbs={thumbs} readOnly={ordered} lowDpiIds={lowDpi} dupIds={dups} initialPhotoId={editPhoto} extra={(photo) => <PlacementCard photo={photo} thumb={thumbs[photo.id]} readOnly={ordered} />} />
       )}
-      {step === "check" && <CheckStep draft={draft} thumbs={thumbs} product={product} price={price} goPhotos={() => setStep("photos")} readOnly={ordered} />}
+      {step === "check" && (
+        <CheckStep
+          draft={draft}
+          thumbs={thumbs}
+          product={product}
+          price={price}
+          goPhotos={() => setStep("photos")}
+          goSharpen={(photoId) => {
+            setEditPhoto(photoId);
+            setStep("edits");
+          }}
+          readOnly={ordered}
+        />
+      )}
 
       <div className="sticky-bar">
         <div>
@@ -260,29 +275,36 @@ function OrderedNotice({ draft }) {
 /* ---------- Шаг 1: фото ---------- */
 function useAdder() {
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState(null); // { done, total } — фото галереи
+  const [missing, setMissing] = useState([]); // фото галереи, которые не скачались
   async function add(files, fromGallery) {
     if (!files?.length) return;
     setBusy(true);
+    if (fromGallery) setMissing([]);
     try {
-      const { added, rejected, failed } = fromGallery ? await addGalleryFiles(files) : await addFiles(files);
+      const { added, rejected, failed, missing: miss = [] } = fromGallery ? await addGalleryFiles(files, setProgress) : await addFiles(files);
       if (added) notify(`Добавлено фото: ${added}`, "success");
       if (rejected.length) notify(`Это не фото, пропустили: ${rejected.join(", ")}`, "error");
       if (failed) notify(`Не получилось добавить фото: ${failed}. Нажмите «Повторить» в списке.`, "error");
+      if (miss.length) setMissing(miss);
+      return miss;
     } catch (e) {
       console.error(e);
       notify("Не удалось добавить фото. Проверьте интернет и попробуйте ещё раз.", "error");
+      return files;
     } finally {
       setBusy(false);
+      setProgress(null);
     }
   }
-  return [busy, add];
+  return [busy, add, progress, missing];
 }
 
 const UPLOAD_TEXT = { wait: "ждёт очереди", work: "готовим…", error: "не получилось" };
 
 function PhotosStep({ draft, thumbs, product, uploads, readOnly, lowDpi, dups }) {
   const inputRef = useRef(null);
-  const [busy, add] = useAdder();
+  const [busy, add, progress, missing] = useAdder();
   const [over, setOver] = useState(false);
   const [gallery, setGallery] = useState(false);
 
@@ -357,11 +379,20 @@ function PhotosStep({ draft, thumbs, product, uploads, readOnly, lowDpi, dups })
       {gallery && !readOnly && (
         <GalleryPanel
           busy={busy}
+          progress={progress}
           onAdd={async (items) => {
-            await add(items, true);
-            setGallery(false);
+            const miss = await add(items, true);
+            if (!miss?.length) setGallery(false); // всё скачалось — галерею закрываем, иначе остаётся «Повторить»
           }}
         />
+      )}
+      {missing.length > 0 && !busy && (
+        <p className="err-text small" role="alert">
+          Не скачались из галереи (медленная сеть): {missing.map((m) => m.title).join(", ")}.{" "}
+          <button className="btn btn-small" onClick={() => add(missing, true)}>
+            Повторить
+          </button>
+        </p>
       )}
       {over && <div className="drop-overlay">Отпустите — добавим фото</div>}
 
@@ -412,7 +443,7 @@ const PROBLEM = {
   overexposed: "пересвет", "color-cast": "оттенок", blurry: "размыто", "low-resolution": "маленькое", tilted: "завален горизонт", duplicate: "дубль",
 };
 
-function GalleryPanel({ busy, onAdd }) {
+function GalleryPanel({ busy, progress, onAdd }) {
   const [items, setItems] = useState(null);
   const [failed, setFailed] = useState(false);
   const [picked, setPicked] = useState({});
@@ -436,7 +467,8 @@ function GalleryPanel({ busy, onAdd }) {
     <section className="card" aria-label="Тестовая галерея">
       <h3>Тестовая галерея</h3>
       <p className="muted small">
-        Фото со свободной лицензией (Wikimedia Commons). Среди них есть «плохие» — маленькое, размытое, тёмное — чтобы увидеть, как работает проверка.
+        Фото со свободной лицензией (Wikimedia Commons). Среди них есть «плохие» — маленькое, размытое, тёмное — чтобы увидеть, как работает проверка. В сетке — лёгкие
+        превью, полные фото скачиваются только при «Добавить».
       </p>
       {failed && (
         <p className="err-text small">
@@ -451,28 +483,56 @@ function GalleryPanel({ busy, onAdd }) {
         <>
           <div className="gallery-grid">
             {items.map((it) => (
-              <label key={it.file} title={it.title}>
-                {/* eslint-disable-next-line @next/next/no-img-element -- статика тестовой галереи: e2e ищут img[src="/demo-gallery/…"], сервис-воркер кэширует оригиналы для офлайна */}
-                <img src={"/demo-gallery/" + it.file} alt={it.title} loading="lazy" />
+              <label key={it.file} title={it.title} data-file={it.file}>
+                <GalleryThumb it={it} />
                 <input type="checkbox" checked={!!picked[it.file]} onChange={(e) => setPicked((p) => ({ ...p, [it.file]: e.target.checked }))} aria-label={it.title} />
                 {it.problem && <span className="tag">{PROBLEM[it.problem] || it.problem}</span>}
               </label>
             ))}
           </div>
           <div className="row wrap">
-            <button className="btn btn-primary" disabled={busy || !chosen.length} onClick={() => onAdd(chosen)}>
-              {busy ? "Добавляем…" : `Добавить ${chosen.length} фото`}
+            <button className="btn btn-primary" disabled={busy || !chosen.length} onClick={() => onAdd(chosen)} aria-busy={busy}>
+              {busy ? (progress?.total ? `Добавлено ${progress.done} из ${progress.total}…` : "Добавляем…") : `Добавить ${chosen.length} фото`}
             </button>
-            <button className="btn btn-small" onClick={() => setPicked(Object.fromEntries(items.map((x) => [x.file, true])))}>
+            <button className="btn btn-small" onClick={() => setPicked(Object.fromEntries(items.map((x) => [x.file, true])))} disabled={busy}>
               Выбрать все
             </button>
-            <button className="btn btn-small" onClick={() => setPicked({})}>
+            <button className="btn btn-small" onClick={() => setPicked({})} disabled={busy}>
               Снять выбор
             </button>
           </div>
+          {busy && progress?.total > 0 && <progress className="pe-progress" max={progress.total} value={progress.done} aria-label="Добавляем фото из галереи" />}
         </>
       )}
     </section>
+  );
+}
+
+// Превью фото галереи (~300 точек, 15–30 КБ): плитка постоянного размера с заглушкой; не загрузилось —
+// два повтора, потом «↻» в плитке (а не обломки подписи поверх галочки)
+function GalleryThumb({ it }) {
+  const [state, setState] = useState({ n: 0, failed: false, loaded: false });
+  const src = "/demo-gallery/" + (it.thumb || it.file) + (state.n ? "?r=" + state.n : "");
+  return (
+    <span className={"gallery-thumb" + (state.loaded ? " loaded" : "")}>
+      {!state.failed && (
+        // eslint-disable-next-line @next/next/no-img-element -- статика тестовой галереи (превью), сервис-воркер кэширует её для офлайна
+        <img
+          key={src}
+          src={src}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          onLoad={() => setState((s) => ({ ...s, loaded: true }))}
+          onError={() => setState((s) => (s.n < 2 ? { ...s, n: s.n + 1 } : { ...s, failed: true }))}
+        />
+      )}
+      {state.failed && (
+        <button type="button" className="gallery-retry" onClick={(e) => (e.preventDefault(), setState({ n: state.n + 1, failed: false, loaded: false }))} aria-label={"Загрузить превью ещё раз: " + it.title}>
+          ↻
+        </button>
+      )}
+    </span>
   );
 }
 
@@ -729,7 +789,7 @@ function PlacementCard({ photo, thumb, readOnly }) {
 }
 
 /* ---------- Шаг 3: проверка ---------- */
-function CheckStep({ draft, thumbs, product, price, goPhotos, readOnly }) {
+function CheckStep({ draft, thumbs, product, price, goPhotos, goSharpen, readOnly }) {
   const router = useRouter();
   const { issues } = useMemo(() => runChecks(draft, product), [draft, product]);
   const replaceRef = useRef(null);
@@ -835,7 +895,7 @@ function CheckStep({ draft, thumbs, product, price, goPhotos, readOnly }) {
         </div>
       ) : (
         <p className="muted">
-          Нашли моментов: {issues.length}. Исправьте или нажмите «Продолжить всё равно» — решать вам.
+          Нашли {issues.length} {plural(issues.length, "момент", "момента", "моментов")}. Исправьте или нажмите «Продолжить всё равно» — решать вам.
         </p>
       )}
       {openAckable.length > 1 && !readOnly && (
@@ -867,6 +927,15 @@ function CheckStep({ draft, thumbs, product, price, goPhotos, readOnly }) {
                         }}
                       >
                         Заменить фото
+                      </button>
+                    )}
+                    {/* ED (п. 15): фото до 1500 точек можно сделать резче нейросетью ×2 — в «Правках», на этом фото */}
+                    {i.key?.startsWith("dpi:") && !readOnly && (() => {
+                      const ph = draft.photos.find((x) => x.id === i.photoId);
+                      return ph && ph.edits?.upscale !== 2 && Math.max(ph.w || 0, ph.h || 0) <= 1500;
+                    })() && (
+                      <button className="btn btn-small" onClick={() => goSharpen(i.photoId)}>
+                        Улучшить резкость для печати
                       </button>
                     )}
                     {i.actions.includes("add") && (
