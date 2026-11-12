@@ -1276,6 +1276,8 @@ components:
         options: { type: object, description: "Группы опций: cover, lamination, paper, print, surface" }
         requirements: { type: object }
         priceFromKop: { type: integer }
+        badge: { type: string, description: "Плашка на карточке: «новинка», «скидка», «выбор pic pac» (N1)" }
+        oldPriceFromKop: { type: integer, description: "Цена «от» до скидки — только если в products задан old_price_kop больше текущей; карточка показывает её зачёркнутой (N1)" }
     DeliveryMethod:
       type: object
       properties:

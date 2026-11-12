@@ -58,3 +58,12 @@
 - Серый брендбука `#7C807F` (3,7:1) и логотипный `#DD5757` с белым (3,8:1) — только крупное, декор и логотип.
 - Тёмная тема: текст `#ebe5da` на `#172321` — 13,3:1; коралл `#f0968c` на карточке `#20302d` — 6,2:1; пастельные плашки с текстом `#2b403d` — от 7,5:1.
 - Проверка: `npm run test:a11y` (axe, светлая и тёмная тема), `e2e/brand.spec.mjs` (светлая по умолчанию, выбор темы, кнопка без градиента).
+
+## Как пользоваться (для новых экранов)
+
+- **N2 (сезоны):** сезонные цвета — только для баннеров, промо-плашек, линейной графики и логотипа; заводить их токенами `--season-*` в `app/picpac.css` (рядом с палитрой), кнопки, текст и фон — фирменные (`--ds-*`). Линейная графика — в стиле `components/LineArt.js` (`stroke="currentColor"`, вторая линия `.ink2`). Анимации — только `transform`/`opacity`, `--ds-ease`, `--ds-duration`, выключать при `prefers-reduced-motion`.
+- **N8 (промокоды, открытка):** ошибки промокода — `.note.note-error` / текст `.err-text`, успех — `.note.note-ok`, код — `.chip.chip-ok`; открытка — `.card` + пастель `--pp-*`, тени `--ds-shadow-photo`.
+- **N9 (админка):** `.admin` (обёртка уже в `app/admin/layout.js`), вкладки разделов — `components/admin/AdminNav.js` (`.filter-chip[aria-current]`), фильтры — `.filters` + `.filter-chip[aria-pressed]`, таблицы — `.table-wrap` > `.data-table` (`.num` — числа справа), плитки — `.stat-tiles` > `.stat-tile` (`.warn`). Плашка «скидка» со старой ценой: столбец `products.old_price_kop` (цена «от» до скидки, копейки) → каталог отдаёт `oldPriceFrom`, карточка зачёркивает старую цену (`PriceFrom` в `components/CatalogView.js`); плашки — `products.badge` («новинка» / «скидка» / «выбор pic pac» → `.tag-new` / `.tag-sale` / `.tag-choice`).
+- **N4 (модерация):** статусы — `.chip.status-chip[data-status=pending|approved|rejected|returned]`, превью размыто — как сейчас; карточки клиента «на проверке» / «нужна замена» уже окрашены по `data-testid` (`moderation-checking`, `moderation-returned`).
+- **N11 (книга):** `--ds-radius-book`, `--ds-shadow-photo`, бумага — `--pp-white`, рамки — `--pp-frame`; иконка «180°» — как в карточке Classic (`.tag-180`).
+- Тёмную тему в тестах включать cookie `pp_theme=dark`; онбординг в тестах уже пропущен (`playwright.config.mjs`, storageState).

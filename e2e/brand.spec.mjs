@@ -82,3 +82,32 @@ test.describe("онбординг первого входа", () => {
     expect(await page.evaluate(() => localStorage.getItem("pp:onboarding"))).toBe("done");
   });
 });
+
+// Образцы всех плашек, кнопок и сообщений дизайн-системы — на странице в обеих темах; axe проверяет контраст AA
+const SAMPLES = `
+  <div id="ds-samples" style="padding:16px;display:flex;flex-wrap:wrap;gap:8px;background:var(--ds-color-bg-page)">
+    <button class="btn btn-primary">Главная</button><button class="btn">Вторичная</button>
+    <button class="btn btn-secondary">Контур</button><button class="btn-text">Текстовая</button>
+    <span class="chip">Нейтральная</span><span class="chip chip-hl">В корзине</span><span class="chip chip-ok">TEST10</span>
+    <span class="tag tag-new">новинка</span><span class="tag tag-sale">скидка</span><span class="tag tag-choice">выбор pic pac</span><span class="tag tag-180">180°</span>
+    ${["accepted", "moderation", "production", "shipped", "done", "returned", "pending", "approved", "rejected", "draft", "in_cart", "ordered", "open", "answered", "closed"]
+      .map((s) => `<span class="chip status-chip" data-status="${s}">${s}</span>`)
+      .join("")}
+    <p class="note">Сообщение</p><p class="note note-ok">Готово</p><p class="note note-warn"><span class="warn-text">Внимание</span></p><p class="note note-error"><span class="err-text">Ошибка</span></p>
+    <p class="muted">Вторичный текст</p><a href="#ds-samples">Ссылка</a><span class="price-row"><s class="price-old">90,00 BYN</s><span class="price-now">от 81,00 BYN</span></span>
+    <div class="card"><span class="eyebrow">Надзаголовок</span><p class="muted small">Подпись</p></div>
+    <div class="segmented"><label><input type="radio" name="s" checked>Светлая</label><label><input type="radio" name="s">Тёмная</label></div>
+  </div>`;
+
+for (const theme of ["light", "dark"]) {
+  test(`дизайн-система: контраст AA у кнопок, плашек и сообщений — ${theme === "light" ? "светлая" : "тёмная"} тема`, async ({ page }) => {
+    const AxeBuilder = (await import("@axe-core/playwright")).default;
+    if (theme === "dark") await page.context().addCookies([{ name: "pp_theme", value: "dark", url: test.info().project.use.baseURL }]);
+    await page.goto("/help");
+    await expect(page.locator("html")).toHaveAttribute("data-color-scheme", theme);
+    await page.evaluate((html) => document.querySelector("main").insertAdjacentHTML("afterbegin", html), SAMPLES);
+    const r = await new AxeBuilder({ page }).include("#ds-samples").withRules(["color-contrast"]).analyze();
+    const bad = r.violations.flatMap((v) => v.nodes.map((n) => `${n.target.join(" ")}: ${n.failureSummary?.split("\n").pop()}`));
+    expect(bad, bad.join("\n")).toEqual([]);
+  });
+}

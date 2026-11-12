@@ -52,7 +52,8 @@ a.card { transition: box-shadow var(--ds-duration) var(--ds-ease), transform var
 @media (prefers-reduced-motion: reduce) { a.card, a.card:hover { transition: none; transform: none; } }
 
 /* ── 4. Плашки: нейтральная .chip, продуктовые .tag-*, статусы .status-chip[data-status] ── */
-.chip { font-weight: 500; line-height: 1.6; }
+/* заливка плашек — всегда пастель, значит текст всегда тёмный (и в тёмной теме); ux.css красил .chip-ok белым */
+.chip, .chip-hl, .chip-ok { font-weight: 500; line-height: 1.6; color: var(--ds-color-on-chip); }
 .tag {
   display: inline-flex; align-items: center; gap: var(--space-1); padding: 2px 10px; border-radius: var(--ds-radius-pill);
   font-size: var(--ds-text-sm); font-weight: 500; line-height: 1.6; white-space: nowrap;
@@ -342,3 +343,15 @@ html[data-text='lg'] { --sticky-h: 92px; }
   padding: 0 var(--space-3); min-height: var(--tap); font-weight: 500; color: var(--ds-color-text);
 }
 .options[role='tablist'] .option.selected { background: var(--ds-color-bg-inverse); color: var(--ds-color-text-inverse); }
+.options[role='tablist'] .option b, .options[role='tablist'] .option span { color: inherit; display: inline; }
+
+/* ── 25. Корзина на компьютере: слева состав и оформление, справа липкий «Итого» (W-02) ── */
+@media (min-width: 1024px) {
+  main > div:has(> section[aria-labelledby='h-total']) {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(20rem, 24rem); column-gap: var(--space-8); row-gap: 0; align-items: start;
+  }
+  main > div:has(> section[aria-labelledby='h-total']) > * { grid-column: 1; min-width: 0; }
+  main > div:has(> section[aria-labelledby='h-total']) > section[aria-labelledby='h-total'] {
+    grid-column: 2; grid-row: 1 / span 60; position: sticky; top: calc(var(--topbar-h, 61px) + var(--space-4));
+  }
+}

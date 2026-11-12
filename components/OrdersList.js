@@ -35,15 +35,22 @@ export default function OrdersList() {
     return (
       <div>
         <h1>Мои заказы</h1>
-        <div className="card stack">
-          <p>Заказы хранятся в аккаунте. Войдите, чтобы увидеть историю и статусы.</p>
-          <Link href="/login?next=/orders" className="btn btn-primary btn-block">
-            Войти
-          </Link>
-          <Link href="/" className="btn btn-block">
-            В каталог
-          </Link>
-        </div>
+        <EmptyState
+          art="orders"
+          title="Заказы — в вашем аккаунте"
+          actions={
+            <>
+              <Link href="/login?next=/orders" className="btn btn-primary">
+                Войти
+              </Link>
+              <Link href="/" className="btn">
+                В каталог
+              </Link>
+            </>
+          }
+        >
+          Войдите, чтобы увидеть историю заказов и следить за каждым шагом — от печати до доставки.
+        </EmptyState>
       </div>
     );
   if (res.status === 403)

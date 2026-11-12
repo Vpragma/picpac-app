@@ -151,7 +151,7 @@
   --ds-color-status-draft: var(--pp-mist);
   /* лента статусов */
   --ds-color-step-done: var(--ds-color-success);
-  --ds-color-step-current: var(--pp-red);
+  --ds-color-step-current: var(--ds-color-accent); /* в тёмной теме — коралл: значок на нём тёмный */
   --ds-color-step-todo: #d9d1c5;
 
   /* ── 6. Тени — мягкие, тёплые, без цветного свечения ── */

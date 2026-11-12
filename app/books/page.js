@@ -96,7 +96,9 @@ function ProjectCard({ p, product, thumbs }) {
     <div className="card">
       <div className="row between">
         <b style={{ color: "var(--ds-color-text-strong)" }}>{name}</b>
-        <span className={"chip" + st.chip}>{st.label}</span>
+        <span className="chip status-chip" data-status={STATUS[p.status] ? p.status : "draft"}>
+          {st.label}
+        </span>
       </div>
       <div className="muted small">
         {p.sizeId?.replace("x", "×")} см{p.pages ? ` · ${p.pages} стр.` : ""} · {p.photos.length} фото · {p.status === "ordered" && p.orderNumber ? `заказ ${p.orderNumber}` : `изменён ${when}`}
