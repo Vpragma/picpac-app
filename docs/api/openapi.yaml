@@ -406,39 +406,74 @@ paths:
   /api/v1/promo/validate:
     post:
       tags: [Корзина]
-      summary: Проверить промокод (гостю — по subtotal для предпросмотра, клиенту — по корзине на сервере)
+      summary: Проверить промокод (гостю — по subtotal/lines для предпросмотра, клиенту — по корзине на сервере)
+      description: |
+        N8: проверяются срок, «выключен», сезон (если включён сезон, код другого сезона не действует), продукты кода
+        (скидка — только от подходящих позиций), минимальная сумма (по подходящим позициям), лимиты всего и на клиента,
+        личные коды-открытки (только владельцу; гостю — «войдите»). У вошедшего клиента subtotal и lines не читаются —
+        сервер считает по своей корзине (подмена суммы ничего не даёт). При оформлении заказа всё проверяется ещё раз.
       security: []
       requestBody:
         required: true
         content:
           application/json:
-            schema: { type: object, required: [code], properties: { code: { type: string }, subtotal: { type: number } } }
-            example: { code: TEST10 }
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string }
+                subtotal: { type: number, description: "BYN, только гость, только предпросмотр" }
+                lines: { type: array, maxItems: 50, items: { type: object, properties: { slug: { type: string }, kop: { type: integer } } }, description: "Позиции гостевой корзины (продукт и сумма) — для кодов, привязанных к продуктам" }
+            example: { code: OSEN2026, lines: [{ slug: layflat, kop: 8100 }] }
       responses:
         "200":
-          description: "Ответ 200 и для неподходящего кода (это не ошибка запроса — консоль браузера остаётся чистой). valid true — применён, promo — условия кода для пересчёта на экране; valid false — code promo_not_found | promo_expired | promo_not_started | promo_min_total, текст для экрана в message"
+          description: "Ответ 200 и для неподходящего кода (это не ошибка запроса — консоль браузера остаётся чистой). valid true — применён, promo — условия кода для пересчёта на экране (code, kind, value, minTotalKop, validFrom, validTo, label, productSlugs, season, personal), eligibleKop — сумма подходящих позиций; valid false — code promo_not_found | promo_disabled | promo_not_started | promo_expired | promo_season_off | promo_wrong_product | promo_min_total (+ minTotalKop) | promo_limit | promo_limit_user | promo_used | promo_not_yours | promo_login_required, текст для экрана в message"
           content:
             application/json:
               examples:
                 applied: { value: { ok: true, valid: true, message: "Промокод применён", promo: { code: TEST10, kind: percent, label: "−10% на заказ", value: 10, minTotalKop: 0, validFrom: null, validTo: null, active: true }, discountKop: 810, freeDelivery: false } }
                 notFound: { value: { ok: true, valid: false, code: promo_not_found, reason: not_found, message: "Не подходит: такого промокода нет." } }
                 expired: { value: { ok: true, valid: false, code: promo_expired, reason: expired, message: "Истёк: срок действия промокода закончился." } }
-                minTotal: { value: { ok: true, valid: false, code: promo_min_total, reason: min_total, message: "Не подходит: промокод действует при заказе от 50,00 руб." } }
+                minTotal: { value: { ok: true, valid: false, code: promo_min_total, reason: min_total, minTotalKop: 20000, message: "Не подходит: минимальная сумма заказа на фотокниги Lite, Classic, Premium — 200,00 BYN. Добавьте ещё 119,00 BYN." } }
+                wrongProduct: { value: { ok: true, valid: false, code: promo_wrong_product, reason: wrong_product, message: "Не для этого продукта: код действует только на фотокниги Lite, Classic, Premium." } }
+                notYours: { value: { ok: true, valid: false, code: promo_not_yours, reason: not_yours, message: "Не подходит: это личный код другого клиента." } }
         "429": { $ref: "#/components/responses/TooMany" }
+
+  /api/v1/promo/seasonal:
+    get:
+      tags: [Корзина]
+      summary: Действующий сезонный промокод для плашки на главной и в корзине (N8)
+      description: "Сезон экран берёт из GET /api/v1/season (N2). Код — только включённый, не личный, в сроке, нужного сезона; иначе promo: null. Открыт всем, кэш 60 с."
+      security: []
+      parameters:
+        - { name: season, in: query, required: true, schema: { enum: [autumn, blackfriday, newyear] } }
+      responses:
+        "200":
+          description: "{ ok, season, seasonLabel, promo: (условия кода + benefit, validToText) | null }"
+          content:
+            application/json:
+              example: { ok: true, season: autumn, seasonLabel: "Осень", promo: { code: OSEN2026, kind: percent, value: 15, label: "−15% на фотокниги этой осенью", productSlugs: [pages-book, layflat, photopaper-book], season: autumn, benefit: "−15%", validToText: "30 ноября 2026" } }
+        "503": { description: Сезонный код не загрузился }
 
   /api/v1/orders:
     get:
       tags: [Заказы]
       summary: Мои заказы
       description: |
-        Список для экрана «Мои заказы» (последние 100): номер, статус, сумма, дата, названия позиций (`titles`), число позиций (`itemsCount`).
+        Список для экрана «Мои заказы» (последние 100): номер, статус, сумма, дата, названия позиций (`titles`), число позиций (`itemsCount`),
+        открытка с личным кодом на следующий заказ (`card`: code, kind, value, validTo, label, personal, status active | used | expired | disabled) — N8.
         Демо-заказы (`isDemo`) при чтении продвигаются по таймеру — см. `GET /api/v1/orders/{id}`.
       responses:
-        "200": { description: "{ ok, items: (Order & { itemsCount, titles: string[] })[] }" }
+        "200": { description: "{ ok, items: (Order & { itemsCount, titles: string[], card: PromoCard | null })[] }" }
         "401": { $ref: "#/components/responses/Unauthorized" }
     post:
       tags: [Заказы]
-      summary: Оформить заказ из корзины (идемпотентно; сумму считает сервер)
+      summary: Оформить заказ из корзины (идемпотентно; сумму и скидку считает сервер)
+      description: |
+        Промокод (N8) сервер проверяет по корзине и применяет атомарно вместе с заказом (функция create_order_promo):
+        повтор и двойное нажатие с тем же ключом не тратят лимит второй раз; параллельные заказы с кодом
+        «N раз всего» не превышают лимит (второй получает 422 promo_limit). В ответе `order.card` — открытка
+        с личным кодом на следующий заказ (−10%, 60 дней, один раз, только этому клиенту); повтор возвращает тот же код.
       parameters:
         - name: Idempotency-Key
           in: header
@@ -486,7 +521,11 @@ paths:
           content:
             application/json:
               example: { ok: false, error: { code: cart_empty, message: "Корзина пуста. Добавьте книгу или фото, чтобы оформить заказ.", requestId: "…" } }
-        "422": { description: Промокод не подходит или истёк }
+        "422":
+          description: "Промокод не подходит: promo_not_found | promo_disabled | promo_not_started | promo_expired | promo_season_off | promo_wrong_product | promo_min_total | promo_limit | promo_limit_user | promo_used | promo_not_yours — текст для экрана в error.message"
+          content:
+            application/json:
+              example: { ok: false, error: { code: promo_limit, message: "Лимит использований исчерпан: промокод уже применили максимальное число раз.", requestId: "…" } }
         "429": { $ref: "#/components/responses/TooMany" }
 
   /api/v1/orders/{id}:
@@ -823,6 +862,71 @@ paths:
       responses:
         "200": { description: "{ ok: true, removed: 1 }" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/v1/admin/promo:
+    get:
+      tags: [Админ]
+      summary: Промокоды со статистикой (только admin; модератор и клиент — 403)
+      description: |
+        type=general (по умолчанию) — общие коды, type=personal — личные коды-открытки (последние 200, с номером заказа, без данных клиента).
+        У каждого кода: условия, status (active | scheduled | disabled | expired | exhausted) и stats — uses (сколько раз применён),
+        users (сколькими клиентами), totalKop (сумма заказов), discountKop (скидки). summary — плитки-итоги.
+      parameters:
+        - { name: type, in: query, schema: { enum: [general, personal] } }
+      responses:
+        "200": { description: "{ ok, type, items: AdminPromo[], summary: { activeCodes, uses, totalKop, discountKop, cardsIssued, cardsUsed, cardsTotalKop }, products, truncated }" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Админ]
+      summary: Создать промокод (только admin, запись в журнал admin.promo_create)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, kind, value]
+              properties:
+                code: { type: string, pattern: "^[A-Za-z0-9]{3,20}$" }
+                kind: { enum: [percent, amount, free_delivery] }
+                value: { type: integer, description: "percent — 1–100; amount — копейки (от 10); free_delivery — 0" }
+                minTotalKop: { type: integer, minimum: 0 }
+                validFrom: { type: string, format: date, nullable: true, description: "день по Минску, с 00:00" }
+                validTo: { type: string, format: date, nullable: true, description: "день по Минску, до 23:59:59" }
+                maxUses: { type: integer, minimum: 1, nullable: true }
+                maxUsesPerUser: { type: integer, minimum: 1, nullable: true }
+                productSlugs: { type: array, items: { type: string }, description: "пусто — ко всем продуктам" }
+                season: { enum: [autumn, blackfriday, newyear], nullable: true }
+                label: { type: string, maxLength: 120 }
+                active: { type: boolean, default: true }
+            example: { code: OSEN2026, kind: percent, value: 15, productSlugs: [layflat], season: autumn, validTo: "2026-11-30", maxUsesPerUser: 1, label: "−15% на фотокниги осенью" }
+      responses:
+        "201": { description: "{ ok, promo: AdminPromo }" }
+        "400": { $ref: "#/components/responses/Invalid" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { description: "promo_exists — такой код уже есть" }
+        "429": { $ref: "#/components/responses/TooMany" }
+
+  /api/v1/admin/promo/{code}:
+    patch:
+      tags: [Админ]
+      summary: Изменить условия или выключить/включить код (только admin; удаления нет)
+      description: "Любые поля из POST, кроме code. { active: false } — выключить (код сразу перестаёт действовать), { active: true } — включить. В журнал — admin.promo_update (было → стало), admin.promo_disable, admin.promo_enable."
+      parameters:
+        - { name: code, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example: { active: false }
+      responses:
+        "200": { description: "{ ok, promo: AdminPromo }" }
+        "400": { $ref: "#/components/responses/Invalid" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { description: Кода нет }
 
   /api/v1/admin/stats:
     get:
