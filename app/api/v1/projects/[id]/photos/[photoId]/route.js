@@ -12,7 +12,7 @@ export async function DELETE(request, { params }) {
 
   const project = await getOwnProject(ctx, id);
   const { data: photo } = project
-    ? await ctx.db.from("project_photos").select("id, storage_path").eq("id", photoId).eq("project_id", id).eq("user_id", ctx.userId).maybeSingle()
+    ? await ctx.db.from("project_photos").select("id, storage_path, print_path").eq("id", photoId).eq("project_id", id).eq("user_id", ctx.userId).maybeSingle()
     : { data: null };
   if (!photo) {
     await ctx.audit("photo.delete", "photo", photoId, "denied", { reason: "not_found_or_foreign" });
@@ -20,7 +20,7 @@ export async function DELETE(request, { params }) {
   }
   if (project.status === "ordered") return jsonError(409, "project_ordered", "Фото уже в заказе. Удалить его можно в профиле: «Удалить мои фото».");
 
-  const { error: e1 } = await ctx.admin.storage.from(BUCKET).remove([photo.storage_path]);
+  const { error: e1 } = await ctx.admin.storage.from(BUCKET).remove([photo.storage_path, photo.print_path].filter(Boolean));
   const { error: e2 } = await ctx.admin.from("project_photos").delete().eq("id", photoId).eq("user_id", ctx.userId);
   if (e1 || e2) {
     await ctx.audit("photo.delete", "photo", photoId, "error");

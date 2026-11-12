@@ -37,6 +37,7 @@ export default function CartPage() {
   const [promoMsg, setPromoMsg] = useState(null); // { ok, text }
   const [errors, setErrors] = useState({});
   const [busy, setBusy] = useState(false);
+  const [printing, setPrinting] = useState(null); // { done, total } — печатные версии изменённых фото
   const [failure, setFailure] = useState(null); // текст ошибки оформления + «Повторить»
   const [done, setDone] = useState(null); // оформленный заказ
   const lock = useRef(false);
@@ -189,6 +190,11 @@ export default function CartPage() {
       if (readKey("cart", []).some((c) => c?.projectId)) throw new Error(navigator.onLine === false ? "offline" : "Ещё не все фото загрузились. Подождите немного и нажмите «Повторить».");
       // 2. Свежие настройки проектов корзины — на сервер (цену посчитает сервер)
       for (const l of lines) if (l.localProjectId) await syncProject(l.localProjectId);
+      // 2а. Печатные версии изменённых фото: файл полного размера со всеми правками (оригинал не меняется)
+      const localIds0 = lines.map((l) => l.localProjectId).filter(Boolean);
+      const { preparePrintVersions } = await import("../../lib/photo/print");
+      await preparePrintVersions(localIds0, (p) => setPrinting(p.total ? p : null));
+      setPrinting(null);
       // 3. Заказ с ключом идемпотентности
       let key = await kvGet("checkoutKey").catch(() => null);
       if (!key) {
@@ -253,6 +259,7 @@ export default function CartPage() {
       );
     } finally {
       setBusy(false);
+      setPrinting(null);
     }
   }
 
@@ -525,7 +532,7 @@ export default function CartPage() {
           </p>
         )}
         <button className="btn btn-primary btn-block" onClick={confirm} disabled={busy} aria-busy={busy} style={{ marginTop: 8 }}>
-          {busy ? (pending.length ? "Загружаем фото…" : "Оформляем…") : failure ? "Повторить" : "Подтвердить заказ"}
+          {busy ? (pending.length ? "Загружаем фото…" : printing ? `Готовим фото к печати: ${printing.done} из ${printing.total}` : "Оформляем…") : failure ? "Повторить" : "Подтвердить заказ"}
         </button>
       </section>
     </div>

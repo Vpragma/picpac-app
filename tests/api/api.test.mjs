@@ -80,6 +80,8 @@ const closed = [
   ["GET", `/api/v1/orders/${NIL}`],
   ["POST", `/api/v1/orders/${NIL}/pay-test`, { method: "card_test" }],
   ["POST", `/api/v1/projects/${NIL}/photos/upload-url`, { mime: "image/jpeg", bytes: 10 }],
+  ["POST", `/api/v1/projects/${NIL}/photos/${NIL}/print`, { bytes: 10 }],
+  ["PUT", `/api/v1/projects/${NIL}/photos/${NIL}/print`, { path: null }],
   ["GET", `/api/v1/photos/${NIL}/url`],
   ["GET", `/api/v1/interactions/${NIL}/messages`],
   ["GET", "/api/v1/me/export"],
