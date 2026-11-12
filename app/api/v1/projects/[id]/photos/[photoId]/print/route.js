@@ -2,7 +2,7 @@
 // Оригинал не меняется и хранится отдельно; печатная версия лежит рядом: {user}/{project}/print/{photo}/{uuid}.jpg.
 //   POST /api/v1/projects/{id}/photos/{photoId}/print { bytes } — ссылка для загрузки файла (JPEG, до 25 МБ);
 //   PUT  /api/v1/projects/{id}/photos/{photoId}/print { path, edits } — зафиксировать: сервер сам читает начало файла
-//        (JPEG, размеры кадра как у оригинала), записывает print_path и правки фото (edits.print = путь и размеры).
+//        (JPEG, размеры кадра как у оригинала или ровно ×2 при «Резкости для печати»), записывает print_path и правки фото (edits.print = путь и размеры).
 //        Снимок заказа (order_items.snapshot.photos[].edits) берёт правки отсюда — печать получает и правки, и файл.
 //   PUT  { path: null } — правки сняли: печатаем оригинал; { path: null, edits } — файл не собрался, правки параметрами.
 import { sniffImage } from "@/lib/imageMeta";
@@ -118,7 +118,9 @@ export async function PUT(request, { params }) {
     return serverError("storage_unavailable", "Не получилось прочитать печатную версию. Попробуйте ещё раз.");
   }
   // Тот же кадр, что и оригинал (поворот по EXIF меняет местами ширину и высоту) — не другое фото и не уменьшенная копия
-  const same = (a, b) => Math.abs(a - b) <= 2;
+  // «Резкость для печати» (D1, edits.upscale = 2) — ровно ×2 по сторонам
+  const k = body.edits?.upscale === 2 ? 2 : 1;
+  const same = (a, b) => Math.abs(a - b * k) <= 2 * k;
   const fits = meta?.width && ((same(meta.width, photo.width) && same(meta.height, photo.height)) || (same(meta.width, photo.height) && same(meta.height, photo.width)));
   const problem =
     !meta || meta.mime !== "image/jpeg"
@@ -126,7 +128,7 @@ export async function PUT(request, { params }) {
       : total > MAX_PHOTO_BYTES
         ? ["file_too_big", "Печатная версия больше 25 МБ."]
         : !fits
-          ? ["size_mismatch", "Печатная версия должна быть того же размера, что и оригинал."]
+          ? ["size_mismatch", k === 2 ? "Печатная версия с резкостью должна быть ровно вдвое больше оригинала." : "Печатная версия должна быть того же размера, что и оригинал."]
           : null;
   if (problem) {
     await ctx.admin.storage.from(BUCKET).remove([body.path]).catch(() => {});

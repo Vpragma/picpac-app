@@ -196,7 +196,32 @@ for (const [phrase, want] of S12_CASES) {
   });
 }
 
-test("S12: «Размыть фон» нет среди подсказок, пока функции нет", async () => {
+test("D1: «Размыть фон» снова в подсказках — выделение касанием есть", async () => {
   const { SUGGESTIONS } = await import("../../lib/photo/commands.js");
-  assert.ok(!SUGGESTIONS.some((s) => /размыть/i.test(s)), SUGGESTIONS.join(", "));
+  assert.ok(SUGGESTIONS.some((s) => /размыть фон/i.test(s)), SUGGESTIONS.join(", "));
+});
+
+test("D1: команды для выделенного касанием", async () => {
+  const { parseCommand } = await import("../../lib/photo/commands.js");
+  const cases = [
+    ["осветли выделенное", { kind: "maskTone", dir: 1 }],
+    ["сделай выделенное ярче", { kind: "maskTone", dir: 1 }],
+    ["затемни предмет", { kind: "maskTone", dir: -1 }],
+    ["выделенное темнее", { kind: "maskTone", dir: -1 }],
+    ["убери выделенное", { kind: "remove", target: "selection" }],
+    ["удали это", { kind: "remove", target: "selection" }],
+    ["убери машину", { kind: "remove", target: "машину" }],
+    ["убери человека слева", { kind: "remove", target: "человека слева" }],
+    ["размой фон", { kind: "blurBackground" }],
+    ["сделай боке", { kind: "blurBackground" }],
+    // общие правки света не перехватываются
+    ["осветли фото", { kind: "adjust" }],
+    ["затемни тени", { kind: "adjust" }],
+  ];
+  for (const [text, want] of cases) {
+    const r = parseCommand(text);
+    assert.ok(r.ok, text);
+    const s = r.steps[0];
+    for (const [k, v] of Object.entries(want)) assert.equal(s[k], v, `${text}: ${JSON.stringify(s)}`);
+  }
 });

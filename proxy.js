@@ -188,6 +188,7 @@ export const config = {
     "/api/:path*",
     // Остальные страницы — чтобы продлевать сессию; статику не трогаем
     // sw.js — сервис-воркер: свои заголовки в next.config.mjs, сессия ему не нужна
-    "/((?!_next/static|_next/image|api/|favicon.ico|sw\\.js$|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|txt|xml|webmanifest)$).*)",
+    // models/, ort/ — файлы моделей ИИ и wasm (D1): статика, сессия и CSP им не нужны
+    "/((?!_next/static|_next/image|api/|models/|ort/|favicon.ico|sw\\.js$|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|txt|xml|webmanifest|onnx|wasm|mjs)$).*)",
   ],
 };

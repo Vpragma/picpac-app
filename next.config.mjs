@@ -14,6 +14,13 @@ const nextConfig = {
   env: { NEXT_PUBLIC_APP_VERSION: buildVersion() },
   // Без заголовка X-Powered-By: Next.js (SEC-10)
   poweredByHeader: false,
+  // ИИ-редактор (D1): один onnxruntime-web 1.31.1 для transformers.js (SlimSAM) и ластика MI-GAN.
+  // Без этого Turbopack кладёт в сборку две копии ORT и два .wasm (14,8 и 26,9 МБ); wasm берётся из public/ort.
+  turbopack: {
+    resolveAlias: {
+      "onnxruntime-web/webgpu": "./node_modules/onnxruntime-web/dist/ort.webgpu.min.mjs",
+    },
+  },
   experimental: {
     // Страницы 401 и 403 (app/unauthorized.js, app/forbidden.js) для отказа в доступе
     authInterrupts: true,
@@ -31,6 +38,15 @@ const nextConfig = {
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=(), usb=()" },
           { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
         ],
+      },
+      // Модели ИИ и wasm (public/models, public/ort): пути версионированы папкой — браузер может долго не сверять
+      {
+        source: "/models/:path*",
+        headers: [{ key: "Cache-Control", value: "public, max-age=604800" }],
+      },
+      {
+        source: "/ort/:path*",
+        headers: [{ key: "Cache-Control", value: "public, max-age=604800" }],
       },
       // Сервис-воркер: браузер всегда сверяет свежую версию; свой строгий CSP — только свой сайт
       {
