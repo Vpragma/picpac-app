@@ -111,7 +111,10 @@ export default function EditorPage() {
   const router = useRouter();
   const { ready, error, draft, thumbs, uploads } = useDraft();
   const { product, loading } = useProduct(draft?.productSlug);
-  const [step, setStep] = useState("photos");
+  // Шаг можно открыть ссылкой: /editor?project=<id>&step=edits (например, из корзины — «Открыть правки»)
+  const urlStep = useSyncExternalStore(subscribeNone, () => new URLSearchParams(window.location.search).get("step") || "", () => "");
+  const [chosenStep, setStep] = useState(null);
+  const step = chosenStep || (STEPS.some((s) => s.id === urlStep && s.id !== "status") ? urlStep : "photos");
   useStepTimer(step);
   useAnalysis(draft);
   const lowDpi = useLowDpi(draft, product);
