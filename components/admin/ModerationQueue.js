@@ -144,7 +144,7 @@ const Card = forwardRef(function Card({ item, active, onActivate, onDone }, ref)
           </label>
           <label className="field">
             <span>Комментарий для клиента (шаблон можно поправить)</span>
-            <textarea className="input" rows={3} maxLength={500} value={comment} onChange={(e) => setComment(e.target.value)} />
+            <textarea className="input" rows={3} maxLength={500} value={comment} onChange={(e) => setComment(e.target.value)} style={{ fontFamily: "inherit" }} />
           </label>
           <div className="row wrap">
             <button type="button" className="btn btn-primary" onClick={() => decide("return")} disabled={busy}>
@@ -189,15 +189,19 @@ function Stats({ stats }) {
   );
 }
 
-function History() {
+function History({ onStats }) {
   const [res, setRes] = useState(null);
   useEffect(() => {
     let alive = true;
-    callApi("/api/v1/admin/moderation?view=history", { method: "GET" }).then((r) => alive && setRes(r));
+    callApi("/api/v1/admin/moderation?view=history", { method: "GET" }).then((r) => {
+      if (!alive) return;
+      setRes(r);
+      if (r.ok && r.stats) onStats(r.stats);
+    });
     return () => {
       alive = false;
     };
-  }, []);
+  }, [onStats]);
   if (!res) return <p className="muted">Загружаем историю…</p>;
   if (!res.ok) return <p className="err-text">{res.error?.message || "Не получилось загрузить историю."}</p>;
   if (!res.items.length) return <p className="muted">Решений пока нет.</p>;
@@ -241,8 +245,13 @@ export default function ModerationQueue() {
   const [active, setActive] = useState(0);
   const [keys, setKeys] = useState(true);
   const [desktop, setDesktop] = useState(false);
+  const [stats, setStats] = useState(null);
   const cards = useRef({});
-  const load = useCallback(async () => setRes(await callApi("/api/v1/admin/moderation", { method: "GET" })), []);
+  const load = useCallback(async () => {
+    const r = await callApi("/api/v1/admin/moderation", { method: "GET" });
+    setRes(r);
+    if (r.ok && r.stats) setStats(r.stats);
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -295,17 +304,26 @@ export default function ModerationQueue() {
 
   return (
     <div className="stack" data-testid="moderation-queue">
-      <Stats stats={res?.stats} />
+      <Stats stats={stats} />
       <div className="steps" role="tablist" aria-label="Модерация" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))", maxWidth: 420 }}>
-        <button type="button" role="tab" aria-selected={tab === "queue"} className={tab === "queue" ? "active" : ""} onClick={() => setTab("queue")}>
-          Очередь{res?.stats ? ` (${res.stats.pending})` : ""}
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "queue"}
+          className={tab === "queue" ? "active" : ""}
+          onClick={() => {
+            setTab("queue");
+            load();
+          }}
+        >
+          Очередь{stats ? ` (${stats.pending})` : ""}
         </button>
         <button type="button" role="tab" aria-selected={tab === "history"} className={tab === "history" ? "active" : ""} onClick={() => setTab("history")}>
           История решений
         </button>
       </div>
       {tab === "history" ? (
-        <History />
+        <History onStats={setStats} />
       ) : (
         <>
           {desktop && (
