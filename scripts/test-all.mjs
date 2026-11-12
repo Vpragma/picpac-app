@@ -1,5 +1,5 @@
 // npm run test:all — весь регресс-набор подряд (docs/night/plan.md, раздел 9):
-// lint → build → test:unit → (свой сервер next start на порту 3100, если BASE_URL не задан) → test:api → test:auth → e2e.
+// lint → build → test:unit → (свой сервер next start на порту 3100, если BASE_URL не задан) → test:api → test:auth → e2e → test:a11y.
 // test:mfa не входит: ему нужен отдельный ручной шаг (npm run test:mfa).
 // Итог — таблица «шаг · результат · время»; код выхода 1, если хоть один шаг упал.
 import { spawn, spawnSync } from "node:child_process";
@@ -43,6 +43,7 @@ try {
   run("test:api", "npm", ["run", "test:api"], env);
   run("test:auth", "npm", ["run", "test:auth", "--", base], env);
   run("e2e", "npm", ["run", "e2e"], env);
+  run("test:a11y", "npm", ["run", "test:a11y"], env);
 } finally {
   if (server) {
     try {

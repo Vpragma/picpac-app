@@ -22,7 +22,8 @@
     "security:scan": "node --env-file-if-exists=.env.local scripts/security-scan.mjs",
     "seed:synthetic": "node --env-file-if-exists=.env.local scripts/demo-data.mjs synthetic",
     "seed:demo": "node --env-file-if-exists=.env.local scripts/demo-data.mjs demo",
-    "reset:demo": "node --env-file-if-exists=.env.local scripts/demo-data.mjs reset"
+    "reset:demo": "node --env-file-if-exists=.env.local scripts/demo-data.mjs reset",
+    "test:a11y": "playwright test -c playwright.a11y.config.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
