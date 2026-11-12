@@ -13,17 +13,32 @@ import { ADJUST_KEYS, ADJUST_LABELS, addManual, applyEdits, emptyEdits, hasAuto,
 import { autoParams } from "../../lib/photo/analyze";
 import { SUGGESTIONS, parseCommand } from "../../lib/photo/commands";
 import { photoBadges } from "../../lib/photo/badges";
+import { applyOps, findSun } from "../../lib/photo/local";
 import { setAutoEnhance, useAutoEnhance } from "../../lib/photo/settings";
 import { notify } from "../../lib/store";
 
 const PREVIEW_SIDE = 1280;
 
-// Местные правки по маске — делает S03c (SlimSAM, ластик, размытие фона). Пока — честный ответ, не молчание.
+// Местные правки. «Убери солнце/блики» — поиск самой яркой компактной области и заливка (lib/photo/local.js),
+// правка — в edits.ops. Выделение касанием (SlimSAM, ластик, размытие фона) — следующий шаг; пока — честный ответ.
 const LOCAL_ACTIONS = {
   blurBackground: () => ({ say: "Размытие фона появится вместе с выделением касанием — скоро. Сейчас работают свет и цвет: «ярче», «теплее», «убери пересвет»." }),
-  remove: (step) => ({
-    say: `Убрать ${step.target === "sun" ? "солнце" : step.target === "glare" ? "блики" : "«" + step.target + "»"} пока не умею — ластик появится вместе с выделением касанием. Сейчас работают свет и цвет: «ярче», «теплее», «убери пересвет».`,
-  }),
+  remove: (step, { photo, edits }) => {
+    if (step.target === "sun" || step.target === "glare") {
+      const what = step.target === "sun" ? "солнце" : "блик";
+      const img = cache.get(photo.id);
+      if (!img) return { say: "Ещё открываем фото — повторите через секунду" };
+      const op = findSun(img.data, img.width, img.height);
+      if (!op) return { say: `Не нашёл на фото яркого пятна — ${what} убрать не получится. Попробуйте «убери пересвет».` };
+      const side = Math.max(img.width, img.height);
+      const twice = (edits.ops || []).some((o) => o.kind === "heal" && Math.hypot((o.cx - op.cx) * img.width, (o.cy - op.cy) * img.height) < o.r * side);
+      if (twice) return { say: `${what[0].toUpperCase() + what.slice(1)} уже убрано. «Отменить» вернёт как было.` };
+      return { say: step.target === "sun" ? "Убрали солнце" : "Убрали блик", edits: { ...edits, ops: [...(edits.ops || []), op], by: "command" } };
+    }
+    return {
+      say: `Убрать «${step.target}» пока не умею — ластик появится вместе с выделением касанием. Сейчас работают свет и цвет и «убери солнце».`,
+    };
+  },
   creative: () => ({ say: "Творческие правки (небо, снег) появятся в облачном редакторе. Сейчас работают свет и цвет: «ярче», «теплее», «убери пересвет»." }),
 };
 
@@ -128,7 +143,8 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
         return resetOriginal();
       } else {
         const handler = LOCAL_ACTIONS[step.kind];
-        const res = handler ? handler(step, { photo }) : { say: "Пока не умею. Попробуйте: «ярче», «теплее», «убери пересвет»." };
+        const res = handler ? handler(step, { photo, edits: next }) : { say: "Пока не умею. Попробуйте: «ярче», «теплее», «убери пересвет»." };
+        if (res.edits) next = res.edits;
         said.push(res.say);
       }
     }
@@ -372,7 +388,9 @@ function Preview({ photo, thumb, edits }) {
         c.height = src.height;
       }
       const out = new ImageData(src.width, src.height);
-      applyEdits(src.data, out.data, JSON.parse(key));
+      const ed = JSON.parse(key);
+      applyEdits(src.data, out.data, ed);
+      if (ed?.ops?.length) applyOps(out.data, src.width, src.height, ed.ops);
       c.getContext("2d").putImageData(out, 0, 0);
       c.dataset.rendered = key;
     }, 0);
