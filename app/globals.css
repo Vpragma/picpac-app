@@ -362,6 +362,8 @@ button, input, select { font: inherit; color: inherit; }
   background: var(--ds-color-warning-bg); color: var(--ds-color-text-strong); border: 1px solid var(--ds-color-warning);
   font-size: 14px; box-shadow: var(--ds-shadow-popover);
 }
+/* S12: на экранах с панелью цены плашка стоит над панелью и не закрывает главную кнопку */
+body:has(.sticky-bar) .net-banner { bottom: calc(var(--tabbar-h) + var(--sticky-h) + 12px + env(safe-area-inset-bottom)); }
 .net-banner b { font-weight: 500; }
 .net-banner-queue { display: block; }
 .pwa-update {
@@ -400,12 +402,21 @@ button, input, select { font: inherit; color: inherit; }
 .formula { display: inline-block; position: relative; vertical-align: middle; }
 .formula summary {
   list-style: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
-  width: 28px; height: 28px; border-radius: 999px; border: 1px solid var(--ds-color-border);
-  font-size: 14px; color: var(--ds-color-text-secondary); background: var(--ds-color-bg-surface);
+  /* зона нажатия 44×44, видимый кружок 28 px */
+  width: 44px; height: 44px; margin: -8px; border-radius: 999px; border: 0;
+  font-size: 14px; color: var(--ds-color-text-secondary);
+  background: radial-gradient(circle, var(--ds-color-bg-surface) 13px, var(--ds-color-border) 13.5px, var(--ds-color-border) 14px, transparent 14.5px);
 }
 .formula summary::-webkit-details-marker { display: none; }
 .formula[open] p {
   position: absolute; right: 0; z-index: 5; width: min(280px, 80vw); margin: 6px 0 0; padding: 10px 12px;
   background: var(--ds-color-bg-surface); color: var(--ds-color-text-strong); border: 1px solid var(--ds-color-border);
   border-radius: var(--ds-radius-md); box-shadow: var(--ds-shadow-popover);
+}
+/* S12: на узком экране подсказка — по ширине экрана с отступами 16 px, не уходит за левый край */
+@media (max-width: 640px) {
+  .formula[open] p {
+    position: fixed; left: 16px; right: 16px; width: auto; top: auto;
+    bottom: calc(var(--tabbar-h) + 16px + env(safe-area-inset-bottom)); z-index: 60;
+  }
 }
