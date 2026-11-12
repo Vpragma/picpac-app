@@ -18,6 +18,9 @@ const PATTERNS = [
 // Значения настоящих секретов (если есть .env.local) — ищем их буквально
 const SECRET_NAMES = ["SUPABASE_SECRET_KEY", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_JWT_SECRET", "POSTGRES_PASSWORD", "POSTGRES_URL", "CLOUDFLARE_API_TOKEN", "VAPID_PRIVATE_KEY", "CRON_SECRET", "ERP_SECRET", "ANALYTICS_SALT", "SEED_PASSWORD"];
 const secrets = SECRET_NAMES.map((n) => [n, process.env[n]]).filter(([, v]) => v && v.length >= 12);
+// Пароль демо-аккаунтов жюри (SEED_PASSWORD) опубликован в README намеренно — по нему жюри входит в прототип.
+// В репозитории и истории его не считаем находкой, во фронтенде (.next/static) — считаем.
+const PUBLIC_IN_REPO = new Set(["SEED_PASSWORD"]);
 
 // JWT с ролью anon — публичный ключ (его можно показывать), service_role — секрет
 function jwtIsPublic(token) {
@@ -29,14 +32,14 @@ function jwtIsPublic(token) {
   }
 }
 
-function scanText(text, where, found) {
+function scanText(text, where, found, { repo = false } = {}) {
   for (const [name, re] of PATTERNS) {
     for (const m of text.matchAll(re)) {
       if (name.startsWith("JWT") && jwtIsPublic(m[0])) continue;
       found.push(`${name} — ${where}`);
     }
   }
-  for (const [name, value] of secrets) if (text.includes(value)) found.push(`значение ${name} — ${where}`);
+  for (const [name, value] of secrets) if (!(repo && PUBLIC_IN_REPO.has(name)) && text.includes(value)) found.push(`значение ${name} — ${where}`);
 }
 
 const git = (args, max = 1024 * 1024 * 1024) => execFileSync("git", args, { cwd: ROOT, maxBuffer: max, encoding: "utf8" });
@@ -50,7 +53,7 @@ const report = {};
     if (/\.(jpe?g|png|gif|webp|ico|woff2?|onnx|wasm|bin)$/i.test(f)) continue;
     const p = join(ROOT, f);
     if (!existsSync(p) || statSync(p).size > 5 * 1024 * 1024) continue;
-    scanText(readFileSync(p, "utf8"), f, found);
+    scanText(readFileSync(p, "utf8"), f, found, { repo: true });
   }
   report["файлы репозитория"] = { checked: files.length, found };
 }
@@ -63,7 +66,7 @@ const report = {};
   const lines = log.split("\n");
   for (const line of lines) {
     if (line.startsWith("@@commit ")) commit = line.slice(9);
-    else if (line.startsWith("+") || line.startsWith("-")) scanText(line, `коммит ${commit}`, found);
+    else if (line.startsWith("+") || line.startsWith("-")) scanText(line, `коммит ${commit}`, found, { repo: true });
   }
   const refs = git(["for-each-ref", "--format=%(refname:short)"]).split("\n").filter(Boolean).length;
   report["история git"] = { checked: `${refs} веток и тегов, ${lines.length} строк`, found: [...new Set(found)] };
