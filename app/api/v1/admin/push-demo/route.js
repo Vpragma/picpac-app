@@ -63,7 +63,15 @@ export async function POST(request) {
   if (response) return response;
   const { body, response: bad } = await parseBody(request, schema);
   if (bad) return bad;
-  if (await rateLimited(`w:push-demo:${ctx.userId}`, 1, 10)) {
+  // Окна ограничителя выровнены по 10 с: два нажатия на стыке окон прошли бы оба — добиваем скользящими 10 с по журналу
+  const since = new Date(Date.now() - 10_000).toISOString();
+  const { count: recent } = await ctx.admin
+    .from("audit_log")
+    .select("id", { count: "exact", head: true })
+    .eq("action", "admin.push_demo")
+    .eq("user_id", ctx.userId)
+    .gte("at", since);
+  if ((await rateLimited(`w:push-demo:${ctx.userId}`, 1, 10)) || recent > 0) {
     const res = jsonError(429, "rate_limited", "Не чаще одного пуша в 10 секунд. Подождите и нажмите снова.");
     res.headers.set("Retry-After", "10");
     return res;
