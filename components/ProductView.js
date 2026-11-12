@@ -9,6 +9,7 @@ import { daysWord, etaFromDay, formatByn, formatEtaRange, linePrice, minskDate }
 import { plural } from "../lib/plural";
 import { createProject } from "../lib/draft";
 import { notify } from "../lib/store";
+import { OPENS_FLAT, tagClass } from "./CatalogView";
 
 // Группы опций из каталога — в таком порядке и с такими подписями
 const GROUPS = [
@@ -124,11 +125,19 @@ function ProductForm({ product: p, delivery, serverToday, gallery }) {
         <Link href="/" className="back-link">
           ← Каталог
         </Link>
-        <h1 style={{ marginTop: 8 }}>
-          {isBook ? "Фотокнига " : ""}
-          {p.name}
-        </h1>
-        <p className="muted">{p.tagline}</p>
+        <div className="product-head" style={{ marginTop: 8 }}>
+          <h1>
+            {isBook ? "Фотокнига " : ""}
+            {p.name}
+          </h1>
+          {(p.badge || OPENS_FLAT.has(p.slug)) && (
+            <span className="tags">
+              {p.badge && <span className={tagClass(p.badge)}>{p.badge}</span>}
+              {OPENS_FLAT.has(p.slug) && <span className="tag tag-180">раскрытие 180°</span>}
+            </span>
+          )}
+        </div>
+        <p className="muted" style={{ marginTop: 4 }}>{p.tagline}</p>
         {gallery}
         <p>{p.description}</p>
 

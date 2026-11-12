@@ -66,3 +66,11 @@ test("пуш: свой путь, обрезка, метка устройства
   assert.equal(deviceLabel("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Version/17.0 Mobile/15E148 Safari/604.1"), "iPhone/iPad · Safari");
   assert.equal(deviceLabel("Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36"), "Android · Chrome");
 });
+
+test("N7: напоминание о печати фото — не «книга»", () => {
+  const t = cartReminderText({ title: "", productName: "Печать фото", productSlug: "photo" });
+  assert.doesNotMatch(t.inbox.title + t.inbox.body + t.push.body, /[Кк]ниг/);
+  assert.match(t.inbox.title, /Фото ждут в корзине/);
+  const b = cartReminderText({ title: "Свадьба", productName: "Classic", productSlug: "layflat" });
+  assert.match(b.inbox.title, /Книга ждёт в корзине/);
+});

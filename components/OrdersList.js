@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { callApi } from "../lib/api";
 import { getMe } from "../lib/me";
 import { StatusChip, byn, minskDay } from "./OrderBits";
+import { EmptyState } from "./LineArt";
 
 const POLL_MS = 15000;
 
@@ -77,13 +78,17 @@ export default function OrdersList() {
     <div>
       <h1>Мои заказы</h1>
       {!orders.length && (
-        <div className="card">
-          <p>Заказов пока нет.</p>
-          <p className="muted">Ваши фотокниги и фото появятся здесь сразу после оформления.</p>
-          <Link href="/" className="btn btn-primary">
-            В каталог
-          </Link>
-        </div>
+        <EmptyState
+          art="orders"
+          title="Заказов пока нет"
+          actions={
+            <Link href="/" className="btn btn-primary">
+              В каталог
+            </Link>
+          }
+        >
+          Здесь появятся ваши фотокниги и фото — сразу после оформления. Будем следить за каждым шагом вместе.
+        </EmptyState>
       )}
       {orders.map((o) => (
         <Link key={o.id} href={"/orders/" + o.id} className="card order-row" style={{ display: "block", textDecoration: "none", color: "inherit" }} data-number={o.number}>
