@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { IconBook, IconCart, IconGrid, IconPackage, IconUser } from "./icons";
 import { cartCount, useCart } from "../lib/cart";
 import { startSync } from "../lib/sync";
+import Pwa from "./Pwa";
 
 const TABS = [
   { href: "/", label: "Каталог", icon: IconGrid, match: (p) => p === "/" || p.startsWith("/product") },
@@ -79,6 +80,7 @@ export default function Shell({ children }) {
         })}
       </nav>
       <Toasts hidden={path.startsWith("/login")} />
+      <Pwa />
     </div>
   );
 }

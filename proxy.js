@@ -187,6 +187,7 @@ export const config = {
     "/admin/:path*",
     "/api/:path*",
     // Остальные страницы — чтобы продлевать сессию; статику не трогаем
-    "/((?!_next/static|_next/image|api/|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|txt|xml|webmanifest)$).*)",
+    // sw.js — сервис-воркер: свои заголовки в next.config.mjs, сессия ему не нужна
+    "/((?!_next/static|_next/image|api/|favicon.ico|sw\\.js$|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|txt|xml|webmanifest)$).*)",
   ],
 };

@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { DndContext, KeyboardSensor, MouseSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, rectSortingStrategy, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable";
 import {
@@ -10,6 +10,9 @@ import {
   addGalleryFiles,
   copyProject,
   dismissUpload,
+  getDraftState,
+  openProject,
+  whenDraftReady,
   loadGallery,
   movePhoto,
   removePhoto,
@@ -27,6 +30,7 @@ import { runChecks } from "../../lib/checks";
 import { notify } from "../../lib/store";
 import { addToCart as putInCart } from "../../lib/cart";
 import { callApi } from "../../lib/api";
+import { whenInitialSync } from "../../lib/sync";
 import DraftError from "../../components/DraftError";
 import { IconAlert, IconCheck, IconLeft, IconRight, IconTrash, IconUpload } from "../../components/icons";
 import { photoBadges } from "../../lib/photo/badges";
@@ -72,6 +76,35 @@ function placeStyle(photo) {
   return { objectFit: photo?.fit === "contain" ? "contain" : "cover", objectPosition: photo?.focus || "50% 50%" };
 }
 
+// Прямая ссылка на проект (X-7): /editor?project=<id> — из пуша, закладки или установленного приложения.
+// id — местный или из аккаунта (serverId). Проекты аккаунта появляются на устройстве после первой синхронизации.
+const subscribeNone = () => () => {};
+function useProjectLink() {
+  const id = useSyncExternalStore(subscribeNone, () => new URLSearchParams(window.location.search).get("project") || "", () => "");
+  const [done, setDone] = useState({ id: "", found: true });
+  useEffect(() => {
+    if (!id) return;
+    let alive = true;
+    const find = () => Object.values(getDraftState().projects || {}).find((p) => p.id === id || p.serverId === id);
+    (async () => {
+      await whenDraftReady();
+      let p = find();
+      if (!p) {
+        await whenInitialSync().catch(() => null);
+        p = find();
+      }
+      if (p) await openProject(p.id);
+      if (alive) setDone({ id, found: !!p });
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [id]);
+  if (!id) return { state: "none", id };
+  if (done.id !== id) return { state: "opening", id };
+  return { state: done.found ? "open" : "missing", id };
+}
+
 export default function EditorPage() {
   const router = useRouter();
   const { ready, error, draft, thumbs, uploads } = useDraft();
@@ -80,8 +113,23 @@ export default function EditorPage() {
   useAnalysis(draft);
   const lowDpi = useLowDpi(draft, product);
   const dups = useMemo(() => findDuplicates(draft?.photos || []), [draft?.photos]);
+  const link = useProjectLink();
 
   if (error) return <DraftError />;
+  if (link.state === "opening") return <p className="muted">Открываем проект…</p>;
+  if (link.state === "missing")
+    return (
+      <div className="card stack">
+        <h2>Проект не найден на этом устройстве</h2>
+        <p className="muted">Если он сохранён в аккаунте — войдите, и он откроется. Черновики гостя хранятся только на том устройстве, где их создали.</p>
+        <Link href={"/login?next=" + encodeURIComponent("/editor?project=" + link.id)} className="btn btn-primary btn-block">
+          Войти
+        </Link>
+        <Link href="/books" className="btn btn-block">
+          Мои книги
+        </Link>
+      </div>
+    );
 
   if (!ready || (draft && loading)) return <p className="muted">Открываем черновик…</p>;
   if (!draft || !product)

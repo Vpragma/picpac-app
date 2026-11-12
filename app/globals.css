@@ -354,3 +354,21 @@ button, input, select { font: inherit; color: inherit; }
 .pe-switch { gap: 12px; cursor: pointer; }
 .pe-switch input { width: 44px; height: 24px; accent-color: var(--ds-color-success); flex: none; }
 .pe-badges.compact .pe-badge { max-width: 100%; white-space: nowrap; }
+
+/* S07: приложение (PWA) — плашка «Нет сети», тост новой версии, установка */
+.net-banner {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(72px + env(safe-area-inset-bottom));
+  width: calc(100% - 32px); max-width: 488px; z-index: 55; padding: 10px 14px; border-radius: var(--ds-radius-md);
+  background: var(--ds-color-warning-bg); color: var(--ds-color-text-strong); border: 1px solid var(--ds-color-warning);
+  font-size: 14px; box-shadow: var(--ds-shadow-popover);
+}
+.net-banner b { font-weight: 500; }
+.net-banner-queue { display: block; }
+.pwa-update {
+  position: fixed; left: 50%; transform: translateX(-50%); top: calc(64px + env(safe-area-inset-top));
+  width: calc(100% - 32px); max-width: 488px; z-index: 61; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.pwa-install { margin-top: 16px; }
+.pwa-install h2 { font-size: 18px; font-weight: 500; margin: 0 0 6px; }
+.pwa-ios-steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.pwa-install-note { margin-top: 16px; font-size: 14px; }
