@@ -7,7 +7,8 @@ import { benefitText, promoDate } from "../../lib/promo";
 import { ART, BRAND_COLORS, CARD_H, CARD_W, cardText, drawCard, seasonColors, spaced } from "./postcardArt";
 import "./promo.css";
 
-export default function Postcard({ card, orderNumber, compact = false }) {
+// hideHeading — когда у секции вокруг уже есть свой заголовок (экран заказа)
+export default function Postcard({ card, orderNumber, compact = false, hideHeading = false }) {
   const [msg, setMsg] = useState(null);
   const [busy, setBusy] = useState(false);
   const [season, setSeason] = useState(null);
@@ -62,10 +63,12 @@ export default function Postcard({ card, orderNumber, compact = false }) {
     card.status === "used" ? "Код уже использован в другом заказе." : card.status === "expired" ? "Срок кода закончился." : card.status === "disabled" ? "Код выключен." : null;
 
   return (
-    <section className={"postcard" + (compact ? " postcard-compact" : "")} aria-labelledby="postcard-title" data-testid="postcard" data-code={card.code}>
-      <h2 id="postcard-title" className="visually-hidden">
-        Открытка с личным кодом
-      </h2>
+    <section className={"postcard" + (compact ? " postcard-compact" : "")} aria-labelledby={hideHeading ? undefined : "postcard-title"} aria-label={hideHeading ? "Открытка с личным кодом" : undefined} data-testid="postcard" data-code={card.code}>
+      {!hideHeading && (
+        <h2 id="postcard-title" className="visually-hidden">
+          Открытка с личным кодом
+        </h2>
+      )}
       <svg className="postcard-art" viewBox={`0 0 ${CARD_W} ${CARD_H}`} role="img" aria-label={label} data-season={season?.season || undefined}>
         <rect x="0" y="0" width={CARD_W} height={CARD_H} rx="22" fill={c.paper} />
         <rect x="14" y="14" width={CARD_W - 28} height={CARD_H - 28} rx="14" fill="none" stroke={c.frame} strokeWidth="1.5" />

@@ -193,7 +193,7 @@ export default function OrderPage() {
           <p className="muted small" style={{ marginTop: 0 }}>
             Личный код на следующий заказ: один раз и только для вас. Введите его в корзине.
           </p>
-          <Postcard card={o.card} orderNumber={o.number} compact />
+          <Postcard card={o.card} orderNumber={o.number} compact hideHeading />
         </section>
       )}
 

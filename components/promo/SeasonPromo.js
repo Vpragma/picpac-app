@@ -1,7 +1,7 @@
 "use client";
 // Сезонная плашка с действующим промокодом (N8) — на главной и в корзине.
-// Сезон — из GET /api/v1/season (N2, договор docs/night/night2-seasons.md). Нет маршрута, нет ответа или «none» —
-// плашки нет, ничего не ломается. Код — из GET /api/v1/promo/seasonal: только включённый, в сроке, нужного сезона.
+// Сезон — из GET /api/v1/season (N2, договор docs/night/night2-seasons.md) или из data-season на <html>.
+// Нет маршрута, нет ответа или «none» — плашки нет, ничего не ломается. Код — из GET /api/v1/promo/seasonal: только включённый, в сроке, нужного сезона.
 // Цвета — --season-*, если N2 их задал, иначе фирменная пастель (app/picpac.css).
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -33,10 +33,11 @@ export default function SeasonPromo({ place = "home", applied = null, onApply = 
 
   useEffect(() => {
     let alive = true;
-    if (!HAS_SEASON_API) return;
+    // Быстрый путь: N2 ставит data-season на <html> на сервере — тогда запрос сезона не нужен
+    const attr = document.documentElement.getAttribute("data-season");
+    if (attr === "none" || (!attr && !HAS_SEASON_API)) return;
     (async () => {
-      const s = await getJson("/api/v1/season");
-      const season = s?.season;
+      const season = TITLES[attr] ? attr : (await getJson("/api/v1/season"))?.season;
       if (!season || season === "none" || !TITLES[season]) return;
       const r = await getJson(`/api/v1/promo/seasonal?season=${encodeURIComponent(season)}`);
       if (alive && r?.promo) setPromo({ ...r.promo, season });
