@@ -90,6 +90,25 @@ test("клиент: обычное фото — без флага и проце�
   expect(errors).toEqual([]);
 });
 
+test("устройство пропустило (подмена «чисто»), сервер нашёл — клиент всё равно видит «проверит модератор»", async ({ page }) => {
+  const user = await createTestUser(admin, ["client"], "n4r" + Date.now().toString(36).slice(-4));
+  users.push(user);
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.addInitScript(() => (window.__PICPAC_TEST__ = { ...(window.__PICPAC_TEST__ || {}), nsfw: "clean" }));
+  await login(page, user);
+  await page.goto("/product/photo");
+  await page.getByRole("button", { name: "Выбрать фото" }).click();
+  await page.locator('input[type="file"][multiple]').setInputFiles([{ name: "flag.jpg", mimeType: "image/jpeg", buffer: await flagJpeg() }]);
+  await expect(page.locator('.photo-cell[data-photo="flag.jpg"] [data-upload]')).toHaveText("Загружено", { timeout: 300_000 });
+  // Флаг с устройства не пришёл — его ставит фоновая проверка сервера, приложение перечитывает флаги через 25 с
+  await expect(page.locator('.photo-cell[data-photo="flag.jpg"] [data-badge="mod"]')).toBeVisible({ timeout: 150_000 });
+  const { data } = await admin.from("project_photos").select("nsfw, moderation").eq("user_id", user.id);
+  expect(data[0].nsfw?.nsfw).toBeLessThan(0.1);
+  expect(data[0].moderation.findings).toEqual([{ id: "nazi", level: "high" }]);
+  expect(errors).toEqual([]);
+});
+
 test("модератор: вывод словами, размытое фото до «Показать», клавиши и история решений", async ({ page }, info) => {
   const client = await createTestUser(admin, ["client"], "n4o" + Date.now().toString(36).slice(-4));
   const mod = await createTestUser(admin, ["moderator"], "n4m" + Date.now().toString(36).slice(-4));
