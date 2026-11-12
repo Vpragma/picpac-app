@@ -102,3 +102,18 @@ test("N4: пороги на тестовом наборе — 0 ложных в 
     assert.deepEqual(missed, [], `пропущено в ${folder}`);
   }
 });
+
+test("N4: сервер — у вытянутого кадра CLIP смотрит центр и два края, у квадратного только центр", async () => {
+  const sharp = (await import("sharp")).default;
+  const { preparePixels } = await import("../../lib/server/moderationEngine.js");
+  const wide = await sharp({ create: { width: 900, height: 600, channels: 3, background: "#4a7" } }).jpeg().toBuffer();
+  const square = await sharp({ create: { width: 600, height: 600, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).png().toBuffer();
+  const a = await preparePixels(wide, { crops: 3 });
+  assert.equal(a.clipEdges.length, 2);
+  assert.equal(a.clipPx.length, core.CLIP_SIZE * core.CLIP_SIZE * 3);
+  assert.equal(a.nsfwPx.length, core.NSFW_SIZE * core.NSFW_SIZE * 3);
+  assert.equal((await preparePixels(wide)).clipEdges.length, 0, "как на устройстве — только центр");
+  const b = await preparePixels(square, { crops: 3 });
+  assert.equal(b.clipEdges.length, 0);
+  assert.equal(b.clipPx[0], 255, "прозрачное — на белом фоне");
+});
