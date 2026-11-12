@@ -159,7 +159,7 @@ export default async function AdminOrdersPage({ searchParams }) {
       {res && (
         <>
           <p className="small" aria-live="polite" data-testid="orders-summary">
-            {res.total ? `Найдено заказов: ${res.total.toLocaleString("ru-RU")}. Страница ${res.page} из ${res.pages}.` : "По этим фильтрам заказов нет."}
+            {res.total ? `Найдено заказов: ${res.total.toLocaleString("ru-RU")}.${res.page <= res.pages ? ` Страница ${res.page} из ${res.pages}.` : ""}` : "По этим фильтрам заказов нет."}
           </p>
           {/* N7: страница за пределами списка (старая ссылка, ?page=99) — пусто, но не ошибка */}
           {!res.items.length && res.total > 0 && (
