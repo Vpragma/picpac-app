@@ -7,6 +7,8 @@ import { createTestUser, deleteTestUser, supabaseAdmin } from "../tests/helpers/
 let admin;
 let user;
 
+// W-15: подмена результата классификатора nsfwjs — «чистое» фото (настоящая модель на CPU в headless ≈ 3 с на фото)
+test.beforeEach(async ({ page }) => page.addInitScript(() => (window.__PICPAC_TEST__ = { ...(window.__PICPAC_TEST__ || {}), nsfw: "clean" })));
 test.beforeEach(async ({}, info) => {
   admin = supabaseAdmin();
   user = await createTestUser(admin, ["client"], "e2eai" + info.parallelIndex + Date.now().toString(36).slice(-4));

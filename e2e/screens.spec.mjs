@@ -15,6 +15,8 @@ let admin;
 let client;
 let staff;
 
+// W-15: подмена результата классификатора nsfwjs — «чистое» фото (настоящая модель на CPU в headless ≈ 3 с на фото)
+test.beforeEach(async ({ page }) => page.addInitScript(() => (window.__PICPAC_TEST__ = { ...(window.__PICPAC_TEST__ || {}), nsfw: "clean" })));
 test.beforeEach(async ({}, info) => {
   admin = supabaseAdmin();
   const tag = Date.now().toString(36).slice(-4) + info.parallelIndex;
@@ -115,6 +117,7 @@ async function corePath(page, shot) {
 async function adminStats(browser, info, shot) {
   const u = info.project.use;
   const ctx = await browser.newContext({ viewport: u.viewport, hasTouch: u.hasTouch, locale: "ru-RU", timezoneId: "Europe/Minsk", baseURL: u.baseURL, extraHTTPHeaders: u.extraHTTPHeaders });
+  await ctx.addInitScript(() => (window.__PICPAC_TEST__ = { ...(window.__PICPAC_TEST__ || {}), nsfw: "clean" }));
   const page = await ctx.newPage();
   await page.goto("/login");
   await login(page, staff);

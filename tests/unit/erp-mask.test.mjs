@@ -70,3 +70,23 @@ test("D4: пороги цензуры — граница не включаетс
   assert.equal(needsModeration({ porn: NaN, hentai: "x", sexy: undefined }), false);
   assert.ok(RETURN_REASONS.quality && Object.keys(RETURN_REASONS).length === 6);
 });
+
+test("бот поддержки: «Где мой заказ?» — статус, готовность и дата по данным заказа; иное — срок ответа оператора", async () => {
+  const { botReply, etaText } = await import("../../lib/supportBot.js");
+  const order = { number: "PP-261112-10001", status: "production", substatus: "Печать", erp_stage: "print_started", eta_from: "2026-11-16T21:00:00Z", eta_to: "2026-11-17T21:00:00Z" };
+  const r = botReply({ topic: "Где мой заказ?", order, slaText: "13 ноября в 12:00" });
+  assert.match(r.body, /^Обращение по заказу PP-261112-10001 получено\./);
+  assert.match(r.body, /«Производство» — Печать, готовность 45 %/);
+  assert.match(r.body, /17–18 ноября/);
+  assert.equal(etaText("2026-11-29T21:00:00Z", "2026-12-01T21:00:00Z"), "30 ноября – 2 декабря");
+  const other = botReply({ topic: "Другой вопрос", order, slaText: "13 ноября в 12:00" });
+  assert.match(other.body, /Обращение по заказу PP-261112-10001 получено\. Оператор ответит до 13 ноября в 12:00\./);
+});
+
+test("бот поддержки: заявка на перепечатку — причина и срок ответа оператора", async () => {
+  const { botReply } = await import("../../lib/supportBot.js");
+  const order = { number: "PP-261112-10002", status: "done" };
+  const r = botReply({ topic: "Перепечатка: ошибка в макете", order, slaText: "13 ноября в 12:00" });
+  assert.match(r.body, /^Обращение по заказу PP-261112-10002 получено\. Заявка на перепечатку, причина: ошибка в макете\./);
+  assert.match(botReply({ topic: "Перепечатка: брак печати", order, slaText: "x" }).body, /брак печати.*Сфотографируйте брак/);
+});
