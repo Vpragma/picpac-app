@@ -172,6 +172,9 @@ test("выделение касанием: размыть фон, убрать �
 
   let order;
   await test.step("корзина → заказ: печатные версии собраны на устройстве", async () => {
+    // Оба фото уже в аккаунте (на медленной сети маленькое фото догружается дольше собаки)
+    await page.getByRole("navigation", { name: "Шаги редактора" }).getByRole("button", { name: "Фото" }).click();
+    for (const f of ["dog.jpg", "nesvizh-small.jpg"]) await expect(page.locator(`.photo-cell[data-photo="${f}"] [data-upload]`)).toHaveText("Загружено", { timeout: 180_000 });
     await page.getByRole("navigation", { name: "Шаги редактора" }).getByRole("button", { name: "Проверка" }).click();
     const toCart = page.getByRole("button", { name: /^(В корзину|Обновить в корзине)$/ });
     await expect(toCart).toBeVisible();
