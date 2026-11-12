@@ -11,6 +11,7 @@ test("«В корзину»: миниатюра летит к значку ко�
   page.on("pageerror", (e) => errors.push(String(e)));
   await page.goto("/help");
   await expect(page.locator(".topbar .cart-btn")).toBeVisible();
+  await page.waitForLoadState("networkidle"); // обработчик события ставится после гидратации
   // нажатие (точка старта) и событие «добавлено в корзину» — его шлёт lib/cart.js
   await page.mouse.click(200, 500);
   await page.evaluate((cover) => window.dispatchEvent(new CustomEvent("picpac-cart-add", { detail: { cover } })), COVER);
