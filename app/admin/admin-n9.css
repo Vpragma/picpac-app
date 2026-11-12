@@ -1,0 +1,46 @@
+/* N9 · админка сильнее: журнал, заказы, пользователи, каталог. Только токены дизайн-системы N1 (app/picpac.css). */
+
+/* ── Журнал: группы «×N», раскрытие, страницы ── */
+.audit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0 var(--space-3); }
+.audit-view { gap: 0 var(--space-4); align-items: flex-start; }
+.audit-view .filters { margin: 0 0 var(--space-3); }
+.audit-count { margin-left: var(--space-2); background: var(--ds-color-status-moderation); font-size: var(--ds-text-sm); vertical-align: middle; }
+.audit-more { margin-top: var(--space-1); }
+.audit-more > summary { cursor: pointer; min-height: var(--tap); display: inline-flex; align-items: center; color: var(--ds-color-link); font-size: var(--ds-text-sm); font-weight: 500; }
+.audit-mini { margin: 0; padding-left: var(--space-5); color: var(--ds-color-text-secondary); }
+.audit-mini li { padding: 2px 0; overflow-wrap: anywhere; }
+.audit-pager { margin: var(--space-4) 0; gap: var(--space-2); }
+.audit-row .small { overflow-wrap: anywhere; }
+
+/* ── Списки (заказы, пользователи): поиск и фильтры в одну плотную сетку ── */
+.admin-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0 var(--space-3); align-items: end; }
+.admin-filters .field { margin-bottom: var(--space-3); }
+.admin-check { display: flex; align-items: center; gap: var(--space-2); min-height: var(--tap); margin-bottom: var(--space-3); font-size: var(--ds-text-sm); }
+.admin-check input { width: 20px; height: 20px; accent-color: var(--ds-color-primary); }
+.admin-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.admin-pager { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: var(--space-4) 0; }
+.admin-pager .muted { margin: 0 var(--space-2); }
+.admin .data-table td.wrap-any { overflow-wrap: anywhere; }
+.admin .data-table th a { color: inherit; }
+.admin .data-table th a[aria-current] { color: var(--ds-color-text-strong); text-decoration: underline; }
+.admin .data-table .roles { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+
+/* ── Карточка заказа: всё в одном месте ── */
+.order-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 0 var(--space-3); align-items: start; }
+.order-sums { margin: 0; }
+.order-sums div { display: flex; justify-content: space-between; gap: var(--space-3); padding: 2px 0; }
+.order-sums dt { color: var(--ds-color-text-secondary); }
+.order-sums dd { margin: 0; font-variant-numeric: tabular-nums; text-align: right; }
+.order-sums .total { border-top: 1px solid var(--ds-color-border); margin-top: var(--space-1); padding-top: var(--space-2); font-weight: 500; color: var(--ds-color-text-strong); }
+.chat-log { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.chat-log li { padding: var(--space-2) var(--space-3); border-radius: var(--ds-radius-md); background: var(--ds-color-bg-muted); overflow-wrap: anywhere; }
+.chat-log li.staff { background: var(--ds-color-bg-selected); margin-left: var(--space-6); }
+.chat-log li.client { margin-right: var(--space-6); }
+.chat-log .meta { display: block; color: var(--ds-color-text-secondary); font-size: var(--ds-text-sm); }
+
+/* ── Каталог: поля цен узкие, числа справа ── */
+.catalog-card h2 { font-size: var(--ds-text-lg); margin: 0; }
+.catalog-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0 var(--space-3); align-items: end; }
+.catalog-fields .input[type='number'] { text-align: right; font-variant-numeric: tabular-nums; }
+.catalog-sizes { margin: var(--space-2) 0 var(--space-3); }
+.catalog-sizes .input { min-width: 6rem; }

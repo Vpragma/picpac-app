@@ -1,5 +1,6 @@
 // Админка: вторая линия защиты после proxy.js. Без входа — 401, без роли модератора или админа — 403.
 import AdminNav from "@/components/admin/AdminNav";
+import "./admin-n9.css";
 import { ROLE_LABELS } from "@/lib/roles";
 import { requirePageRole } from "@/lib/server/session";
 

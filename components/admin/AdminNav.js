@@ -4,10 +4,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const LINKS = [
-  { href: "/admin", label: "Обзор", match: (p) => p === "/admin" || p.startsWith("/admin/orders") || p.startsWith("/admin/support") },
+  { href: "/admin", label: "Обзор", match: (p) => p === "/admin" || p.startsWith("/admin/support") },
+  { href: "/admin/orders", label: "Заказы", admin: true },
   { href: "/admin/moderation", label: "Модерация" },
   { href: "/admin/notifications", label: "Уведомления" },
   { href: "/admin/stats", label: "Статистика", admin: true },
+  { href: "/admin/users", label: "Пользователи", admin: true },
+  { href: "/admin/catalog", label: "Каталог", admin: true },
   { href: "/admin/audit", label: "Журнал действий", admin: true },
   { href: "/admin/reminders", label: "Напоминания", admin: true },
   { href: "/admin/push", label: "Демо пушей", admin: true },
