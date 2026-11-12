@@ -342,7 +342,7 @@ PicPac — PWA: устанавливается значком и работае�
 
 | Команда | Что делает |
 |---|---|
-| `npm run seed` | создаёт демо-аккаунты жюри (один раз; пароль — из `SEED_PASSWORD`, не меняется) |
+| `npm run seed` | создаёт демо-аккаунты жюри (пароли — из `SEED_PASSWORD_CLIENT`, `SEED_PASSWORD_MODERATOR`, `SEED_PASSWORD_ADMIN`) |
 | `npm run seed:catalog` | каталог, размеры, доставка, промокоды |
 | `npm run seed:demo` | синтетический набор + «живые» демо-аккаунты: у `client@example.com` 2 проекта (книга Lite на 12 фото из тестовой галереи, среди них «плохие»; печать фото), 5 заказов во всех статусах, обращение с ответом оператора |
 | `npm run seed:synthetic` | только синтетический набор |
@@ -413,7 +413,7 @@ PicPac — PWA: устанавливается значком и работае�
 | `SUPABASE_PUBLISHABLE_KEY` (запасной — `SUPABASE_ANON_KEY`) | сервер | запросы от имени пользователя, с правилами RLS |
 | `SUPABASE_SECRET_KEY` (запасной — `SUPABASE_SERVICE_ROLE_KEY`) | только сервер и скрипты | создание и удаление пользователей, запись журнала, подписанные ссылки, демо-данные |
 | `POSTGRES_URL_NON_POOLING` | скрипты `db:migrate`, `db:backup` | прямое подключение к базе |
-| `SEED_PASSWORD` | скрипты `seed` и `test:auth` | пароль демо-аккаунтов |
+| `SEED_PASSWORD_CLIENT`, `SEED_PASSWORD_MODERATOR`, `SEED_PASSWORD_ADMIN` | скрипты `seed` и `test:auth` | пароли демо-аккаунтов (по одному на аккаунт) |
 | `ANALYTICS_SALT` | сервер | соль хеша пользователя в обезличенной аналитике (без неё события пишутся без хеша пользователя) |
 | `REQUIRE_STAFF_MFA` | сервер | `true` — код 2FA для модератора и админа; по умолчанию выключен |
 | `VAPID_PUBLIC_KEY`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | сервер (публичный ключ — и в браузере) | Web Push: подпись пушей; публичный ключ не секрет |

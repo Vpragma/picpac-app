@@ -20,13 +20,11 @@ PWA для заказа фотокниг и печати фото в стиле 
 
 ## 3. Тестовые учётные записи
 
-| Почта | Роль | Что увидите |
-|---|---|---|
-| client@example.com | клиент | каталог, редактор, корзина, «Мои заказы» (5 заказов во всех статусах), уведомления; `/admin` → «Нет доступа» (403) |
-| moderator@example.com | модератор | админка: «Обзор» без данных клиентов, «Модерация», уведомления о модерации; остальное — 403 |
-| admin@example.com | клиент + администратор | выбор роли; «Администратор» — вся админка: заказы и смена статуса, чат оператора, модерация, статистика, журнал, напоминания, демо пушей |
-
-Пароль для всех трёх: `PicPac-kchQ-XBUz-4tqK`
+| Почта | Пароль | Роль | Что увидите |
+|---|---|---|---|
+| client@example.com | `PicPacUser26` | клиент | каталог, редактор, корзина, «Мои заказы» (5 заказов во всех статусах), уведомления; `/admin` → «Нет доступа» (403) |
+| moderator@example.com | `PicPacModer26` | модератор | админка: «Обзор» без данных клиентов, «Модерация», уведомления о модерации; остальное — 403 |
+| admin@example.com | `PicPacAdmin26` | клиент + администратор | выбор роли; «Администратор» — вся админка: заказы и смена статуса, чат оператора, модерация, статистика, журнал, напоминания, демо пушей |
 
 ## 4. Обязательный сценарий за 5 минут
 
@@ -55,7 +53,7 @@ Next.js 16 и React 19 (JavaScript), Supabase (Postgres, RLS, Auth, Storage), `z
 
 1. `git clone https://github.com/Vpragma/picpac-app.git && cd picpac-app && npm install` (репозиторий закрытый — нужен доступ).
 2. supabase.com → New project; Settings → API — адрес и ключи; Settings → Database → Connection string (Direct) — строка подключения.
-3. `cp .env.example .env.local` и впишите значения (раздел 8); `SEED_PASSWORD` и `ANALYTICS_SALT` придумайте сами. Команде проекта: `vercel env pull .env.local`.
+3. `cp .env.example .env.local` и впишите значения (раздел 8); `SEED_PASSWORD_CLIENT`, `SEED_PASSWORD_MODERATOR`, `SEED_PASSWORD_ADMIN` и `ANALYTICS_SALT` придумайте сами. Команде проекта: `vercel env pull .env.local`.
 4. `npm run db:migrate && npm run seed && npm run seed:catalog && npm run seed:demo` — таблицы, демо-аккаунты, каталог, демо-данные (повторный запуск безопасен).
 5. `npm run dev` → http://localhost:3000 (или `npm run build && npm start`).
 
@@ -63,7 +61,7 @@ Next.js 16 и React 19 (JavaScript), Supabase (Postgres, RLS, Auth, Storage), `z
 
 ## 8. Переменные окружения
 
-Значения — только в `.env.local` (не в git) и в Vercel, шаблон — [`.env.example`](.env.example): `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `POSTGRES_URL_NON_POOLING`, `SEED_PASSWORD`, `ANALYTICS_SALT`, `REQUIRE_STAFF_MFA`, `VAPID_PUBLIC_KEY`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `CRON_SECRET`, `ERP_SECRET`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`. Зачем каждая — [docs/features.md](docs/features.md#переменные-окружения-где-нужны-и-зачем).
+Значения — только в `.env.local` (не в git) и в Vercel, шаблон — [`.env.example`](.env.example): `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `POSTGRES_URL_NON_POOLING`, `SEED_PASSWORD_CLIENT`, `SEED_PASSWORD_MODERATOR`, `SEED_PASSWORD_ADMIN`, `ANALYTICS_SALT`, `REQUIRE_STAFF_MFA`, `VAPID_PUBLIC_KEY`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `CRON_SECRET`, `ERP_SECRET`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`. Зачем каждая — [docs/features.md](docs/features.md#переменные-окружения-где-нужны-и-зачем).
 
 ## 9. Данные и их повторная загрузка
 

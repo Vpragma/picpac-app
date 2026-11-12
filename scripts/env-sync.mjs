@@ -24,7 +24,9 @@ const REQUIRED = [
   "POSTGRES_URL_NON_POOLING",
   "CLOUDFLARE_API_TOKEN",
   "CLOUDFLARE_ACCOUNT_ID",
-  "SEED_PASSWORD",
+  "SEED_PASSWORD_CLIENT",
+  "SEED_PASSWORD_MODERATOR",
+  "SEED_PASSWORD_ADMIN",
 ];
 
 // Vercel CLI стоит в ~/.npm-global/bin, который есть не в каждой оболочке

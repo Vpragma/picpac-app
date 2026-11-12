@@ -3,6 +3,7 @@
 //   npm run seed:synthetic — синтетический набор (ТЗ, раздел 8): 200 клиентов, 520 заказов за 60 дней во всех 5 статусах,
 //                            320 обращений с темами и SLA, события воронки. Детерминированно (seed 20261112).
 //   npm run seed:demo      — синтетический набор + «живые» демо-аккаунты жюри (проекты, заказы во всех статусах, обращение с ответом).
+//   node scripts/demo-data.mjs demo-accounts — только демо-данные client@example.com, синтетику не трогает
 //   npm run reset:demo     — удалить is_demo/is_synthetic строки, синтетических, e2e- и critic-пользователей с их файлами,
 //                            затем снова загрузить демо. С флагом --clean — только удалить, --dry-run — только посчитать.
 // Повторный запуск любой команды безопасен: старые синтетические и демо-строки сначала удаляются.
@@ -483,7 +484,10 @@ async function reset(existingUsers) {
 try {
   const cat = await catalog();
   let users = await listAllUsers();
-  if (mode === "reset") {
+  if (mode === "demo-accounts") {
+    // Только демо-данные client@example.com (исходные проекты, 5 заказов, обращение); синтетический набор не трогаем
+    await seedDemoAccounts(cat, users);
+  } else if (mode === "reset") {
     await reset(users);
     if (!cleanOnly && !dryRun) {
       users = await listAllUsers();
