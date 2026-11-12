@@ -350,8 +350,8 @@ test("fix1: старые черновики (маска в каждой прав
 
 test("fix1: размеры файлов моделей в modelFiles.js совпадают с public/ (честный процент загрузки)", async () => {
   const { statSync } = await import("node:fs");
-  const { SAM_FILES, ORT_WASM, MIGAN_FILE } = await import("../../lib/photo/modelFiles.js");
-  for (const f of [...SAM_FILES, ORT_WASM, MIGAN_FILE]) {
+  const { SAM_FILES, ORT_WASM, MIGAN_FILE, YOLOX_FILE, MEANING_FILES, UPSCALER_FILES } = await import("../../lib/photo/modelFiles.js");
+  for (const f of [...SAM_FILES, ORT_WASM, MIGAN_FILE, YOLOX_FILE, ...MEANING_FILES, ...UPSCALER_FILES]) {
     const size = statSync(new URL("../../public" + f.url, import.meta.url)).size;
     assert.equal(f.size, size, f.url);
   }

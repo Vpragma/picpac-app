@@ -27,3 +27,13 @@ test("CSP: скрипты только с nonce, без unsafe-inline/unsafe-eva
   assert.doesNotMatch(csp, /vercel\.live/);
   assert.match(buildCsp("abc", { preview: true }), /frame-src https:\/\/vercel\.live/);
 });
+
+test("N3: connect-src — только свой сайт и хранилище Supabase проекта (облачного ИИ нет)", () => {
+  const prod = buildCsp("abc", { https: true, supabase: "https://x.supabase.co/rest/v1" });
+  const connect = prod.split("; ").find((d) => d.startsWith("connect-src"));
+  assert.equal(connect, "connect-src 'self' data: blob: https://x.supabase.co");
+  assert.doesNotMatch(prod, /cloudflare|huggingface|jsdelivr|unpkg|googleapis/i);
+  // Превью Vercel: дополнительно только его панель (на основном сайте её нет)
+  const preview = buildCsp("abc", { https: true, supabase: "https://x.supabase.co", preview: true }).split("; ").find((d) => d.startsWith("connect-src"));
+  assert.equal(preview, "connect-src 'self' data: blob: https://x.supabase.co https://vercel.live wss://ws-us3.pusher.com");
+});
