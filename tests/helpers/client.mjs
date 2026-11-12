@@ -62,9 +62,15 @@ export async function createTestUser(admin, roles = ["client"], label = "user") 
   return { id, email, password, client };
 }
 
-// Удалить тестового пользователя и его файлы
+// Удалить тестового пользователя, его заказы, запросы на удаление данных и файлы.
+// N10: заказы и data_requests ссылаются на аккаунт с ON DELETE SET NULL — без этого шага после теста оставались
+// «ничьи» заказы (с обращениями и уведомлениями админу) и запросы, которые копились в общей базе.
 export async function deleteTestUser(admin, user) {
   if (!user?.id) return;
+  if (/^(e2e|night2)-/i.test(user.email || "")) {
+    await admin.from("orders").delete().eq("user_id", user.id);
+    await admin.from("data_requests").delete().eq("user_id", user.id);
+  }
   // Файлы пользователя, включая печатные версии ({user}/{project}/print/{photo}/{file}) — обходим папки вглубь
   const walk = async (prefix, depth) => {
     const { data: items } = await admin.storage.from("photos").list(prefix, { limit: 1000 });

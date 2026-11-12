@@ -35,6 +35,7 @@ before(async () => {
 after(async () => {
   // Убрать за собой: тестовые заказы (по ключу идемпотентности), пользователей и их файлы
   await admin.from("orders").delete().like("idempotency_key", `${RUN}%`);
+  if (s.dataRequest) await admin.from("data_requests").delete().eq("id", s.dataRequest);
   for (const u of [A, B, M]) await deleteTestUser(admin, u);
 });
 
@@ -591,6 +592,7 @@ test("удалить мои фото: фото заказов в работе �
   assert.equal(r.json.deleted, 1);
   assert.equal(r.json.kept, 3);
   assert.equal(r.json.request.kind, "delete_photos");
+  s.dataRequest = r.json.request.id; // N10: после удаления аккаунта запрос остаётся «ничьим» — уберём его в after()
 });
 
 test("статусы демо-заказа (S02d): оплата → Модерация → автоодобрение → … → Завершён без дублей; миниатюры по подписанным ссылкам", async () => {
