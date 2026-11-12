@@ -170,12 +170,15 @@ test("N9 роли: выдать и снять — с журналом; свои 
   const demo = users.users.find((u) => u.email === "moderator@example.com" || u.email === "client@example.com");
   if (demo) {
     const d = await set(demo.id, { role: "admin", grant: true });
+    // Страховка: если защита когда-нибудь сломается — сразу вернуть демо-аккаунт как было (у него нет роли админа)
+    if (d.status === 200 && d.json.result === "granted") await admin.from("user_roles").delete().eq("user_id", demo.id).eq("role", "admin");
     assert.equal(d.status, 403, d.text);
     assert.equal(d.json.error.code, "demo_account");
   }
   const { data: syn } = await admin.from("profiles").select("id").eq("is_synthetic", true).limit(1);
   if (syn?.[0]) {
     const s = await set(syn[0].id, { role: "moderator", grant: true });
+    if (s.status === 200 && s.json.result === "granted") await admin.from("user_roles").delete().eq("user_id", syn[0].id).eq("role", "moderator");
     assert.equal(s.status, 403);
     assert.equal(s.json.error.code, "synthetic");
   }

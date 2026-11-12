@@ -21,6 +21,7 @@
 .admin-pager { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: var(--space-4) 0; }
 .admin-pager .muted { margin: 0 var(--space-2); }
 .admin .data-table td.wrap-any { overflow-wrap: anywhere; }
+.admin .data-table td.nowrap { white-space: nowrap; }
 .admin .data-table th a { color: inherit; }
 .admin .data-table th a[aria-current] { color: var(--ds-color-text-strong); text-decoration: underline; }
 .admin .data-table .roles { display: flex; flex-wrap: wrap; gap: var(--space-1); }

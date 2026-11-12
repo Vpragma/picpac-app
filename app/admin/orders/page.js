@@ -180,10 +180,9 @@ export default async function AdminOrdersPage({ searchParams }) {
                 <tbody>
                   {res.items.map((o) => (
                     <tr key={o.id}>
-                      <td>
+                      <td className="nowrap">
                         <Link href={`/admin/orders/${o.id}`}>{o.number}</Link>
-                        {o.isSynthetic ? <span className="muted small"> · синт.</span> : null}
-                        {o.isDemo ? <span className="muted small"> · демо</span> : null}
+                        {o.isSynthetic || o.isDemo ? <div className="muted small">{o.isSynthetic ? "синтетика" : "демо"}</div> : null}
                       </td>
                       <td className="num">{time(o.createdAt)}</td>
                       <td>{o.products.map((s) => names[s] || s).join(", ") || "—"}</td>

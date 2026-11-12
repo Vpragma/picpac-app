@@ -113,3 +113,42 @@ test("модератор не видит заказы, пользователе�
   await page.goto("/admin/moderation");
   await expect(page.getByRole("navigation", { name: "Разделы админки" }).getByRole("link", { name: "Пользователи" })).toHaveCount(0);
 });
+
+test("пользователи: выдать и снять роль модератора кнопкой; каталог: старая цена не больше текущей — понятная ошибка", async ({ page }) => {
+  await login(page, ["admin"]);
+  // Цель — свой тестовый клиент night2-n9-…
+  const email = `night2-n9-e2e-target-${randomUUID().slice(0, 8)}@example.com`;
+  const { data, error } = await admin.auth.admin.createUser({ email, password: randomBytes(18).toString("base64url"), email_confirm: true, user_metadata: { full_name: "Night2 Цель" } });
+  expect(error).toBeNull();
+  const target = { id: data.user.id, email };
+  try {
+    page.on("dialog", (d) => d.accept());
+    await page.goto(`/admin/users?q=${encodeURIComponent(email)}&tests=1`);
+    const row = page.locator(`tr[data-user="${target.id}"]`);
+    await expect(row).toBeVisible();
+    await expect(row).toContainText("n•••@example.com");
+    await row.getByTestId("role-grant-moderator").click();
+    await expect(row.getByRole("status")).toHaveText("Роль «модератор» выдана.");
+    await expect(row.locator(".status-chip", { hasText: "Модератор" })).toBeVisible();
+    await row.getByTestId("role-revoke-moderator").click();
+    await expect(row.getByRole("status")).toHaveText("Роль «модератор» снята.");
+    await expect(row.locator(".status-chip", { hasText: "Модератор" })).toHaveCount(0);
+    // Свою строку менять нельзя
+    await page.goto(`/admin/users?q=${encodeURIComponent(user.email)}&tests=1`);
+    await expect(page.locator(`tr[data-user="${user.id}"]`)).toContainText("Свои роли менять нельзя");
+  } finally {
+    await deleteTestUser(admin, target);
+  }
+
+  // Каталог: старая цена равна текущей — сервер отказывает, цена не меняется
+  await page.goto("/admin/catalog");
+  const form = page.getByTestId("catalog-form-digital");
+  const before = await form.getByLabel("Старая цена «от», BYN").inputValue();
+  const { data: sizes } = await admin.from("product_sizes").select("unit_price_kop").eq("product_slug", "digital").eq("active", true);
+  const from = Math.min(...sizes.map((x) => x.unit_price_kop));
+  await form.getByLabel("Старая цена «от», BYN").fill((from / 100).toFixed(2).replace(".", ","));
+  await form.getByRole("button", { name: "Сохранить" }).click();
+  await expect(form.getByRole("status")).toContainText("Старая цена должна быть больше текущей");
+  const { data: p } = await admin.from("products").select("old_price_kop").eq("slug", "digital").single();
+  expect(p.old_price_kop == null ? "" : (p.old_price_kop / 100).toFixed(2).replace(".", ",")).toBe(before);
+});

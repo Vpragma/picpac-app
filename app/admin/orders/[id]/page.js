@@ -136,7 +136,7 @@ export default async function AdminOrderPage({ params }) {
             {client.name || "—"} · {client.phone || "—"} · {client.email || "—"}
             {client.address ? ` · ${client.address}` : ""}
           </p>
-          <p className="muted small">Полные контакты и адрес видит только служба доставки.</p>
+          <p className="muted small">Данные клиента скрыты: полные контакты и адрес видит только служба доставки.</p>
           <h3 className="admin-h" style={{ marginTop: 12 }}>
             Сменить статус вручную
           </h3>

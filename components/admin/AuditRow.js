@@ -1,6 +1,6 @@
 // Строка журнала действий. Без "use client": рисуется и на сервере (экран журнала), и в браузере (поиск по почте).
 // N9: группа одинаковых событий подряд — та же строка с плашкой «×N», периодом и раскрывающимся списком.
-import { ACTION_LABELS, OBJECT_LABELS, REASON_LABELS, RESULT_LABELS } from "@/lib/auditLabels";
+import { ACTION_LABELS, OBJECT_LABELS, ORDER_STATUS_LABELS, REASON_LABELS, RESULT_LABELS } from "@/lib/auditLabels";
 import { auditActor } from "@/lib/auditView";
 import { ROLE_LABELS } from "@/lib/roles";
 
@@ -34,7 +34,7 @@ function changeText(item) {
   if (d.role && (item.action === "admin.role_grant" || item.action === "admin.role_revoke")) return `роль: ${ROLE_LABELS[d.role] || d.role}`;
   if (d.changes && typeof d.changes === "object") return `изменено полей: ${Object.keys(d.changes).length}`;
   if (d.count != null && item.action === "admin.orders_export") return `строк: ${d.count}`;
-  if (d.from && d.to && item.action === "order.status_change") return `${d.from} → ${d.to}`;
+  if (d.from && d.to && item.action === "order.status_change") return `${ORDER_STATUS_LABELS[d.from] || d.from} → ${ORDER_STATUS_LABELS[d.to] || d.to}`;
   return "";
 }
 
