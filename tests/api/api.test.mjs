@@ -142,6 +142,14 @@ test("удаление проекта с чужого сайта (Origin) → 40
   assert.equal(r.json.error.code, "bad_origin");
 });
 
+test("S12 (SEC-07): без Origin, но с чужим Referer → 403; со своим Referer — проверка проходит дальше", async () => {
+  const evil = await A.client.req(`/api/v1/projects/${NIL}`, { method: "DELETE", headers: { referer: "https://evil.example/page" } });
+  assert.equal(evil.status, 403);
+  assert.equal(evil.json.error.code, "bad_origin");
+  const own = await A.client.req(`/api/v1/projects/${NIL}`, { method: "DELETE", headers: { referer: BASE + "/books" } });
+  assert.notEqual(own.status, 403, own.text);
+});
+
 test("модератор не может создавать проекты клиента → 403", async () => {
   const r = await M.client.req("/api/v1/projects", { method: "POST", body: { productSlug: "layflat" } });
   assert.equal(r.status, 403);

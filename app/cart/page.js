@@ -411,7 +411,8 @@ export default function CartPage() {
               <label key={d.code} className={"radio-row" + (d.code === form.delivery ? " selected" : "")}>
                 <input type="radio" name="delivery" checked={d.code === form.delivery} onChange={() => update({ delivery: d.code })} />
                 <div style={{ flex: 1 }}>
-                  <b style={{ color: "var(--ds-color-text-strong)" }}>{d.name}</b> <span className="muted small">{d.note}</span>
+                  <b style={{ color: "var(--ds-color-text-strong)" }}>{d.name}</b>{" "}
+                  <span className="muted small">{d.eta ? String(d.note || "").replace(", " + d.eta, "") : d.note}</span>
                   <div className="muted small">
                     {d.eta}
                     {d.freeFromKop != null && ` · бесплатно от ${byn(d.freeFromKop)}`}

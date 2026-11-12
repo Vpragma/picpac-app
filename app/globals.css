@@ -172,6 +172,9 @@ button, input, select { font: inherit; color: inherit; }
   color: #2b403d; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;
 }
 .photo-tools button:disabled { opacity: 0.35; }
+/* S12: на плитке с кнопками значки и подпись загрузки — над кнопками, не под ними */
+.photo-cell:has(.photo-tools) .pe-badges.compact { bottom: 42px; }
+.photo-cell:has(.photo-tools) .photo-upload { bottom: 42px; }
 
 .dropzone {
   border: 2px dashed var(--ds-color-border-strong); border-radius: var(--ds-radius-lg);

@@ -538,17 +538,17 @@ function SortablePhoto({ p, i, n, thumb, readOnly, badges, upload }) {
       )}
       {!readOnly && (
         <>
-          <button ref={setActivatorNodeRef} className="drag-handle" {...attributes} {...listeners} aria-label={`Переставить фото ${i + 1}`} title="Перетащите, чтобы переставить">
+          <button ref={setActivatorNodeRef} className="drag-handle" {...attributes} {...listeners} aria-label={`Переставить фото ${i + 1} «${p.name}»`} title="Перетащите, чтобы переставить">
             ⠿
           </button>
           <div className="photo-tools">
-            <button onClick={() => movePhoto(p.id, -1)} disabled={i === 0} aria-label={`Раньше: фото ${i + 1}`} title="Раньше">
+            <button onClick={() => movePhoto(p.id, -1)} disabled={i === 0} aria-label={`Раньше: фото ${i + 1} «${p.name}»`} title="Раньше">
               <IconLeft size={18} />
             </button>
-            <button onClick={() => removePhoto(p.id)} aria-label={`Удалить фото ${i + 1}`} title="Удалить">
+            <button onClick={() => removePhoto(p.id)} aria-label={`Удалить фото ${i + 1} «${p.name}»`} title="Удалить">
               <IconTrash size={16} />
             </button>
-            <button onClick={() => movePhoto(p.id, 1)} disabled={i === n - 1} aria-label={`Позже: фото ${i + 1}`} title="Позже">
+            <button onClick={() => movePhoto(p.id, 1)} disabled={i === n - 1} aria-label={`Позже: фото ${i + 1} «${p.name}»`} title="Позже">
               <IconRight size={18} />
             </button>
           </div>

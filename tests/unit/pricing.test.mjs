@@ -83,7 +83,7 @@ test("промокод PICPAC5: −5,00 от 50,00, ниже порога — «
   assert.equal(low.ok, false);
   assert.equal(low.reason, "min_total");
   assert.match(low.message, /^Не подходит/);
-  assert.match(low.message, /50,00 руб\./);
+  assert.match(low.message, /50,00 BYN/);
 });
 
 test("истёкший промокод — «Истёк», несуществующий — «Не подходит»", () => {
@@ -133,7 +133,7 @@ test("сроки считаются по Минску (UTC+3), а не по UTC"
   assert.deepEqual(etaRange(new Date("2026-11-28T10:00:00Z"), 2, 1, 2), { from: "2026-12-01", to: "2026-12-02" });
 });
 
-test("формат денег: 14100 → «141,00 руб.»", () => {
-  assert.equal(formatByn(14100), "141,00 руб.");
-  assert.equal(formatByn(61), "0,61 руб.");
+test("формат денег: 14100 → «141,00 BYN» (одна валюта во всём приложении)", () => {
+  assert.equal(formatByn(14100), "141,00 BYN");
+  assert.equal(formatByn(61), "0,61 BYN");
 });
