@@ -2,7 +2,7 @@
 // Тело: { name, email, password, next? }. Письмо-подтверждение в прототипе не нужно:
 // пользователь создаётся на сервере уже подтверждённым и сразу входит.
 import { clientIp, registerBlocked, writeAudit } from "@/lib/server/audit";
-import { json, jsonError, readMutation } from "@/lib/server/http";
+import { extraFields, json, jsonError, readMutation, withRetryAfter } from "@/lib/server/http";
 import { startSession } from "@/lib/server/session";
 import { createSupabaseAdmin, createSupabaseServer } from "@/lib/server/supabase";
 import { normEmail, normName, passwordProblem, safeNext } from "@/lib/validate";
@@ -10,6 +10,8 @@ import { normEmail, normName, passwordProblem, safeNext } from "@/lib/validate";
 export async function POST(request) {
   const { body, response } = await readMutation(request);
   if (response) return response;
+  const extra = extraFields(body, ["name", "email", "password", "next"]);
+  if (extra) return extra;
 
   const ip = clientIp(request.headers);
   const name = normName(body.name);
@@ -26,7 +28,7 @@ export async function POST(request) {
 
   if (await registerBlocked({ ip })) {
     await writeAudit({ action: "auth.register", result: "denied", email, details: { reason: "rate_limited" }, ip });
-    return jsonError(429, "rate_limited", "Слишком много регистраций с этого устройства. Попробуйте через час.");
+    return withRetryAfter(jsonError(429, "rate_limited", "Слишком много регистраций с этого устройства. Попробуйте через час."), 3600);
   }
 
   const admin = createSupabaseAdmin();

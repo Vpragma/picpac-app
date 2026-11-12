@@ -2,7 +2,7 @@
 // Тело: { email, password, next? }. Сессия ставится в httpOnly-cookies.
 import { sortRoles } from "@/lib/roles";
 import { clientIp, LOGIN_LIMIT, loginBlocked, writeAudit } from "@/lib/server/audit";
-import { json, jsonError, readMutation } from "@/lib/server/http";
+import { extraFields, json, jsonError, readMutation, withRetryAfter } from "@/lib/server/http";
 import { startSession } from "@/lib/server/session";
 import { createSupabaseServer } from "@/lib/server/supabase";
 import { normEmail, safeNext } from "@/lib/validate";
@@ -13,6 +13,8 @@ const WRONG = "Неверная почта или пароль.";
 export async function POST(request) {
   const { body, response } = await readMutation(request);
   if (response) return response;
+  const extra = extraFields(body, ["email", "password", "next"]);
+  if (extra) return extra;
 
   const ip = clientIp(request.headers);
   const email = normEmail(body.email);
@@ -26,7 +28,7 @@ export async function POST(request) {
 
   if (await loginBlocked({ email, ip })) {
     await writeAudit({ action: "auth.login", result: "denied", email, details: { reason: "rate_limited" }, ip });
-    return jsonError(429, "rate_limited", `Слишком много неудачных попыток входа. Подождите ${LOGIN_LIMIT.minutes} минут и попробуйте снова.`);
+    return withRetryAfter(jsonError(429, "rate_limited", `Слишком много неудачных попыток входа. Подождите ${LOGIN_LIMIT.minutes} минут и попробуйте снова.`), LOGIN_LIMIT.minutes * 60);
   }
 
   const supabase = await createSupabaseServer();
@@ -36,7 +38,7 @@ export async function POST(request) {
     const limited = error?.status === 429;
     const reason = limited ? "service_rate_limit" : down ? "service_unavailable" : error.code || "invalid_credentials";
     await writeAudit({ action: "auth.login", result: "error", email, details: { reason }, ip });
-    if (limited) return jsonError(429, "rate_limited", "Слишком много попыток входа. Подождите несколько минут.");
+    if (limited) return withRetryAfter(jsonError(429, "rate_limited", "Слишком много попыток входа. Подождите несколько минут."), 300);
     if (down) return jsonError(503, "unavailable", "Сервис входа временно недоступен. Попробуйте через минуту.");
     return jsonError(401, "invalid_credentials", WRONG);
   }

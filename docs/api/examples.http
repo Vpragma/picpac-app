@@ -1,0 +1,97 @@
+# Примеры запросов к PicPac API (REST Client в VS Code / JetBrains HTTP Client).
+# Сначала войдите: запрос «Вход» сохранит cookies сессии. Пароль — свой (тестовые аккаунты — в README).
+@base = http://localhost:3000
+
+### Каталог (открыт всем)
+GET {{base}}/api/v1/catalog
+
+### Вход
+POST {{base}}/api/v1/auth/login
+Content-Type: application/json
+
+{ "email": "e2e-you@example.com", "password": "ваш-пароль" }
+
+### Новый проект Classic 20×20, 20 страниц
+POST {{base}}/api/v1/projects
+Content-Type: application/json
+
+{ "productSlug": "layflat", "title": "Отпуск", "options": { "size": "20x20", "pages": 20 } }
+
+### Ссылка для загрузки фото (подставьте id проекта)
+POST {{base}}/api/v1/projects/PROJECT_ID/photos/upload-url
+Content-Type: application/json
+
+{ "mime": "image/jpeg", "bytes": 117000 }
+
+### Загрузка файла: PUT по upload.url из ответа выше, тело — сам файл
+# PUT https://…/storage/v1/object/upload/sign/photos/…?token=…
+# Content-Type: image/jpeg
+#
+# < ./public/demo-gallery/nesvizh-small.jpg
+
+### Зафиксировать фото
+POST {{base}}/api/v1/projects/PROJECT_ID/photos
+Content-Type: application/json
+
+{ "path": "USER_ID/PROJECT_ID/UUID.jpg" }
+
+### Изменить проект (version — текущая версия; старая → 409)
+PATCH {{base}}/api/v1/projects/PROJECT_ID
+Content-Type: application/json
+
+{ "version": 1, "options": { "pages": 30 } }
+
+### Положить в корзину
+PUT {{base}}/api/v1/cart
+Content-Type: application/json
+
+{ "items": [{ "projectId": "PROJECT_ID", "quantity": 1 }] }
+
+### Корзина с итогом: доставка Белпочтой и промокод
+GET {{base}}/api/v1/cart?delivery=belpost&promo=TEST10
+
+### Промокод (ошибка: 422 «Истёк»)
+POST {{base}}/api/v1/promo/validate
+Content-Type: application/json
+
+{ "code": "OLD2025" }
+
+### Заказ (повтор с тем же ключом вернёт тот же заказ; цена из запроса игнорируется)
+POST {{base}}/api/v1/orders
+Content-Type: application/json
+Idempotency-Key: checkout-2026-11-11-0001
+
+{ "delivery": { "code": "europost", "address": { "pickup_point": "Минск, пр. Независимости, 1" } }, "recipient": { "name": "Анна", "phone": "+375 29 000-00-00" }, "promoCode": "TEST10", "total": 0.01 }
+
+### Заказ без ключа → 400 idempotency_key_required
+POST {{base}}/api/v1/orders
+Content-Type: application/json
+
+{ "delivery": { "code": "europost" }, "recipient": { "name": "Анна", "phone": "+375290000000" } }
+
+### Мои заказы
+GET {{base}}/api/v1/orders
+
+### Заказ по номеру
+GET {{base}}/api/v1/orders/PP-261111-10001
+
+### Тестовая оплата
+POST {{base}}/api/v1/orders/ORDER_ID/pay-test
+Content-Type: application/json
+
+{ "method": "card_test" }
+
+### Обращение по заказу
+POST {{base}}/api/v1/orders/ORDER_ID/interactions
+Content-Type: application/json
+
+{ "topic": "Где мой заказ?", "kind": "support", "message": "Подскажите срок доставки" }
+
+### Переписка
+GET {{base}}/api/v1/interactions/INTERACTION_ID/messages
+
+### Мои данные (JSON-файл)
+GET {{base}}/api/v1/me/export
+
+### Удалить мои фото
+DELETE {{base}}/api/v1/me/photos

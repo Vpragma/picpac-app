@@ -56,7 +56,7 @@ export default function MfaStep({ mode, role, roleLabel, next, email }) {
       <label className="field">
         <span>Код из приложения — 6 цифр</span>
         <input
-          className="input"
+          className="input code-input"
           inputMode="numeric"
           autoComplete="one-time-code"
           pattern="[0-9]{6}"
@@ -65,7 +65,6 @@ export default function MfaStep({ mode, role, roleLabel, next, email }) {
           onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
           autoFocus
           required
-          style={{ fontSize: 24, letterSpacing: 6, textAlign: "center" }}
         />
       </label>
       {error && <p className="err-text small" role="alert">{error}</p>}
@@ -100,6 +99,7 @@ export default function MfaStep({ mode, role, roleLabel, next, email }) {
         <>
           <p>1. Отсканируйте QR-код в приложении-аутентификаторе.</p>
           <div style={{ background: "#fff", borderRadius: 12, padding: 12, width: 220, margin: "0 auto" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element -- QR-код приходит от Supabase как data:-картинка, оптимизировать нечего */}
             <img src={enroll.qr} alt="QR-код для приложения-аутентификатора" width="196" height="196" style={{ display: "block", width: "100%", height: "auto" }} />
           </div>
           <p className="muted small">

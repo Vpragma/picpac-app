@@ -1,0 +1,1339 @@
+openapi: 3.1.0
+info:
+  title: PicPac API
+  version: "1.5.0"
+  summary: API мобильного приложения PicPac (трек 2 хакатона «Великий камень» × «Фотопринт»)
+  description: |
+    Все ответы — JSON. Успех: `{ "ok": true, ... }`. Ошибка — единый формат:
+    `{ "ok": false, "error": { "code", "message", "requestId", "fields"? } }`, `message` — по-русски и понятно человеку,
+    `requestId` также в заголовке `X-Request-Id`. Так же отвечают и отказы `proxy.js` (401/403/503),
+    неизвестный адрес `/api/…` (`404 not_found`) и неверный метод (`405 method_not_allowed`, заголовок `Allow`).
+
+    * **Строгий ввод** — лишние поля в теле запроса не отбрасываются молча, а дают `400 invalid_input`
+      (все схемы `additionalProperties: false`).
+
+    * **Вход** — cookies сессии Supabase (httpOnly), их ставит `POST /api/v1/auth/login`.
+    * **Роли**: `client`, `moderator`, `admin`. Права проверяются на сервере в каждом запросе; чужие объекты — `404` (IDOR).
+    * **Деньги** — целые копейки (`*Kop`) и валюта `BYN`; для показа дублируются в рублях.
+    * **Даты** — ISO 8601 с часовым поясом (UTC); показываются по Минску (`Europe/Minsk`).
+    * **Изменяющие запросы** — только `Content-Type: application/json`; браузерный `Origin` (а если его нет — `Referer`) должен совпадать с сайтом (защита от CSRF). Лишние поля в теле → `400 invalid_input`.
+    * **Лимиты частоты** — `429` с заголовком `Retry-After` на всех изменяющих маршрутах (S12: проекты, фото, порядок, корзина, перенос корзины, тестовая оплата, роль, выход, «Удалить мои фото», профиль — по пользователю), на входе и регистрации.
+    * Все действия пишутся в журнал (кто, когда, что, над чем, результат).
+servers:
+  - url: http://localhost:3000
+    description: Локально (npm start)
+  - url: https://picpac-app-git-night-pragma21.vercel.app
+    description: Превью ветки night
+tags:
+  - name: Каталог
+  - name: Проекты
+  - name: Фото
+  - name: Корзина
+  - name: Заказы
+  - name: Поддержка
+  - name: Аккаунт
+  - name: Админ
+  - name: Статистика
+  - name: ERP (мок)
+  - name: Уведомления
+  - name: Поддержка (оператор)
+  - name: Модерация
+  - name: ИИ
+security:
+  - session: []
+paths:
+  /api/v1/catalog:
+    get:
+      tags: [Каталог]
+      summary: Каталог из базы — продукты, размеры, опции, цены, сроки, требования к фото, доставка
+      security: []
+      responses:
+        "200":
+          description: Каталог. Кэш CDN 60 секунд.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Catalog" }
+              example:
+                ok: true
+                currency: BYN
+                timezone: Europe/Minsk
+                products:
+                  - slug: layflat
+                    name: Classic
+                    kind: book
+                    printDays: 3
+                    pages: { min: 20, max: 60, step: 2 }
+                    price: { currency: BYN, base: 81, per2Pages: 3, basedOnSize: "20x20" }
+                    sizes: [{ id: "20x20", label: "Квадрат", w: 20, h: 20, k: 1 }, { id: "21x30", label: "Как лист А4", w: 21, h: 30, k: 1.345 }]
+                    requirements: { formats: [image/jpeg, image/png], maxBytes: 26214400, dpi: { excellent: 300, good: 150, warn: 100 } }
+                delivery:
+                  - { code: belpost, name: "Белпочта", priceKop: 690, freeFromKop: 15000, minDays: 2, maxDays: 3, addressFields: [city, street, house, postcode] }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/projects:
+    get:
+      tags: [Проекты]
+      summary: Мои проекты
+      responses:
+        "200":
+          description: Список
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { const: true }
+                  items: { type: array, items: { $ref: "#/components/schemas/Project" } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Проекты]
+      summary: Новый проект
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productSlug]
+              properties:
+                productSlug: { type: string, example: layflat }
+                title: { type: string, maxLength: 100 }
+                options: { $ref: "#/components/schemas/ProjectOptions" }
+            example: { productSlug: layflat, title: "Отпуск", options: { size: "20x20", pages: 20, cover: gloss } }
+      responses:
+        "201":
+          description: Создан (version = 1)
+          content:
+            application/json:
+              schema: { type: object, properties: { ok: { const: true }, project: { $ref: "#/components/schemas/Project" } } }
+        "400": { $ref: "#/components/responses/Invalid" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/projects/{id}:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [Проекты]
+      summary: Проект с фото
+      responses:
+        "200":
+          description: Проект
+          content:
+            application/json:
+              schema: { type: object, properties: { ok: { const: true }, project: { $ref: "#/components/schemas/Project" } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Проекты]
+      summary: Изменить проект (с защитой от затирания по version)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties:
+                version: { type: integer, minimum: 1 }
+                title: { type: string }
+                options: { $ref: "#/components/schemas/ProjectOptions" }
+                status: { enum: [draft, in_cart] }
+            example: { version: 1, title: "Отпуск 2026" }
+      responses:
+        "200": { description: Изменён, version + 1 }
+        "400": { $ref: "#/components/responses/Invalid" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Версия устарела — проект изменили на другом устройстве (или проект уже в заказе)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { ok: false, error: { code: version_conflict, message: "Проект изменили на другом устройстве. Обновите страницу, чтобы не потерять изменения.", requestId: "7f0c…", currentVersion: 3 } }
+    delete:
+      tags: [Проекты]
+      summary: Удалить проект и его фото (файлы тоже)
+      responses:
+        "200": { description: Удалён }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/projects/{id}/photos/upload-url:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [Фото]
+      summary: Подписанная ссылка для загрузки одного фото (JPEG/PNG до 25 МБ)
+      description: Загрузка — `PUT upload.url` с телом файла и заголовками `upload.headers`. Путь `{user_id}/{project_id}/{uuid}.jpg` выдаёт сервер.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mime, bytes]
+              properties:
+                mime: { enum: [image/jpeg, image/png] }
+                bytes: { type: integer, minimum: 1, maximum: 26214400 }
+            example: { mime: image/jpeg, bytes: 2400000 }
+      responses:
+        "200":
+          description: Ссылка на 2 часа
+          content:
+            application/json:
+              example: { ok: true, upload: { path: "9b1…/4c2…/0f3….jpg", url: "https://…/storage/v1/object/upload/sign/photos/…?token=…", method: PUT, headers: { content-type: image/jpeg, x-upsert: "false" }, expiresIn: 7200 } }
+        "400":
+          description: Неподходящий тип или размер
+          content:
+            application/json:
+              example: { ok: false, error: { code: invalid_input, message: "Проверьте поле «bytes»: Файл больше 25 МБ. Уменьшите фото или выберите другое.", requestId: "…" } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooMany" }
+
+  /api/v1/projects/{id}/photos:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [Фото]
+      summary: Зафиксировать загруженное фото (сервер проверяет первые байты и размеры кадра)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path]
+              properties:
+                path: { type: string }
+                edits: { type: object }
+                quality: { type: object }
+                nsfw: { type: object, description: "Вероятности nsfwjs (porn, hentai, sexy, …). Флаг модерации: porn+hentai > 0,7 или sexy > 0,85" }
+      responses:
+        "409":
+          description: Проект уже в заказе (project_ordered) — фото добавить нельзя
+          content:
+            application/json:
+              example: { ok: false, error: { code: project_ordered, message: "Проект уже в заказе — новые фото добавить нельзя. Создайте новый проект.", requestId: "…" } }
+        "201":
+          description: Фото добавлено
+          content:
+            application/json:
+              schema: { type: object, properties: { ok: { const: true }, photo: { $ref: "#/components/schemas/Photo" } } }
+        "400":
+          description: Не JPEG/PNG, больше 25 МБ или чужой путь
+          content:
+            application/json:
+              example: { ok: false, error: { code: unsupported_format, message: "Это не JPEG и не PNG. Мы печатаем только фото в этих форматах.", requestId: "…" } }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/projects/{id}/photos/order:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    patch:
+      tags: [Фото]
+      summary: Новый порядок фото (ровно все фото проекта)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [order], properties: { order: { type: array, items: { type: string, format: uuid } } } }
+      responses:
+        "200": { description: "Порядок сохранён: { ok, count }" }
+        "400": { $ref: "#/components/responses/Invalid" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/projects/{id}/photos/{photoId}/print:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: photoId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [Фото]
+      summary: Ссылка для загрузки печатной версии изменённого фото (S03e)
+      description: |
+        Печатная версия — JPEG полного разрешения со всеми правками, собранный на устройстве при оформлении заказа
+        (`lib/photo/print.js`, воркер с OffscreenCanvas). Оригинал не меняется и хранится отдельно.
+        Путь `{user_id}/{project_id}/print/{photoId}/{uuid}.jpg` выдаёт сервер; загрузка — `PUT upload.url`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [bytes], properties: { bytes: { type: integer, minimum: 1, maximum: 26214400 } } }
+            example: { bytes: 3250000 }
+      responses:
+        "200":
+          description: Ссылка на 2 часа
+          content:
+            application/json:
+              example: { ok: true, upload: { path: "9b1…/4c2…/print/7d0…/0f3….jpg", url: "https://…", method: PUT, headers: { content-type: image/jpeg, x-upsert: "false" }, expiresIn: 7200 } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: "Проект уже в заказе (project_ordered)" }
+        "429": { $ref: "#/components/responses/TooMany" }
+    put:
+      tags: [Фото]
+      summary: Зафиксировать печатную версию (или снять её)
+      description: |
+        `{ path, edits }` — сервер читает начало файла: JPEG, размеры кадра как у оригинала (±2 точки, поворот допускается);
+        записывает `print_path` и правки фото (`edits.print = { path, width, height, bytes, at }`). Снимок заказа
+        (`order_items.snapshot.photos[].edits`) получает и правки, и путь печатной версии.
+        `{ path: null }` — правки сняли, печатается оригинал; `{ path: null, edits }` — файл не собрался на устройстве,
+        правки записываются параметрами.
+        D1: размер кадра — как у оригинала, или ровно ×2 по сторонам, если в правках `upscale: 2` («Резкость для печати»).
+        Правки по выделению касанием — `ops: [{ kind: "mask", act: "blurBg" | "lighten" | "darken" | "erase", id, mask: { w, h, rle } }]`
+        (маска ≤ 320 точек, RLE + base64); печатная версия уже собрана с ними на устройстве в полном разрешении.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path]
+              properties:
+                path: { type: string, nullable: true }
+                edits: { type: object, description: "photo.edits: { v, auto, autoOff, manual, ops, upscale? }" }
+            example: { path: "9b1…/4c2…/print/7d0…/0f3….jpg", edits: { v: 1, auto: null, autoOff: false, manual: { exposure: 20 }, ops: [{ kind: heal, cx: 0.4, cy: 0.12, r: 0.1 }] } }
+      responses:
+        "200":
+          description: Сохранено
+          content:
+            application/json:
+              example: { ok: true, print: { path: "9b1…/print/7d0…/0f3….jpg", width: 1600, height: 1200, bytes: 325900, at: "2026-11-12T00:47:00Z" } }
+        "400": { description: "invalid_path (чужой путь), unsupported_format (не JPEG), size_mismatch (другой размер кадра; с upscale: 2 — не ровно ×2), file_too_big, too_many_pixels (кадр больше 100 мегапикселей — файл удаляется)" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: "Запрос с другого сайта (bad_origin)" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: "Проект уже в заказе (project_ordered)" }
+
+  /api/v1/projects/{id}/photos/{photoId}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: photoId, in: path, required: true, schema: { type: string, format: uuid } }
+    delete:
+      tags: [Фото]
+      summary: Удалить фото и файл в хранилище
+      responses:
+        "200": { description: Удалено }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/photos/{id}/url:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [Фото]
+      summary: Подписанная ссылка на просмотр (10 минут). Клиент — свои фото, модератор — фото с флагом, админ — все
+      responses:
+        "200":
+          description: Ссылка
+          content:
+            application/json:
+              example: { ok: true, url: "https://…/storage/v1/object/sign/photos/…?token=…", expiresIn: 600 }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/cart:
+    get:
+      tags: [Корзина]
+      summary: Корзина с ценами сервера; с ?delivery=&promo= — и полный итог
+      parameters:
+        - { name: delivery, in: query, schema: { type: string }, example: belpost }
+        - { name: promo, in: query, schema: { type: string }, example: TEST10 }
+      responses:
+        "200":
+          description: Корзина и итог
+          content:
+            application/json:
+              example:
+                ok: true
+                cart: { items: [{ projectId: "…", title: "Отпуск", quantity: 1, photoCount: 2, unitPriceKop: 8100, lineTotalKop: 8100 }], goodsKop: 8100, currency: BYN }
+                totals: { goodsKop: 8100, discountKop: 810, deliveryKop: 590, totalKop: 7880, currency: BYN, delivery: europost }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    put:
+      tags: [Корзина]
+      summary: Заменить корзину целиком
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CartItems" }
+            example: { items: [{ projectId: "4c2…", quantity: 1 }] }
+      responses:
+        "200": { description: Новая корзина }
+        "400": { $ref: "#/components/responses/Invalid" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/cart/merge:
+    post:
+      tags: [Корзина]
+      summary: Перенести гостевую корзину в аккаунт (количества складываются, до 99)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CartItems" }
+      responses:
+        "200": { description: "{ ok, merged, skipped, cart }" }
+        "400": { $ref: "#/components/responses/Invalid" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/v1/checks/ack:
+    post:
+      tags: [Проекты]
+      summary: "«Продолжить всё равно» на шаге «Проверка» — запись осознанного решения в журнал (S02b)"
+      description: "Клиент оставил фото или страницы с предупреждением (размыто, формат, пустые страницы). Гость хранит отметку только в проекте на устройстве. Лимит — 60 отметок в минуту."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [issue]
+              properties:
+                issue: { type: string, maxLength: 80, description: "вид предупреждения: dpi, fmt, big, empty, overflow" }
+                title: { type: string, maxLength: 120 }
+                productSlug: { type: string }
+                projectId: { type: string, maxLength: 64, description: "id проекта на устройстве" }
+            example: { issue: dpi, title: "Может быть нечётко", productSlug: layflat, projectId: "m3x1k2abc" }
+      responses:
+        "200":
+          description: "Записано в журнал (action check.continue_anyway)"
+          content:
+            application/json:
+              example: { ok: true }
+        "400": { $ref: "#/components/responses/Invalid" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooMany" }
+
+  /api/v1/promo/validate:
+    post:
+      tags: [Корзина]
+      summary: Проверить промокод (гостю — по subtotal для предпросмотра, клиенту — по корзине на сервере)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [code], properties: { code: { type: string }, subtotal: { type: number } } }
+            example: { code: TEST10 }
+      responses:
+        "200":
+          description: "Ответ 200 и для неподходящего кода (это не ошибка запроса — консоль браузера остаётся чистой). valid true — применён, promo — условия кода для пересчёта на экране; valid false — code promo_not_found | promo_expired | promo_not_started | promo_min_total, текст для экрана в message"
+          content:
+            application/json:
+              examples:
+                applied: { value: { ok: true, valid: true, message: "Промокод применён", promo: { code: TEST10, kind: percent, label: "−10% на заказ", value: 10, minTotalKop: 0, validFrom: null, validTo: null, active: true }, discountKop: 810, freeDelivery: false } }
+                notFound: { value: { ok: true, valid: false, code: promo_not_found, reason: not_found, message: "Не подходит: такого промокода нет." } }
+                expired: { value: { ok: true, valid: false, code: promo_expired, reason: expired, message: "Истёк: срок действия промокода закончился." } }
+                minTotal: { value: { ok: true, valid: false, code: promo_min_total, reason: min_total, message: "Не подходит: промокод действует при заказе от 50,00 руб." } }
+        "429": { $ref: "#/components/responses/TooMany" }
+
+  /api/v1/orders:
+    get:
+      tags: [Заказы]
+      summary: Мои заказы
+      description: |
+        Список для экрана «Мои заказы» (последние 100): номер, статус, сумма, дата, названия позиций (`titles`), число позиций (`itemsCount`).
+        Демо-заказы (`isDemo`) при чтении продвигаются по таймеру — см. `GET /api/v1/orders/{id}`.
+      responses:
+        "200": { description: "{ ok, items: (Order & { itemsCount, titles: string[] })[] }" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Заказы]
+      summary: Оформить заказ из корзины (идемпотентно; сумму считает сервер)
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: 8–100 символов. Повтор с тем же ключом вернёт тот же заказ (200, replayed = true).
+          schema: { type: string, pattern: "^[A-Za-z0-9_.:-]{8,100}$" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [delivery, recipient]
+              properties:
+                delivery:
+                  type: object
+                  required: [code]
+                  properties:
+                    code: { type: string, example: belpost }
+                    address:
+                      type: object
+                      description: "Поля из addressFields способа доставки: city, street, house, flat, postcode, pickup_point. Для курьера (courier-*) ещё date — день доставки YYYY-MM-DD, не раньше ориентировочного срока и не позже чем через 60 дней (иначе 400 с полем delivery.address.date)"
+                recipient:
+                  type: object
+                  required: [name, phone]
+                  properties: { name: { type: string }, phone: { type: string }, email: { type: string, format: email } }
+                promoCode: { type: string }
+                paymentMethod: { enum: [card_test, erip_test] }
+            example: { delivery: { code: europost, address: { pickup_point: "Минск, пр. Независимости, 1" } }, recipient: { name: "Анна", phone: "+375 29 000-00-00" }, promoCode: TEST10 }
+      responses:
+        "201":
+          description: Заказ создан
+          content:
+            application/json:
+              schema: { type: object, properties: { ok: { const: true }, replayed: { const: false }, order: { $ref: "#/components/schemas/Order" } } }
+        "200": { description: Повтор с тем же ключом — тот же заказ (replayed = true) }
+        "400":
+          description: Нет ключа или ошибка ввода
+          content:
+            application/json:
+              example: { ok: false, error: { code: idempotency_key_required, message: "Нужен заголовок Idempotency-Key (8–100 символов: буквы, цифры, - _ . :). Он защищает от двойного заказа.", requestId: "…" } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409":
+          description: Корзина пуста, в проекте нет фото, или корзина изменилась / уже оформлена параллельным запросом (cart_changed)
+          content:
+            application/json:
+              example: { ok: false, error: { code: cart_empty, message: "Корзина пуста. Добавьте книгу или фото, чтобы оформить заказ.", requestId: "…" } }
+        "422": { description: Промокод не подходит или истёк }
+        "429": { $ref: "#/components/responses/TooMany" }
+
+  /api/v1/orders/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: UUID или номер заказа PP-ГГММДД-NNNNN
+        schema: { type: string }
+    get:
+      tags: [Заказы]
+      summary: Заказ — состав, суммы, получатель, доставка, лента статусов, обращения
+      description: |
+        Ровно 5 статусов ТЗ: «Принят» → «Модерация» → «Производство» → «Готов / передан в доставку» → «Завершён»
+        (`timeline[]` — каждый шаг со временем `at`, `history[]` — смены с причиной `reason` и источником `source`).
+        Демо-заказы (S02d, до мока ERP на S06) продвигаются при чтении: через 30 с после тестовой оплаты — «Модерация»;
+        ещё через 30 с — «Производство» автоодобрением, если ни у одного фото нет флага модерации (с флагом ждёт модератора);
+        дальше каждые 30 с. Смена — условным обновлением, одновременные чтения ленту не задваивают.
+        Позиции: `optionsText[]` (опции словами из каталога), `photoCount`, `thumbs[]` — до 8 миниатюр по подписанным ссылкам на 10 минут
+        (`{ id, url }`), `snapshot.photos[]` — снимок списка фото на момент заказа. `delivery.name` — способ доставки словами.
+      responses:
+        "200":
+          description: Заказ
+          content:
+            application/json:
+              schema: { type: object, properties: { ok: { const: true }, order: { $ref: "#/components/schemas/Order" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/orders/{id}/pay-test:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post:
+      tags: [Заказы]
+      summary: Тестовая оплата (деньги не списываются, данных карты нет)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [method], properties: { method: { enum: [card_test, erip_test] } } }
+      responses:
+        "200": { description: "Оплачено (тест) или уже было оплачено (alreadyPaid = true)" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/orders/{id}/interactions:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post:
+      tags: [Поддержка]
+      summary: Обращение по заказу (support или reprint), SLA 24 часа, бот подтверждает получение
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [topic, message]
+              properties: { topic: { type: string }, kind: { enum: [support, reprint] }, message: { type: string, maxLength: 2000 } }
+            example: { topic: "Где мой заказ?", kind: support, message: "Подскажите срок доставки" }
+      responses:
+        "201": { description: "{ ok, interaction, messages }" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooMany" }
+
+  /api/v1/interactions/{id}/messages:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [Поддержка]
+      summary: Переписка по моему обращению
+      responses:
+        "200": { description: "{ ok, interaction, messages }" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Поддержка]
+      summary: Новое сообщение клиента
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [body], properties: { body: { type: string, maxLength: 2000 } } }
+      responses:
+        "201": { description: "{ ok, message }" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/auth/register:
+    post:
+      tags: [Аккаунт]
+      summary: Регистрация клиента и сразу вход
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties: { name: { type: string, maxLength: 100 }, email: { type: string, format: email }, password: { type: string, minLength: 8 } }
+      responses:
+        "200": { description: "Аккаунт создан, cookies сессии поставлены: { ok, redirect }" }
+        "400": { $ref: "#/components/responses/Invalid" }
+        "409": { description: Почта уже занята }
+        "429": { $ref: "#/components/responses/TooMany" }
+
+  /api/v1/auth/login:
+    post:
+      tags: [Аккаунт]
+      summary: Вход по почте и паролю (ставит httpOnly cookies сессии)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [email, password], properties: { email: { type: string, format: email }, password: { type: string } } }
+      responses:
+        "200": { description: "{ ok, roles, activeRole, redirect }" }
+        "400":
+          description: Неверная почта или пароль
+          content:
+            application/json:
+              example: { ok: false, error: { code: invalid_credentials, message: "Неверная почта или пароль.", requestId: "…" } }
+        "429": { $ref: "#/components/responses/TooMany" }
+
+  /api/v1/auth/role:
+    post:
+      tags: [Аккаунт]
+      summary: Выбор активной роли (если у аккаунта их несколько)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [role], properties: { role: { enum: [client, moderator, admin] } } }
+      responses:
+        "200": { description: "{ ok, activeRole, redirect }" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/auth/logout:
+    post:
+      tags: [Аккаунт]
+      summary: Выход (удаляет cookies сессии и роли)
+      responses:
+        "200": { description: "{ ok, redirect }" }
+
+  /api/v1/auth/mfa/enroll:
+    post:
+      tags: [Аккаунт]
+      summary: Подключить двухфакторный вход (TOTP) для модератора и админа — QR-код
+      responses:
+        "200": { description: "{ ok, qr, secret }" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/auth/mfa/verify:
+    post:
+      tags: [Аккаунт]
+      summary: Проверить 6-значный код из приложения-аутентификатора
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [code, role], properties: { code: { type: string, pattern: "^[0-9]{6}$" }, role: { enum: [moderator, admin] } } }
+      responses:
+        "200": { description: "{ ok, activeRole, redirect }" }
+        "400": { description: Неверный код }
+        "429": { $ref: "#/components/responses/TooMany" }
+
+  /api/v1/me:
+    get:
+      tags: [Аккаунт]
+      summary: Кто я (гостю — authenticated = false)
+      security: []
+      responses:
+        "200": { description: Профиль и роли }
+    delete:
+      tags: [Аккаунт]
+      summary: Удалить аккаунт (подтверждение паролем)
+      description: Удаляются файлы фото, проекты, корзина, адреса, уведомления, подписки на пуши. Заказы обезличиваются и остаются для отчётности. Демо-аккаунты удалить нельзя.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [password], properties: { password: { type: string } } }
+      responses:
+        "200": { description: Удалён }
+        "400": { description: Пароль не подходит }
+        "403": { description: Демо-аккаунт }
+        "429": { $ref: "#/components/responses/TooMany" }
+
+  /api/v1/me/export:
+    get:
+      tags: [Аккаунт]
+      summary: Все мои данные одним JSON-файлом
+      responses:
+        "200": { description: "Файл picpac-my-data-ГГГГ-ММ-ДД.json (Content-Disposition: attachment)" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/TooMany" }
+
+  /api/v1/me/photos:
+    delete:
+      tags: [Аккаунт]
+      summary: Удалить все мои фото; для фото заказов в работе — запрос на удаление
+      responses:
+        "200":
+          description: Итог
+          content:
+            application/json:
+              example: { ok: true, message: "Удалено фото: 1. Ещё 3 — в заказах, которые печатаются: удалим их после завершения заказа.", deleted: 1, kept: 3, request: { id: "…", kind: delete_photos, status: pending } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/v1/admin/audit:
+    get:
+      tags: [Админ]
+      summary: Журнал действий с фильтрами (только admin, SEC-15)
+      description: Без параметров — последние 100 записей. Лишний параметр → 400. Даты — по Минску (UTC+3), `to` включительно. Почту в адресе передавать нельзя — для неё POST.
+      parameters:
+        - { name: action, in: query, description: "действие (order.create) или группа (auth.*)", schema: { type: string, maxLength: 64 } }
+        - { name: result, in: query, schema: { type: string, enum: [success, denied, error] } }
+        - { name: user, in: query, description: "полный uuid или первые 8 знаков", schema: { type: string } }
+        - { name: objectType, in: query, schema: { type: string } }
+        - { name: objectId, in: query, schema: { type: string, maxLength: 200 } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: before, in: query, description: "курсор «Показать ещё» — значение next из прошлого ответа", schema: { type: integer } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+      responses:
+        "200":
+          description: Записи журнала
+          content:
+            application/json:
+              example: { ok: true, timezone: Europe/Minsk, items: [{ id: 9393, at: "2026-11-12T09:31:37Z", action: auth.login, result: success, user_id: "…", details: { email: "…" } }], next: 9343 }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Админ]
+      summary: Поиск в журнале по почте (почта — только в теле)
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false, required: [email], properties: { email: { type: string, format: email }, before: { type: integer }, limit: { type: integer } } }
+      responses:
+        "200": { description: "Записи с details.email = почта (как GET)" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/admin/cart-reminders:
+    get:
+      tags: [Админ]
+      summary: Задержка напоминания о забытой корзине (только admin)
+      responses:
+        "200": { description: "{ ok, afterMinutes, choices: [5, 60, 1440] }" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Админ]
+      summary: «Отправить напоминания сейчас» — правила расписания (тихие часы, одно на корзину) + пуши по новым важным уведомлениям
+      requestBody: { content: { application/json: { schema: { type: object, additionalProperties: false } } } }
+      responses:
+        "200":
+          description: Итог
+          content: { application/json: { example: { ok: true, due: 1, created: 1, pushed: 1, quiet: 0, afterMin: 1440, source: admin } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { description: Слишком часто }
+    put:
+      tags: [Админ]
+      summary: Задержка напоминания
+      requestBody: { content: { application/json: { schema: { type: object, additionalProperties: false, required: [afterMinutes], properties: { afterMinutes: { type: integer, enum: [5, 60, 1440] } } } } } }
+      responses:
+        "200": { description: "{ ok, afterMinutes }" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/cron/cart-reminders:
+    post:
+      tags: [Расписание]
+      summary: Напоминания о забытой корзине и пуши (pg_cron / pg_net каждые 15 минут)
+      description: "Заголовок Authorization: Bearer <CRON_SECRET>. Без него или с неверным — 401. GET — то же (для Vercel Cron)."
+      responses:
+        "200": { description: "{ ok, due, created, pushed, quiet, afterMin, source: cron }" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/v1/push/subscriptions:
+    post:
+      tags: [Пуши]
+      summary: Сохранить пуш-подписку этого устройства (вошедший пользователь)
+      description: Тело — PushSubscription.toJSON(). Адрес — только push-сервисы (fcm.googleapis.com, *.push.services.mozilla.com, *.notify.windows.com, *.push.apple.com) по https; иначе 400. Подписка привязывается к пользователю и сессии входа; при выходе удаляется.
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false, required: [endpoint, keys], properties: { endpoint: { type: string, format: uri }, expirationTime: { type: [number, "null"] }, keys: { type: object, additionalProperties: false, properties: { p256dh: { type: string }, auth: { type: string } } } } }
+      responses:
+        "200": { description: "{ ok: true }" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Запрос с чужого сайта }
+    delete:
+      tags: [Пуши]
+      summary: Удалить свою подписку (чужую — нельзя, removed = 0)
+      requestBody: { content: { application/json: { schema: { type: object, additionalProperties: false, required: [endpoint], properties: { endpoint: { type: string, format: uri } } } } } }
+      responses:
+        "200": { description: "{ ok: true, removed: 1 }" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/v1/admin/stats:
+    get:
+      tags: [Статистика]
+      summary: Сводка дашборда (только admin)
+      description: |
+        Плитки (заказы сегодня, в работе, просрочено, на модерации, обращения без ответа, выручка (тест) за период),
+        воронка «просмотр → проект → корзина → оформление → оплачено (тест)» с конверсией шагов и cartToPaid,
+        медиана времени на шагах редактора и «где бросают», использование ИИ-редактора. Формулы — README «Формулы статистики».
+      parameters:
+        - { name: days, in: query, schema: { type: integer, enum: [7, 30], default: 7 } }
+        - { name: source, in: query, description: "all — с синтетикой (подпись «демо-данные»), real — без строк is_synthetic", schema: { type: string, enum: [all, real], default: all } }
+      responses:
+        "200":
+          description: Сводка
+          content:
+            application/json:
+              example:
+                ok: true
+                days: 7
+                source: all
+                label: демо-данные
+                tiles: { ordersToday: 23, inWork: 66, overdue: 10, onModeration: 13, unanswered: 17, unansweredOverdue: 4, revenueKop: 695633, paidPeriod: 64, ordersPeriod: 82 }
+                funnel: { cartToPaid: 58.4, steps: [{ key: product_view, label: Просмотр продукта, n: 375, fromPrev: null, fromFirst: 100 }] }
+                steps: { rows: [{ key: photos, label: Фото, medianSec: 93, samples: 182, dropped: 36, dropShare: 46.8 }], worst: { key: photos } }
+                ai: { projects: 166, projectsWithAi: 119, projectsWithAiPct: 71.7, autoEnhanced: 383, aiEdits: 146 }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/events:
+    post:
+      tags: [Статистика]
+      summary: Обезличенные события воронки пачкой (до 50)
+      description: |
+        Без персональных данных: sid — случайный id сеанса (24 hex, новый каждый день), пользователя сервер пишет только
+        хешем SHA-256 с солью ANALYTICS_SALT. Лишние поля и неизвестные события → 400. order_created и payment_test
+        пишет только сервер (при создании и тестовой оплате заказа). Лимит: 30 пачек в минуту на сеанс и 300 с IP → 429.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [sid, events]
+              properties:
+                sid: { type: string, pattern: "^[a-f0-9]{24}$" }
+                events:
+                  type: array
+                  minItems: 1
+                  maxItems: 50
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [type]
+                    properties:
+                      type: { type: string, enum: [product_view, project_create, photo_upload, editor_step, ai_edit, cart_add, checkout_start] }
+                      step: { type: string, enum: [photos, layout, edits, check] }
+                      durationMs: { type: integer, minimum: 0, maximum: 3600000, description: "Время на шаге, пока вкладка видна" }
+                      props:
+                        type: object
+                        additionalProperties: false
+                        properties:
+                          product: { type: string, pattern: "^[a-z0-9-]{1,40}$" }
+                          kind: { type: string, enum: [auto, command, local, cloud] }
+                          count: { type: integer, minimum: 0, maximum: 500 }
+            example: { sid: "3f9a0c1b2d4e5f60718293a4", events: [{ type: product_view, props: { product: pages-book } }, { type: editor_step, step: photos, durationMs: 42000 }] }
+      responses:
+        "202": { description: "Принято", content: { application/json: { example: { ok: true, accepted: 2 } } } }
+        "400": { description: Неверные данные (в том числе лишние поля) }
+        "403": { description: Запрос с чужого сайта }
+        "429": { description: Слишком часто, заголовок Retry-After }
+
+  /api/v1/erp/events:
+    post:
+      tags: [ERP (мок)]
+      summary: Событие производства от ERP (по секрету, без входа)
+      description: |
+        Заголовок `Authorization: Bearer <ERP_SECRET>`, сравнение в постоянное время. Нет секрета на сервере — `503`.
+        Порядок: `moderation_passed` (из «Модерации») → `print_started` → `printed` → `bound` (можно пропустить) → `packed` →
+        `handed_to_delivery` (→ «Готов / передан в доставку») → `delivered` (→ «Завершён»). Назад и повтор подэтапа — `409`.
+        Идемпотентность по `eventId`: повтор → `200 replayed: true`; тот же `eventId` с другим заказом или типом → `409 idempotency_conflict`.
+        Отказы `409` не сохраняются как события — только в журнале (`erp.event`), их можно повторить с тем же `eventId`.
+      security: [{ erpBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [eventId, type]
+              properties:
+                eventId: { type: string, pattern: "^[A-Za-z0-9_.:-]{8,100}$" }
+                type: { type: string, enum: [moderation_passed, print_started, printed, bound, packed, handed_to_delivery, delivered] }
+                orderNumber: { type: string, example: PP-261112-10056, description: "Ровно одно из orderNumber и orderId" }
+                orderId: { type: string, format: uuid }
+                occurredAt: { type: string, format: date-time }
+                comment: { type: string, maxLength: 200 }
+            example: { eventId: erp-20261112-000123, type: print_started, orderNumber: PP-261112-10056, occurredAt: "2026-11-12T10:15:00+03:00", comment: "Цех 2" }
+      responses:
+        "200":
+          description: Применено (или повтор того же события)
+          content:
+            application/json:
+              example: { ok: true, applied: true, replayed: false, order: { id: "…", number: PP-261112-10056, status: production, statusLabel: Производство, stage: print_started, substatus: Печать, progress: 45 } }
+        "400": { $ref: "#/components/responses/Invalid" }
+        "401":
+          description: Нет или неверный секрет
+          content: { application/json: { example: { ok: false, error: { code: unauthorized, message: "Нужен заголовок Authorization: Bearer <секрет ERP>.", requestId: "…" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: invalid_transition | moderation_pending | idempotency_conflict
+          content: { application/json: { example: { ok: false, error: { code: invalid_transition, message: "Событие «Напечатано» недопустимо: заказ PP-261112-10056 в статусе «Модерация».", requestId: "…", status: moderation } } } }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "503":
+          description: ERP_SECRET не задан на сервере
+          content: { application/json: { example: { ok: false, error: { code: erp_not_configured, message: "Приём событий ERP не настроен на сервере (нет ERP_SECRET).", requestId: "…" } } } }
+  /api/v1/notifications:
+    get:
+      tags: [Уведомления]
+      summary: Центр уведомлений клиента (только важное), заодно продвигает мои демо-заказы
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 30 } }
+      responses:
+        "200":
+          description: Список и число непрочитанных
+          content:
+            application/json:
+              example: { ok: true, unread: 1, items: [{ id: "…", kind: order_shipped, title: "Заказ готов и передан в доставку", body: "Заказ PP-… напечатан, упакован и передан в доставку.", link: "/orders/…", orderId: "…", category: orders, read: false, createdAt: "2026-11-12T09:32:00Z" }] }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/notifications/read:
+    post:
+      tags: [Уведомления]
+      summary: Отметить прочитанными — все или по списку (чужие id молча не трогаются)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                all: { type: boolean, enum: [true] }
+                ids: { type: array, maxItems: 100, items: { type: string, format: uuid } }
+            example: { all: true }
+      responses:
+        "200": { description: Готово, content: { application/json: { example: { ok: true, marked: 3, unread: 0 } } } }
+        "400": { $ref: "#/components/responses/Invalid" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/TooMany" }
+  /api/v1/admin/notifications:
+    get:
+      tags: [Админ]
+      summary: Лента сотрудника — админ видит все заказы и обращения, модератор только модерацию
+      responses:
+        "200": { description: Лента, content: { application/json: { example: { ok: true, unread: 2, items: [{ id: 1, kind: order_new, audience: admin, title: "Новый заказ PP-…", body: "Заказ создан", link: "/admin/orders/…", unread: true }] } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Админ]
+      summary: «Прочитать все» (тело — пустой объект)
+      requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: false }, example: {} } } }
+      responses:
+        "200": { description: Готово, content: { application/json: { example: { ok: true, unread: 0 } } } }
+        "400": { $ref: "#/components/responses/Invalid" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooMany" }
+  /api/v1/admin/orders/{id}/status:
+    post:
+      tags: [Админ]
+      summary: Ручная смена статуса (только админ, причина обязательна)
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [status, reason]
+              properties:
+                status: { type: string, enum: [accepted, moderation, production, shipped, done] }
+                reason: { type: string, minLength: 5, maxLength: 300 }
+            example: { status: shipped, reason: "ERP не прислал событие, проверили в цехе" }
+      responses:
+        "200": { description: Статус изменён, content: { application/json: { example: { ok: true, order: { id: "…", number: PP-…, status: shipped, statusLabel: "Готов / передан в доставку", substatus: "Передан в доставку" } } } } }
+        "400":
+          description: Нет причины или она короче 5 символов
+          content: { application/json: { example: { ok: false, error: { code: invalid_input, message: "Проверьте данные: одно из полей — Укажите причину — от 5 символов.", requestId: "…", fields: { reason: "Укажите причину — от 5 символов." } } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Тот же статус (same_status)
+          content: { application/json: { example: { ok: false, error: { code: same_status, message: "Заказ PP-… уже в статусе «Модерация».", requestId: "…" } } } }
+        "429": { $ref: "#/components/responses/TooMany" }
+  /api/v1/admin/interactions/{id}:
+    get:
+      tags: [Поддержка (оператор)]
+      summary: Обращение для оператора (админ) — переписка и маскированные данные клиента
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { description: Обращение, content: { application/json: { example: { ok: true, interaction: { id: "…", topic: "Изменить доставку", status: open }, order: { id: "…", number: PP-…, status: production, client: { name: "Тест Т.", phone: "+375 ••••••• 67", email: "t•••@example.com", address: "Пункт выдачи (скрыт)" } }, messages: [{ id: 1, author: client, body: "…", createdAt: "…" }] } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Поддержка (оператор)]
+      summary: Ответ оператора (клиент получит уведомление «Ответ поддержки»)
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false, required: [body], properties: { body: { type: string, minLength: 2, maxLength: 2000 }, close: { type: boolean } } }
+            example: { body: "Здравствуйте! Заказ уже передан в доставку.", close: false }
+      responses:
+        "201": { description: Ответ отправлен, content: { application/json: { example: { ok: true, status: answered, message: { id: 3, author: operator, body: "…", createdAt: "…" } } } } }
+        "400": { $ref: "#/components/responses/Invalid" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Обращение закрыто
+          content: { application/json: { example: { ok: false, error: { code: interaction_closed, message: "Обращение закрыто — ответить в нём нельзя.", requestId: "…" } } } }
+        "429": { $ref: "#/components/responses/TooMany" }
+  /api/v1/admin/moderation:
+    get:
+      tags: [Модерация]
+      summary: Очередь модерации (модератор и админ) — фото с флагом цензуры, клиент только инициалами
+      responses:
+        "200": { description: Очередь, content: { application/json: { example: { ok: true, items: [{ id: "…", orderId: "…", orderNumber: PP-…, photoIndex: 0, url: "https://…(10 минут)", scores: { porn: 0.81, hentai: 0.02, sexy: 0.1 }, client: { name: "Т. Т.", phone: "+375 ••••••• 21", email: "t•••@example.com" }, createdAt: "…" }] } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/admin/moderation/{id}:
+    post:
+      tags: [Модерация]
+      summary: Решение модератора — «Одобрить» или «Вернуть на замену» (причина из списка обязательна)
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [approve, return] }
+                reason: { type: string, enum: [explicit, violence, personal_data, rights, quality, other] }
+                comment: { type: string, maxLength: 500 }
+            example: { decision: return, reason: quality, comment: "Фото слишком тёмное" }
+      responses:
+        "200": { description: Решение принято, content: { application/json: { example: { ok: true, decision: approved, orderStatus: production, waiting: false } } } }
+        "400":
+          description: Нет причины возврата
+          content: { application/json: { example: { ok: false, error: { code: invalid_input, message: "Проверьте данные: …", requestId: "…", fields: { reason: "Выберите причину возврата." } } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: already_decided | not_in_moderation
+          content: { application/json: { example: { ok: false, error: { code: already_decided, message: "Решение по этому фото уже принято.", requestId: "…" } } } }
+        "429": { $ref: "#/components/responses/TooMany" }
+  /api/v1/ai/cloud:
+    get:
+      tags: [ИИ]
+      summary: Облачный ИИ — состояние для вошедшего клиента
+      description: |
+        D6 (SEC-20). Включён ли облачный ИИ (Cloudflare Workers AI), есть ли согласие, сколько облачных правок осталось
+        сегодня (20 в сутки по UTC). Ключи Cloudflare есть только на сервере и в ответах не бывают. Без входа — 401.
+      responses:
+        "200": { description: Состояние, content: { application/json: { example: { ok: true, available: true, consent: false, consentText: "Фото отправится в Cloudflare для обработки и не сохраняется.", used: 0, limit: 20, left: 20, limits: { perMinute: 10, detectSide: 768, editSide: 512 } } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/ai/consent:
+    post:
+      tags: [ИИ]
+      summary: Дать согласие на облачный ИИ (один раз на аккаунт)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false, required: [accept], properties: { accept: { type: boolean, const: true } } }
+      responses:
+        "200": { description: Согласие сохранено, в журнале ai.cloud_consent }
+        "400": { description: "accept не true или лишние поля" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Запрос с чужого сайта }
+        "429": { $ref: "#/components/responses/TooMany" }
+    delete:
+      tags: [ИИ]
+      summary: Отозвать согласие на облачный ИИ
+      responses:
+        "200": { description: "Согласие отозвано — облачные вызовы снова 403" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/ai/command:
+    post:
+      tags: [ИИ]
+      summary: Свободная команда, которую не понял словарь на устройстве (gpt-oss-120b)
+      description: |
+        Только текст команды (до 300 символов). Модель `@cf/openai/gpt-oss-120b` возвращает только операции, которые редактор
+        уже умеет: adjust (свет и цвет, ±60), auto, blur_background, lighten_selection, darken_selection, remove/find
+        (английское слово-цель), creative, undo, reset. Ответ модели проверяется строго (zod), непонятный → 422.
+        Порядок проверок: вход → 10 запросов в минуту → схема → согласие (403 ai_consent_required) → квота
+        (20 в сутки на пользователя и 8 000 нейронов в сутки на всё приложение, 429) → вызов (тайм-аут 30 с, 503) → журнал
+        (модель, байты, нейроны, время — без текста команды).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false, required: [text], properties: { text: { type: string, minLength: 1, maxLength: 300 } } }
+            example: { text: "сделай как в старом кино" }
+      responses:
+        "200": { description: Операции редактора, content: { application/json: { example: { ok: true, ops: [{ op: adjust, exposure: -10, contrast: 30, warmth: 10, saturation: -20 }], say: "Винтажный вид старого кино", left: 19 } } } }
+        "400": { description: Неверные данные }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: "Нет согласия (ai_consent_required) или запрос с чужого сайта" }
+        "422": { description: "Ответ модели не прошёл проверку (ai_not_understood)" }
+        "429": { description: "Лимит облачных правок на сегодня исчерпан (ai_quota_exhausted / ai_budget_exhausted) или слишком часто; Retry-After" }
+        "503": { description: "Облако недоступно, тайм-аут или не настроено (ai_unavailable, ai_timeout, ai_not_configured)" }
+  /api/v1/ai/detect:
+    post:
+      tags: [ИИ]
+      summary: Найти предмет по слову (Moondream detect)
+      description: |
+        Кадр — `data:image/jpeg;base64`, не больше 1024 точек по длинной стороне (браузер шлёт 768) и 1 МБ; сервер ещё раз
+        вырезает EXIF/GPS/комментарии. Слово-цель по-русски переводится словарём, иначе через gpt-oss-120b.
+        Ответ — рамки в долях 0…1 (до 3, крупные первыми); по ним редактор выделяет предмет на устройстве (SlimSAM).
+        Если модель вернула пустой ответ — 503 ai_detect_unavailable, правка возвращается, 10 минут вызовы не делаются.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false, required: [image, target], properties: { image: { type: string, maxLength: 1400000 }, target: { type: string, minLength: 1, maxLength: 60 } } }
+      responses:
+        "200": { description: Рамки, content: { application/json: { example: { ok: true, boxes: [{ x0: 0.3, y0: 0.4, x1: 0.62, y1: 0.86 }], target: car, left: 18 } } } }
+        "400": { description: "Не JPEG, больше 1024 точек или 1 МБ, лишние поля" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Нет согласия или чужой сайт }
+        "413": { description: Тело больше 1,5 МБ }
+        "429": { description: Лимит на сегодня или слишком часто }
+        "503": { description: "Облако или модель поиска недоступны (ai_unavailable, ai_detect_unavailable)" }
+  /api/v1/ai/edit:
+    post:
+      tags: [ИИ]
+      summary: Творческая правка вырезки (FLUX.2 klein 4B) — только сервер, в редакторе не подключена
+      description: |
+        Вырезка JPEG ≤ 512 точек и 500 КБ, задание до 200 символов (русское переводит gpt-oss-120b). Ответ — PNG/JPEG
+        base64 размером 256…512 (стороны кратны 16). Вклейка только внутри маски — задача редактора (не сделано, D6 ⚠️).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false, required: [image, prompt], properties: { image: { type: string, maxLength: 700000 }, prompt: { type: string, minLength: 3, maxLength: 200 } } }
+      responses:
+        "200": { description: "Картинка: { ok, image: data URL, width, height, left }" }
+        "400": { description: Неверная вырезка или задание }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Нет согласия или чужой сайт }
+        "429": { description: Лимит на сегодня или слишком часто }
+        "503": { description: Облако недоступно }
+
+components:
+  securitySchemes:
+    erpBearer:
+      type: http
+      scheme: bearer
+      description: Секрет мока ERP (ERP_SECRET), только для POST /api/v1/erp/events
+    session:
+      type: apiKey
+      in: cookie
+      name: sb-<project>-auth-token
+      description: Cookies сессии Supabase (httpOnly), ставятся при входе
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  responses:
+    Unauthorized:
+      description: Нужно войти
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { ok: false, error: { code: unauthorized, message: "Нужно войти в аккаунт.", requestId: "3c9d2b1e-…" } }
+    Forbidden:
+      description: Не та роль
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { ok: false, error: { code: forbidden, message: "Недостаточно прав для этого действия.", requestId: "…" } }
+    BadRequest:
+      description: Неверные данные или лишнее поле
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { ok: false, error: { code: bad_request, message: "Неверный фильтр журнала.", requestId: "…" } }
+    NotFound:
+      description: Нет такого объекта или он чужой (не подсказываем, что он существует)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { ok: false, error: { code: not_found, message: "Заказ не найден. Возможно, его удалили или ссылка неверная.", requestId: "…" } }
+    Invalid:
+      description: Ошибка ввода
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { ok: false, error: { code: invalid_input, message: "Число страниц для «Classic» — от 20 до 60, чётное.", requestId: "…", fields: { options: "…" } } }
+    Conflict:
+      description: Конфликт состояния (проект в заказе, версия устарела и т. п.)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    TooMany:
+      description: Слишком много запросов (есть заголовок Retry-After)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { ok: false, error: { code: rate_limited, message: "Слишком много запросов подряд. Подождите минуту и попробуйте снова.", requestId: "…" } }
+    Unavailable:
+      description: Временно недоступно
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+  schemas:
+    Error:
+      type: object
+      required: [ok, error]
+      properties:
+        ok: { const: false }
+        error:
+          type: object
+          required: [code, message, requestId]
+          properties:
+            code: { type: string }
+            message: { type: string, description: По-русски, понятно человеку }
+            requestId: { type: string }
+            fields: { type: object, additionalProperties: { type: string } }
+    Catalog:
+      type: object
+      properties:
+        ok: { const: true }
+        currency: { const: BYN }
+        timezone: { const: Europe/Minsk }
+        products: { type: array, items: { $ref: "#/components/schemas/Product" } }
+        delivery: { type: array, items: { $ref: "#/components/schemas/DeliveryMethod" } }
+    Product:
+      type: object
+      properties:
+        slug: { type: string }
+        name: { type: string }
+        kind: { enum: [book, print] }
+        printDays: { type: integer }
+        pages: { type: object, properties: { min: { type: integer }, max: { type: integer }, step: { type: integer } } }
+        sizes:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              label: { type: string }
+              w: { type: number }
+              h: { type: number }
+              k: { type: number, description: "Коэффициент цены книги (тестовый): 1 + 0,6 × (площадь/400 − 1)" }
+              unitPriceKop: { type: [integer, "null"] }
+        options: { type: object, description: "Группы опций: cover, lamination, paper, print, surface" }
+        requirements: { type: object }
+        priceFromKop: { type: integer }
+    DeliveryMethod:
+      type: object
+      properties:
+        code: { type: string }
+        name: { type: string }
+        priceKop: { type: integer }
+        freeFromKop: { type: [integer, "null"] }
+        minDays: { type: integer }
+        maxDays: { type: integer }
+        addressFields: { type: array, items: { type: string } }
+    ProjectOptions:
+      type: object
+      additionalProperties: false
+      properties:
+        size: { type: string, example: "20x20" }
+        pages: { type: integer }
+        cover: { type: string }
+        lamination: { type: string }
+        paper: { type: string }
+        print: { type: string }
+        surface: { type: string }
+        settings: { type: object, description: "Настройки редактора и раскладки (до 50 КБ): quantity, acks (отметки «Продолжить всё равно»), placement {idФото: {fit, focus}}, edits {idФото: {v, auto, autoOff, manual, ops}} — неразрушающие правки ИИ-редактора (S03), оригинал фото не меняется" }
+    Project:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        productSlug: { type: string }
+        title: { type: string }
+        options: { $ref: "#/components/schemas/ProjectOptions" }
+        status: { enum: [draft, in_cart, ordered] }
+        version: { type: integer }
+        photos: { type: array, items: { $ref: "#/components/schemas/Photo" } }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    Photo:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        mime: { enum: [image/jpeg, image/png] }
+        bytes: { type: integer }
+        width: { type: integer }
+        height: { type: integer }
+        position: { type: integer }
+        moderationFlag: { type: boolean }
+    CartItems:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 50
+          items:
+            type: object
+            required: [projectId, quantity]
+            properties:
+              projectId: { type: string, format: uuid }
+              quantity: { type: integer, minimum: 1, maximum: 99 }
+    Order:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        number: { type: string, example: PP-261111-10001 }
+        status: { enum: [accepted, moderation, production, shipped, done] }
+        statusLabel: { type: string, example: Принят }
+        currency: { const: BYN }
+        goodsKop: { type: integer }
+        discountKop: { type: integer }
+        deliveryKop: { type: integer }
+        totalKop: { type: integer }
+        payment: { type: object, properties: { method: { type: [string, "null"] }, status: { enum: [unpaid, paid_test] }, paidAt: { type: [string, "null"] } } }
+        eta: { type: object, properties: { from: { type: string, format: date-time }, to: { type: string, format: date-time } } }
+        timeline:
+          type: array
+          description: Ровно 5 шагов ТЗ — Принят → Модерация → Производство → Готов / передан в доставку → Завершён
+          items: { type: object, properties: { status: { type: string }, label: { type: string }, at: { type: [string, "null"] }, done: { type: boolean } } }
+        items: { type: array, items: { type: object } }
+        interactions: { type: array, items: { type: object } }
