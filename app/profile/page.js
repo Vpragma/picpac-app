@@ -2,6 +2,7 @@
 import Link from "next/link";
 import AccountPanel from "@/components/auth/AccountPanel";
 import Notifications from "@/components/Notifications";
+import PushToggle from "@/components/PushToggle";
 import AutoEnhanceSetting from "@/components/AutoEnhanceSetting";
 import { InstallCard } from "@/components/Pwa";
 import { isStaffRole } from "@/lib/roles";
@@ -55,6 +56,7 @@ export default async function ProfilePage() {
         </div>
       )}
       <Notifications />
+      {auth.user && <PushToggle />}
       <AutoEnhanceSetting />
       <InstallCard />
       <section className="card">

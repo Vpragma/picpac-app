@@ -3,6 +3,7 @@ import { limitWrite } from "@/lib/server/api";
 import { clientIp, writeAudit } from "@/lib/server/audit";
 import { json, jsonError, sameOrigin } from "@/lib/server/http";
 import { clearAuthCookies, getAuth } from "@/lib/server/session";
+import { createSupabaseAdmin } from "@/lib/server/supabaseAdmin";
 
 export async function POST(request) {
   if (!sameOrigin(request)) return jsonError(403, "bad_origin", "Запрос отклонён: он пришёл с другого сайта.");
@@ -12,6 +13,8 @@ export async function POST(request) {
   if (auth.user) {
     // scope local — выходим только на этом устройстве
     await auth.supabase.auth.signOut({ scope: "local" });
+    // Пуш-подписки этой сессии гаснут вместе с ней (SEC-18/19) — даже если устройство без сети не отписалось само
+    if (auth.sessionId) await createSupabaseAdmin().from("push_subscriptions").delete().eq("user_id", auth.user.id).eq("session_id", auth.sessionId);
     await writeAudit({
       userId: auth.user.id,
       role: auth.activeRole,

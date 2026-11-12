@@ -116,7 +116,8 @@ async function handle(request) {
 
   // Отказ: запись в журнал и ответ 401/403 (для страниц — понятная страница на русском)
   const deny = async (status, reason, ctx = {}) => {
-    if (claims?.sub || shouldLogGuestDenial(ip))
+    // Закрытая сессия пишется так же редко, как гость: иначе каждый повтор старого токена — новая запись
+    if ((claims?.sub && reason !== "session_revoked") || shouldLogGuestDenial(ip))
       await writeAudit({
         userId: claims?.sub || null,
         role: ctx.role || null,
@@ -142,13 +143,14 @@ async function handle(request) {
 
   if (!claims?.sub) return deny(401, "no_session");
 
-  // Строго свои роли: админу правило RLS показывает роли всех пользователей
-  const { data: rows, error } = await supabase.from("user_roles").select("role").eq("user_id", claims.sub);
+  // SEC-22: строго свои роли и только у живой сессии (session_id токена есть в auth.sessions, миграция 0009)
+  const { data: live, error } = await supabase.rpc("session_roles");
   if (error) {
     const out = isApi ? apiError(503, MESSAGES[503]) : NextResponse.rewrite(new URL("/denied/403", request.url), { request });
     return withCookies(response, out);
   }
-  const roles = sortRoles((rows || []).map((r) => r.role));
+  if (live === null) return deny(401, "session_revoked");
+  const roles = sortRoles(live || []);
   const raw = request.cookies.get(ROLE_COOKIE)?.value || null;
   const claimed = parseRoleCookie(raw, claims.sub);
   const role = effectiveRole(claimed, roles);

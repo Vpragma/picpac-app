@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: PicPac API
-  version: "1.4.0"
+  version: "1.5.0"
   summary: API мобильного приложения PicPac (трек 2 хакатона «Великий камень» × «Фотопринт»)
   description: |
     Все ответы — JSON. Успех: `{ "ok": true, ... }`. Ошибка — единый формат:
@@ -692,12 +692,96 @@ paths:
   /api/v1/admin/audit:
     get:
       tags: [Админ]
-      summary: Журнал действий (только admin)
-      parameters: [{ name: limit, in: query, schema: { type: integer, maximum: 100 } }]
+      summary: Журнал действий с фильтрами (только admin, SEC-15)
+      description: Без параметров — последние 100 записей. Лишний параметр → 400. Даты — по Минску (UTC+3), `to` включительно. Почту в адресе передавать нельзя — для неё POST.
+      parameters:
+        - { name: action, in: query, description: "действие (order.create) или группа (auth.*)", schema: { type: string, maxLength: 64 } }
+        - { name: result, in: query, schema: { type: string, enum: [success, denied, error] } }
+        - { name: user, in: query, description: "полный uuid или первые 8 знаков", schema: { type: string } }
+        - { name: objectType, in: query, schema: { type: string } }
+        - { name: objectId, in: query, schema: { type: string, maxLength: 200 } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: before, in: query, description: "курсор «Показать ещё» — значение next из прошлого ответа", schema: { type: integer } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
       responses:
-        "200": { description: Записи журнала }
+        "200":
+          description: Записи журнала
+          content:
+            application/json:
+              example: { ok: true, timezone: Europe/Minsk, items: [{ id: 9393, at: "2026-11-12T09:31:37Z", action: auth.login, result: success, user_id: "…", details: { email: "…" } }], next: 9343 }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Админ]
+      summary: Поиск в журнале по почте (почта — только в теле)
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false, required: [email], properties: { email: { type: string, format: email }, before: { type: integer }, limit: { type: integer } } }
+      responses:
+        "200": { description: "Записи с details.email = почта (как GET)" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/admin/cart-reminders:
+    get:
+      tags: [Админ]
+      summary: Задержка напоминания о забытой корзине (только admin)
+      responses:
+        "200": { description: "{ ok, afterMinutes, choices: [5, 60, 1440] }" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Админ]
+      summary: «Отправить напоминания сейчас» — правила расписания (тихие часы, одно на корзину) + пуши по новым важным уведомлениям
+      requestBody: { content: { application/json: { schema: { type: object, additionalProperties: false } } } }
+      responses:
+        "200":
+          description: Итог
+          content: { application/json: { example: { ok: true, due: 1, created: 1, pushed: 1, quiet: 0, afterMin: 1440, source: admin } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { description: Слишком часто }
+    put:
+      tags: [Админ]
+      summary: Задержка напоминания
+      requestBody: { content: { application/json: { schema: { type: object, additionalProperties: false, required: [afterMinutes], properties: { afterMinutes: { type: integer, enum: [5, 60, 1440] } } } } } }
+      responses:
+        "200": { description: "{ ok, afterMinutes }" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/cron/cart-reminders:
+    post:
+      tags: [Расписание]
+      summary: Напоминания о забытой корзине и пуши (pg_cron / pg_net каждые 15 минут)
+      description: "Заголовок Authorization: Bearer <CRON_SECRET>. Без него или с неверным — 401. GET — то же (для Vercel Cron)."
+      responses:
+        "200": { description: "{ ok, due, created, pushed, quiet, afterMin, source: cron }" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/v1/push/subscriptions:
+    post:
+      tags: [Пуши]
+      summary: Сохранить пуш-подписку этого устройства (вошедший пользователь)
+      description: Тело — PushSubscription.toJSON(). Адрес — только push-сервисы (fcm.googleapis.com, *.push.services.mozilla.com, *.notify.windows.com, *.push.apple.com) по https; иначе 400. Подписка привязывается к пользователю и сессии входа; при выходе удаляется.
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false, required: [endpoint, keys], properties: { endpoint: { type: string, format: uri }, expirationTime: { type: [number, "null"] }, keys: { type: object, additionalProperties: false, properties: { p256dh: { type: string }, auth: { type: string } } } } }
+      responses:
+        "200": { description: "{ ok: true }" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Запрос с чужого сайта }
+    delete:
+      tags: [Пуши]
+      summary: Удалить свою подписку (чужую — нельзя, removed = 0)
+      requestBody: { content: { application/json: { schema: { type: object, additionalProperties: false, required: [endpoint], properties: { endpoint: { type: string, format: uri } } } } } }
+      responses:
+        "200": { description: "{ ok: true, removed: 1 }" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
 
   /api/v1/admin/stats:
     get:
@@ -797,6 +881,12 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
           example: { ok: false, error: { code: forbidden, message: "Недостаточно прав для этого действия.", requestId: "…" } }
+    BadRequest:
+      description: Неверные данные или лишнее поле
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { ok: false, error: { code: bad_request, message: "Неверный фильтр журнала.", requestId: "…" } }
     NotFound:
       description: Нет такого объекта или он чужой (не подсказываем, что он существует)
       content:

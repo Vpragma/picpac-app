@@ -1,4 +1,4 @@
-// SEC-22: после удаления аккаунта и после выхода старые куки сессии не дают доступа к данным.
+// SEC-22: после удаления аккаунта и после выхода старые куки сессии не дают доступа к данным (D7: session_roles()).
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { Client, createTestUser, deleteTestUser, supabaseAdmin } from "../helpers/client.mjs";
@@ -6,13 +6,14 @@ import { Client, createTestUser, deleteTestUser, supabaseAdmin } from "../helper
 const admin = supabaseAdmin();
 let U;
 let V;
+let A;
 
 before(async () => {
-  [U, V] = await Promise.all([createTestUser(admin, ["client"], "sess"), createTestUser(admin, ["client"], "sess2")]);
+  [U, V, A] = await Promise.all([createTestUser(admin, ["client"], "sess"), createTestUser(admin, ["client"], "sess2"), createTestUser(admin, ["admin"], "sess-adm")]);
 });
 
 after(async () => {
-  for (const u of [U, V]) if (u) await deleteTestUser(admin, u).catch(() => {});
+  for (const u of [U, V, A]) if (u) await deleteTestUser(admin, u).catch(() => {});
 });
 
 const replay = (jar) => {
@@ -31,12 +32,28 @@ test("SEC-22: старые куки после удаления аккаунта
   assert.equal(r.json?.ok, false);
 });
 
-// Известный долг (S12): после выхода токен доступа работает до своего срока (≤ 1 ч) — подпись проверяется локально
-// (getClaims), а сессия и токен обновления уже отозваны. Тест оставлен как todo: он показывает долг, но не роняет набор.
-test("SEC-22: старые куки после выхода не дают доступа", { todo: "S12: проверять сессию на сервере (getUser или список отозванных session_id)" }, async () => {
+// D7: роли выдаёт public.session_roles() только живой сессии (session_id токена есть в auth.sessions).
+// Выход удаляет строку сессии — старый токен доступа сразу перестаёт работать, хотя подпись у него ещё верна.
+test("SEC-22: старые куки после выхода не дают доступа (API, /me, админка)", async () => {
   const old = new Map(V.client.jar);
+  assert.equal((await replay(old).req("/api/v1/projects")).status, 200, "до выхода куки работают");
   const out = await V.client.req("/api/v1/auth/logout", { method: "POST" });
   assert.equal(out.status, 200);
   const r = await replay(old).req("/api/v1/projects");
   assert.ok([401, 403].includes(r.status), `ожидали 401/403, пришло ${r.status}`);
+  assert.equal(r.json?.ok, false);
+  const me = await replay(old).req("/api/v1/me");
+  assert.equal(me.status, 200);
+  assert.equal(me.json?.authenticated, false, "после выхода /me не узнаёт пользователя");
+});
+
+test("SEC-22: старые куки админа после выхода — 401 в proxy (админка и API админки)", async () => {
+  const old = new Map(A.client.jar);
+  assert.equal((await replay(old).req("/api/v1/admin/audit?limit=1")).status, 200, "до выхода админка доступна");
+  const out = await A.client.req("/api/v1/auth/logout", { method: "POST" });
+  assert.equal(out.status, 200);
+  const api = await replay(old).req("/api/v1/admin/audit?limit=1");
+  assert.equal(api.status, 401, `API админки: ожидали 401, пришло ${api.status}`);
+  const page = await replay(old).req("/admin/audit");
+  assert.equal(page.status, 401, `страница админки: ожидали 401, пришло ${page.status}`);
 });
