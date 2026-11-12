@@ -10,12 +10,14 @@ import { qrSvg, siteUrl } from "@/lib/server/qr";
 import Shell from "../components/Shell";
 import { THEME_COLORS, THEME_COOKIE, parseTheme } from "@/lib/themeShared";
 
+// Jost — свои файлы с нашего сайта (next/font скачивает их при сборке, к Google в работе сайта запросов нет):
+// подмножества латиница + кириллица (один переменный файл на подмножество — и 400, и 500), font-display: swap.
+// N5: preload — браузер качает оба файла сразу вместе с HTML, а не после разбора CSS (заголовок первого экрана —
+// LCP — не ждёт смены шрифта).
 const jost = Jost({
   subsets: ["latin", "cyrillic"],
   weight: ["400", "500"],
-  // Без preload: при переходах между страницами Next повторно вставлял <link rel=preload> уже загруженных файлов шрифта,
-  // и браузер писал в консоль «preloaded but not used». Шрифт всё равно грузится сразу из CSS (display: swap).
-  preload: false,
+  preload: true,
   variable: "--font-jost",
   display: "swap",
 });

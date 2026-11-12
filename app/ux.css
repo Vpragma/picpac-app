@@ -101,6 +101,9 @@ label.row > input[type='checkbox']:not([role='switch']) { width: 22px; height: 2
 
 /* ── 6. Подвал с помощью (N-10) ─────────────────────────────────────── */
 .content { padding-bottom: 16px; }
+/* N5: подвал всегда ниже первого экрана — содержимое, которое дорисовывается после загрузки (черновик в редакторе,
+   корзина, заказы), не сдвигает его на виду (CLS было 0,08 у редактора). */
+.content { min-height: calc(100vh - 48px); min-height: calc(100svh - 48px); }
 .site-footer {
   padding: 16px 16px calc(var(--tabbar-h) + 24px + env(safe-area-inset-bottom));
   color: var(--ds-color-text-secondary); font-size: 0.875rem; text-align: center;
