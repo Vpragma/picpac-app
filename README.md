@@ -362,6 +362,13 @@ curl -X POST "$BASE/api/v1/erp/events" -H "Authorization: Bearer $ERP_SECRET" -H
   - панель цены внутри страницы; ширина содержимого до 80rem, админка тоже.
 - **Тесты:** `npm run test:a11y` — axe на 12 страницах × 2 темы × телефон и компьютер, проверка целей 44×44, клавиатура, крупный текст, помощь и 404 (`a11y/`).
 
+## Фото продуктов (W-04, K-10)
+
+- Каталог (главная) и страницы продуктов показывают фото PicPac. Соответствие продуктов и фото — `lib/productPhotos.js`.
+- Фото — сжатые копии WebP до 1200 px в `assets/products/<slug>/`, около 1,5 МБ на все. Их делает `node scripts/product-photos.mjs` из `docs/superpicpac/photos/`.
+- Картинки собираются на сервере: `getImageProps` из `next/image` + `<picture>`. Есть `srcset` и размытая заглушка, размеры заданы заранее, поэтому вёрстка не прыгает. JS главной от фото не растёт.
+- Логотипы оплаты для корзины: `public/payment/{visa,mastercard,belkart,erip,bepaid}.webp`, ширина 160 px, 1–2 КБ.
+
 ## Тестовая галерея
 
 20 фото со свободной лицензией (Wikimedia Commons: CC0, общественное достояние, CC BY, CC BY-SA) в `public/demo-gallery/`, каждое до 1600 px и 400 КБ. В `manifest.json` — подпись, ожидаемая проблема (тёмное, пересвет, жёлтый оттенок, размытое, маленькое 800 px, солнце в кадре, люди на фоне, пляж, завал горизонта, дубль), автор, лицензия и источник. Испорченные версии сделаны программно (`scripts/demo-gallery-build.mjs`, canvas в Chrome). Авторы и лицензии всех фото — также в [docs/test-photos/sources.md](docs/test-photos/sources.md).
