@@ -552,7 +552,7 @@ export default function CartPage() {
         <p className="muted small row" style={{ gap: 6, flexWrap: "wrap", margin: 0 }}>
           Платёжный сервис на сайте —
           {/* eslint-disable-next-line @next/next/no-img-element -- готовый WebP 160 px */}
-          <img src="/payment/bepaid.webp" alt="bePaid" width={45} height={27} loading="lazy" decoding="async" style={{ background: "#fff", borderRadius: 6, border: "1px solid var(--ds-color-border)" }} />
+          <img src="/payment/bepaid.webp" alt="bePaid" width={45} height={27} decoding="async" style={{ background: "#fff", borderRadius: 6, border: "1px solid var(--ds-color-border)" }} />
         </p>
       </section>
 
@@ -613,7 +613,7 @@ function PayLogos({ kind }) {
     <span className="row" style={{ gap: 4, flexShrink: 0 }} aria-hidden="true">
       {(PAY_LOGOS[kind] || []).map(([file, name]) => (
         // eslint-disable-next-line @next/next/no-img-element -- маленькие готовые WebP 160 px, оптимизация не нужна
-        <img key={file} src={`/payment/${file}.webp`} alt={name} width={45} height={27} loading="lazy" decoding="async" style={{ display: "block", background: "#fff", borderRadius: 6, border: "1px solid var(--ds-color-border)" }} />
+        <img key={file} src={`/payment/${file}.webp`} alt={name} width={45} height={27} decoding="async" style={{ display: "block", background: "#fff", borderRadius: 6, border: "1px solid var(--ds-color-border)" }} />
       ))}
     </span>
   );

@@ -13,7 +13,8 @@ export default function EditorLeaveToast() {
       // Адрес проверяем уже после перехода: при двойном запуске эффектов в dev мы ещё в редакторе
       setTimeout(() => {
         const path = window.location.pathname;
-        if (path.startsWith("/editor") || path.startsWith("/books")) return;
+        // В корзину ушли сами («Добавлено в корзину» уже сказано) или в «Мои книги» — тост не нужен
+        if (path.startsWith("/editor") || path.startsWith("/books") || path.startsWith("/cart")) return;
         const s = getDraftState();
         const d = s?.projects?.[s?.currentId];
         if (!d || !(d.photos?.length > 0) || d.status === "ordered") return;
