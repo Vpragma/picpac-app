@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { callApi } from "@/lib/api";
 
-const toRub = (kop) => (kop == null ? "" : (kop / 100).toFixed(2));
+const toRub = (kop) => (kop == null ? "" : (kop / 100).toFixed(2).replace(".", ","));
 // «12,5» или «12.50» → 1250 копеек; пусто → null; не число → NaN
 const toKop = (s) => {
   const t = String(s ?? "").trim().replace(",", ".");
@@ -85,9 +85,9 @@ export default function CatalogEditor({ product, badges }) {
         </label>
         <label className="field" htmlFor={id("old")}>
           <span>Старая цена «от», BYN</span>
-          <input id={id("old")} className="input" inputMode="decimal" value={old} onChange={(e) => setOld(e.target.value)} placeholder="пусто — без скидки" aria-describedby={id("old-hint")} />
+          <input id={id("old")} className="input" inputMode="decimal" value={old} onChange={(e) => setOld(e.target.value)} placeholder="нет" aria-describedby={id("old-hint")} />
           <span id={id("old-hint")} className="field-hint">
-            Больше текущей — тогда в каталоге она зачёркнута.
+            Пусто — без скидки. Больше текущей — в каталоге она зачёркнута.
           </span>
         </label>
       </div>
@@ -109,7 +109,7 @@ export default function CatalogEditor({ product, badges }) {
                 </th>
                 <td className="num">
                   {isBook ? (
-                    <input className="input" inputMode="decimal" aria-label={`Коэффициент для ${s.code}`} value={s.k} onChange={(e) => setSize(s.code, "k", e.target.value)} />
+                    <input className="input" inputMode="decimal" aria-label={`Коэффициент для ${s.code}`} value={String(s.k).replace(".", ",")} onChange={(e) => setSize(s.code, "k", e.target.value)} />
                   ) : (
                     <input className="input" inputMode="decimal" aria-label={`Цена отпечатка ${s.code}, BYN`} value={s.unit} onChange={(e) => setSize(s.code, "unit", e.target.value)} />
                   )}

@@ -249,3 +249,17 @@ test("N9 журнал: по умолчанию без автотестов и с
   assert.equal((await get("quick=everything")).status, 400);
   assert.equal((await get("days=365")).status, 400);
 });
+
+test("N9 статистика: период 1/7/30/90 дней, промокоды, синтетика — переключателем", async () => {
+  for (const days of [1, 90]) {
+    const r = await A.client.req(`/api/v1/admin/stats?days=${days}&source=all`);
+    assert.equal(r.status, 200, r.text);
+    assert.equal(r.json.days, days);
+    assert.ok(r.json.promo && r.json.promo.withCode <= r.json.promo.orders, "промокоды посчитаны");
+    assert.ok(Array.isArray(r.json.promo.top) && r.json.promo.top.length <= 5);
+  }
+  const all = await A.client.req("/api/v1/admin/stats?days=90&source=all");
+  const real = await A.client.req("/api/v1/admin/stats?days=90&source=real");
+  assert.ok(real.json.promo.orders <= all.json.promo.orders, "без синтетики заказов не больше");
+  assert.equal((await M.client.req("/api/v1/admin/stats?days=90")).status, 403);
+});

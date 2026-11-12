@@ -30,7 +30,7 @@ export default async function AdminUsersPage({ searchParams }) {
       <h1>Пользователи</h1>
       <p className="muted small">Почта и имя скрыты частично. Найти человека можно по полной почте, части имени или началу id. Выдача и снятие роли записываются в журнал.</p>
 
-      <nav className="filters" aria-label="Роль">
+      <nav className="filters filters-scroll" aria-label="Роль">
         <Link className={"filter-chip" + (!f.role ? " active" : "")} href={link({ role: undefined, page: undefined })} aria-current={!f.role ? "true" : undefined}>
           Все
         </Link>

@@ -40,7 +40,14 @@
 
 /* ── Каталог: поля цен узкие, числа справа ── */
 .catalog-card h2 { font-size: var(--ds-text-lg); margin: 0; }
-.catalog-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0 var(--space-3); align-items: end; }
+.catalog-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0 var(--space-3); align-items: start; }
 .catalog-fields .input[type='number'] { text-align: right; font-variant-numeric: tabular-nums; }
 .catalog-sizes { margin: var(--space-2) 0 var(--space-3); }
 .catalog-sizes .input { min-width: 6rem; }
+
+/* ── Телефон: ряды фильтров — одной строкой с прокруткой внутри ряда (страница вбок не едет) ── */
+@media (max-width: 640px) {
+  .filters-scroll { flex-wrap: nowrap; overflow-x: auto; padding-bottom: var(--space-1); scrollbar-width: thin; }
+  .filters-scroll .filter-chip, .filters-scroll .muted { flex: none; }
+  .audit-view { display: block; }
+}

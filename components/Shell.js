@@ -50,7 +50,7 @@ const STAFF_TABS = [
   { href: "/admin", label: "Обзор", icon: IconPackage, match: (p) => p === "/admin" || p.startsWith("/admin/orders") || p.startsWith("/admin/support") },
   { href: "/admin/moderation", label: "Модерация", icon: IconImage, match: (p) => p.startsWith("/admin/moderation") },
   { href: "/admin/notifications", label: "Уведомления", icon: IconBell, match: (p) => p.startsWith("/admin/notifications") },
-  { href: "/admin/stats", label: "Статистика", icon: IconCheck, match: (p) => p.startsWith("/admin/stats") || p.startsWith("/admin/audit") || p.startsWith("/admin/reminders"), adminOnly: true },
+  { href: "/admin/stats", label: "Статистика", icon: IconCheck, match: (p) => /^\/admin\/(stats|audit|reminders|users|catalog)(\/|$)/.test(p), adminOnly: true },
   { href: "/profile", label: "Профиль", icon: IconUser, match: (p) => p.startsWith("/profile") || p.startsWith("/login") },
 ];
 

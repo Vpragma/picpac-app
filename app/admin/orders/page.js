@@ -51,7 +51,7 @@ export default async function AdminOrdersPage({ searchParams }) {
       </div>
       <p className="muted small">Время — по Минску. В CSV — номер, дата, продукт, сумма, статус и город: без имён, телефонов, адресов и почты. Выгрузка записывается в журнал.</p>
 
-      <nav className="filters" aria-label="Быстрые фильтры заказов">
+      <nav className="filters filters-scroll" aria-label="Быстрые фильтры заказов">
         <Link className={"filter-chip" + (!active ? " active" : "")} href="/admin/orders" aria-current={!active ? "true" : undefined}>
           Все
         </Link>

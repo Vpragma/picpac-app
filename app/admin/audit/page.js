@@ -50,9 +50,9 @@ const PAGE = 50;
 const chip = (on) => "filter-chip" + (on ? " active" : "");
 // Что можно показать дополнительно (по умолчанию скрыто)
 const SHOW = [
-  { key: "system", label: "Системные", hint: "расписание и автоматические уведомления" },
-  { key: "erp", label: "ERP и симулятор", hint: "события производства, в том числе симулятора" },
-  { key: "tests", label: "Автотесты", hint: "служебные тестовые аккаунты (и уже удалённые аккаунты) и запросы с самого сервера" },
+  { key: "system", label: "Системные", short: "системные события", hint: "расписание и автоматические уведомления" },
+  { key: "erp", label: "ERP и симулятор", short: "ERP и симулятор", hint: "события производства, в том числе симулятора" },
+  { key: "tests", label: "Автотесты", short: "автотесты", hint: "служебные тестовые аккаунты (и уже удалённые аккаунты) и запросы с самого сервера" },
 ];
 // Ключи состояния экрана (не фильтры журнала)
 const VIEW_KEYS = ["system", "erp", "tests", "page", "sent", "hideTests"];
@@ -102,7 +102,7 @@ export default async function AuditPage({ searchParams }) {
     const s = p.toString();
     return "/admin/audit" + (s ? "?" + s : "");
   };
-  const hidden = SHOW.filter((s) => !view[s.key]).map((s) => s.label.toLowerCase());
+  const hidden = SHOW.filter((s) => !view[s.key]).map((s) => s.short);
 
   return (
     <div>
@@ -117,7 +117,7 @@ export default async function AuditPage({ searchParams }) {
         {hidden.length ? ` Сейчас скрыто: ${hidden.join(", ")}.` : " Показано всё."}
       </p>
 
-      <nav className="filters" aria-label="Быстрые фильтры журнала" data-testid="audit-quick">
+      <nav className="filters filters-scroll" aria-label="Быстрые фильтры журнала" data-testid="audit-quick">
         <a className={chip(!f.quick)} href={href({ quick: undefined })} aria-current={!f.quick ? "true" : undefined}>
           Все действия
         </a>
@@ -128,14 +128,14 @@ export default async function AuditPage({ searchParams }) {
         ))}
       </nav>
       <div className="row wrap audit-view">
-        <nav className="filters" aria-label="Период">
+        <nav className="filters filters-scroll" aria-label="Период">
           {Object.entries(AUDIT_PERIODS).map(([d, label]) => (
             <a key={d} className={chip(!f.from && !f.to && f.days === d)} href={href({ days: d, from: undefined, to: undefined })} aria-current={!f.from && !f.to && f.days === d ? "true" : undefined}>
               {label}
             </a>
           ))}
         </nav>
-        <nav className="filters" aria-label="Показать также">
+        <nav className="filters filters-scroll" aria-label="Показать также">
           <span className="muted small">Показать также:</span>
           {SHOW.map((s) => (
             <a key={s.key} className={chip(view[s.key])} href={href({ [s.key]: view[s.key] ? undefined : "1" })} aria-current={view[s.key] ? "true" : undefined} title={s.hint} data-testid={`audit-show-${s.key}`}>
