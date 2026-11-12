@@ -28,7 +28,7 @@ test("сбой GET /me после входа: корзина переносит�
   await page.getByRole("button", { name: "Тестовая галерея" }).click();
   const gallery = page.getByRole("region", { name: "Тестовая галерея" });
   await gallery.getByRole("button", { name: "Снять выбор" }).click();
-  for (const f of ["mir-castle", "nesvizh"]) await gallery.locator(`label:has(img[src="/demo-gallery/${f}.jpg"]) input[type=checkbox]`).check();
+  for (const f of ["mir-castle", "nesvizh"]) await gallery.locator(`label[data-file="${f}.jpg"] input[type=checkbox]`).check();
   await gallery.getByRole("button", { name: "Добавить 2 фото" }).click();
   await expect(page.locator(".photo-cell img")).toHaveCount(2, { timeout: 60_000 });
 

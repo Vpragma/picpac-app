@@ -71,7 +71,7 @@ test("редактор с фото: кнопки на миниатюрах ≥ 4
   const gallery = page.getByRole("region", { name: "Тестовая галерея" });
   await expect(gallery.locator("input[type=checkbox]").first()).toBeVisible();
   await gallery.getByRole("button", { name: "Снять выбор" }).click();
-  for (const f of ["cat-dark", "mir-castle", "braslav-lake-bright"]) await gallery.locator(`label:has(img[src="/demo-gallery/${f}.jpg"]) input[type=checkbox]`).check();
+  for (const f of ["cat-dark", "mir-castle", "braslav-lake-bright"]) await gallery.locator(`label[data-file="${f}.jpg"] input[type=checkbox]`).check();
   await gallery.getByRole("button", { name: "Добавить 3 фото" }).click();
   await expect(page.locator(".photo-cell[data-photo]")).toHaveCount(3);
   const tools = page.locator(".photo-tools button").first();

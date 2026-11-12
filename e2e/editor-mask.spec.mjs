@@ -88,7 +88,7 @@ test("выделение касанием: размыть фон, убрать �
   const gallery = page.getByRole("region", { name: "Тестовая галерея" });
   await expect(gallery.locator("input[type=checkbox]").first()).toBeVisible();
   await gallery.getByRole("button", { name: "Снять выбор" }).click();
-  for (const f of ["dog", "nesvizh-small"]) await gallery.locator(`label:has(img[src="/demo-gallery/${f}.jpg"]) input[type=checkbox]`).check();
+  for (const f of ["dog", "nesvizh-small"]) await gallery.locator(`label[data-file="${f}.jpg"] input[type=checkbox]`).check();
   await gallery.getByRole("button", { name: "Добавить 2 фото" }).click();
   await expect(page.locator('.photo-cell[data-photo="dog.jpg"] [data-upload]')).toHaveText("Загружено", { timeout: 90_000 });
 
@@ -267,7 +267,7 @@ test("fix1: 8 правок по выделению на одном фото — 
   const gallery = page.getByRole("region", { name: "Тестовая галерея" });
   await expect(gallery.locator("input[type=checkbox]").first()).toBeVisible();
   await gallery.getByRole("button", { name: "Снять выбор" }).click();
-  await gallery.locator('label:has(img[src="/demo-gallery/autumn-forest.jpg"]) input[type=checkbox]').check();
+  await gallery.locator('label[data-file="autumn-forest.jpg"] input[type=checkbox]').check();
   await gallery.getByRole("button", { name: "Добавить 1 фото" }).click();
   await expect(page.locator('.photo-cell[data-photo="autumn-forest.jpg"] [data-upload]')).toHaveText("Загружено", { timeout: 90_000 });
   await page.getByRole("button", { name: "Правки", exact: true }).click();
@@ -344,7 +344,7 @@ test("fix1: правки фото больше предела — честный
   const gallery = page.getByRole("region", { name: "Тестовая галерея" });
   await expect(gallery.locator("input[type=checkbox]").first()).toBeVisible();
   await gallery.getByRole("button", { name: "Снять выбор" }).click();
-  await gallery.locator('label:has(img[src="/demo-gallery/flowers.jpg"]) input[type=checkbox]').check();
+  await gallery.locator('label[data-file="flowers.jpg"] input[type=checkbox]').check();
   await gallery.getByRole("button", { name: "Добавить 1 фото" }).click();
   await expect(page.locator('.photo-cell[data-photo="flowers.jpg"] [data-upload]')).toHaveText("Загружено", { timeout: 90_000 });
   await page.waitForTimeout(2_000); // анализ фото дописал черновик

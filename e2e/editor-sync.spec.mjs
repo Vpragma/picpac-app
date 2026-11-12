@@ -67,7 +67,7 @@ test("правки фото уходят в аккаунт и возвращаю
   const gallery = page.getByRole("region", { name: "Тестовая галерея" });
   await expect(gallery.locator("input[type=checkbox]").first()).toBeVisible();
   await gallery.getByRole("button", { name: "Снять выбор" }).click();
-  for (const f of ["cat-dark", "mir-castle"]) await gallery.locator(`label:has(img[src="/demo-gallery/${f}.jpg"]) input[type=checkbox]`).check();
+  for (const f of ["cat-dark", "mir-castle"]) await gallery.locator(`label[data-file="${f}.jpg"] input[type=checkbox]`).check();
   await gallery.getByRole("button", { name: "Добавить 2 фото" }).click();
   await expect.poll(() => page.locator('.photo-cell[data-photo="cat-dark.jpg"] .pe-badge').allTextContents(), { timeout: 60_000 }).toEqual(["Темно", "Улучшено"]);
   // X-5 (S07): у вошедшего клиента на фото видно, что они загружены в аккаунт

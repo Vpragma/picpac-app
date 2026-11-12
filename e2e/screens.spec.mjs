@@ -42,7 +42,7 @@ async function pickFromGallery(page, files) {
   const gallery = page.getByRole("region", { name: "Тестовая галерея" });
   await expect(gallery.locator("input[type=checkbox]").first()).toBeVisible();
   await gallery.getByRole("button", { name: "Снять выбор" }).click();
-  for (const f of files) await gallery.locator(`label:has(img[src="/demo-gallery/${f}.jpg"]) input[type=checkbox]`).check();
+  for (const f of files) await gallery.locator(`label[data-file="${f}.jpg"] input[type=checkbox]`).check();
   await gallery.getByRole("button", { name: `Добавить ${files.length} фото` }).click();
 }
 

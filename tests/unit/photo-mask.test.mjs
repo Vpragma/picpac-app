@@ -397,8 +397,8 @@ test("fix1: «Проверка» для фото с «Резкостью ×2» �
   const photo = { id: "p1", name: "nesvizh-small.jpg", supported: true, w: 400, h: 274 };
   const plain = runChecks({ photos: [photo], sizeId: "10x15" }, product).issues.find((i) => i.key === "dpi:p1");
   const up = runChecks({ photos: [{ ...photo, edits: { upscale: 2 } }], sizeId: "10x15" }, product).issues.find((i) => i.key === "dpi:p1");
-  assert.match(plain.text, /400×274 точек — это \d+ точек на дюйм/);
-  assert.match(up.text, /800×548 точек \(с «Резкостью для печати ×2»\) — это \d+ точек на дюйм/);
-  const dpi = (t) => Number(t.match(/это (\d+) точек на дюйм/)[1]);
+  assert.match(plain.text, /400×274 точек — это \d+ точ(ка|ки|ек) на дюйм/);
+  assert.match(up.text, /800×548 точек \(с «Резкостью для печати ×2»\) — это \d+ точ(ка|ки|ек) на дюйм/);
+  const dpi = (t) => Number(t.match(/это (\d+) точ(?:ка|ки|ек) на дюйм/)[1]);
   assert.ok(Math.abs(dpi(up.text) - dpi(plain.text) * 2) <= 1);
 });

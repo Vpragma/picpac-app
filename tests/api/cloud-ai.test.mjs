@@ -36,9 +36,9 @@ test("без входа — 401 на всех маршрутах облачно�
   assert.equal((await guest.req("/api/v1/ai/consent", { method: "POST", body: { accept: true } })).status, 401);
   assert.equal((await guest.req("/api/v1/ai/command", { method: "POST", body: { text: "как в старом кино" } })).status, 401);
   assert.equal((await guest.req("/api/v1/ai/detect", { method: "POST", body: { image: jpeg(640, 480), target: "машину" } })).status, 401);
+  // творческих правок FLUX больше нет (решение 12.11) — такого адреса API нет
   const r = await guest.req("/api/v1/ai/edit", { method: "POST", body: { image: jpeg(256, 256), prompt: "небо на закат" } });
-  assert.equal(r.status, 401);
-  assert.equal(r.json.error.message, "Нужно войти в аккаунт.");
+  assert.equal(r.status, 404);
 });
 
 test("вошёл, но без согласия — 403 ai_consent_required, облако не вызывается, отказ в журнале", async () => {
@@ -71,8 +71,6 @@ test("строгая схема и источник: лишние поля, пу
   const huge = await c.req("/api/v1/ai/detect", { method: "POST", body: { image: jpeg(2000, 1000), target: "car" } });
   assert.equal(huge.status, 400);
   assert.match(huge.json.error.message, /1024/);
-  const crop = await c.req("/api/v1/ai/edit", { method: "POST", body: { image: jpeg(800, 600), prompt: "sunset sky" } });
-  assert.equal(crop.status, 400);
   const evil = await c.req("/api/v1/ai/command", { method: "POST", body: { text: "ярче" }, headers: { origin: "https://evil.example" } });
   assert.equal(evil.status, 403);
 });
@@ -124,7 +122,7 @@ test("функция квоты в базе: общий бюджет нейро�
   assert.ok(read.error || read.data.length === 0);
 });
 
-test("с подменой облака (AI_CLOUD_FAKE=1): команда, поиск, правка — шаги редактора и рамки", async (t) => {
+test("с подменой облака (AI_CLOUD_FAKE=1): команда и поиск — шаги редактора и рамки", async (t) => {
   const s = await user.client.req("/api/v1/ai/cloud");
   if (!s.json.fake) return t.skip("сервер запущен без AI_CLOUD_FAKE=1 — живое облако в тестах не вызываем");
   const c = await user.client.req("/api/v1/ai/command", { method: "POST", body: { text: "сделай как в старом кино" } });
@@ -134,11 +132,8 @@ test("с подменой облака (AI_CLOUD_FAKE=1): команда, пои
   assert.equal(d.status, 200);
   assert.equal(d.json.target, "car");
   assert.equal(d.json.boxes.length, 1);
-  const e = await user.client.req("/api/v1/ai/edit", { method: "POST", body: { image: jpeg(512, 384), prompt: "sunset sky" } });
-  assert.equal(e.status, 200);
-  assert.match(e.json.image, /^data:image\/png;base64,/);
   const { data } = await admin.from("ai_cloud_usage").select("calls,neurons").eq("user_id", user.id).eq("day", today()).single();
-  assert.equal(data.calls, 3);
+  assert.equal(data.calls, 2);
   assert.ok(data.neurons > 0);
   const { data: log } = await admin.from("audit_log").select("action,details").eq("user_id", user.id).eq("result", "success").like("action", "ai.cloud_%");
   assert.ok(log.some((x) => x.action === "ai.cloud_detect" && x.details.model === "@cf/moondream/moondream3.1-9B-A2B" && x.details.bytes > 0));
