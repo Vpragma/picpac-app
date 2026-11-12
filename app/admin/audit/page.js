@@ -3,6 +3,7 @@
 import AuditEmailSearch from "@/components/admin/AuditEmailSearch";
 import AuditRow from "@/components/admin/AuditRow";
 import { ACTION_LABELS, OBJECT_LABELS, RESULT_LABELS } from "@/lib/auditLabels";
+import { ROLE_LABELS } from "@/lib/roles";
 import { auditFilters, filtersFromParams, queryAudit } from "@/lib/server/auditRead";
 import { requirePageRole } from "@/lib/server/session";
 
@@ -42,9 +43,15 @@ const PAGE = 50;
 export default async function AuditPage({ searchParams }) {
   const auth = await requirePageRole(["admin"], "/admin/audit");
   const raw = filtersFromParams(await searchParams);
+  // «Скрыть автотесты» включено по умолчанию. Форма шлёт sent=1: без галочки в ней — значит, её сняли
+  const sent = raw.sent === "1";
+  const hideTests = sent ? raw.hideTests === "1" : raw.hideTests !== "0";
+  delete raw.sent;
+  delete raw.hideTests;
   const parsed = auditFilters.safeParse(raw);
   const f = parsed.success ? parsed.data : {};
-  const active = Object.keys(f).filter((k) => k !== "before" && k !== "limit");
+  if (hideTests) f.hideTests = "1";
+  const active = Object.keys(f).filter((k) => k !== "before" && k !== "limit" && k !== "hideTests");
 
   let items = [];
   let next = null;
@@ -59,6 +66,7 @@ export default async function AuditPage({ searchParams }) {
   // Ссылка «Показать ещё»: те же фильтры + курсор
   const more = new URLSearchParams();
   for (const k of active) more.set(k, String(f[k]));
+  more.set("hideTests", hideTests ? "1" : "0");
   if (next) more.set("before", String(next));
 
   const grid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: "0 12px" };
@@ -73,7 +81,7 @@ export default async function AuditPage({ searchParams }) {
       </div>
       <p className="muted">Время — по Минску (UTC+3). Изменить или удалить запись нельзя — так устроена база.</p>
 
-      <details className="card" open={active.length > 0 || !parsed.success}>
+      <details className="card" open>
         <summary style={{ cursor: "pointer", minHeight: 44, display: "flex", alignItems: "center", fontWeight: 500 }}>
           Фильтры{active.length ? ` · включено: ${active.length}` : ""}
         </summary>
@@ -100,6 +108,17 @@ export default async function AuditPage({ searchParams }) {
               <select className="input" name="result" defaultValue={f.result || ""}>
                 <option value="">Любой</option>
                 {Object.entries(RESULT_LABELS).map(([k, v]) => (
+                  <option key={k} value={k}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Роль</span>
+              <select className="input" name="role" defaultValue={f.role || ""}>
+                <option value="">Любая</option>
+                {Object.entries(ROLE_LABELS).map(([k, v]) => (
                   <option key={k} value={k}>
                     {v}
                   </option>
@@ -134,6 +153,11 @@ export default async function AuditPage({ searchParams }) {
               <input className="input" name="user" maxLength={36} defaultValue={f.user || ""} autoComplete="off" spellCheck={false} />
             </label>
           </div>
+          <input type="hidden" name="sent" value="1" />
+          <label className="row small" style={{ gap: 8, minHeight: 44, marginBottom: 8 }}>
+            <input type="checkbox" name="hideTests" value="1" defaultChecked={hideTests} style={{ width: 20, height: 20 }} />
+            Скрыть автотесты (пользователи e2e-… и critic-…, запросы с 127.0.0.1)
+          </label>
           <div className="row wrap">
             <button className="btn btn-primary" type="submit">
               Найти

@@ -67,6 +67,15 @@ async function pickFromGallery(page, files) {
   await gallery.getByRole("button", { name: `Добавить ${files.length} фото` }).click();
 }
 
+// Обязательные поля оформления: гость заполняет их до входа (форма сохраняется на устройстве)
+async function fillCheckout(page) {
+  await page.getByLabel("Имя и фамилия").fill("Тест Тестович");
+  await page.getByLabel("Телефон").fill("+375 (29) 123-45-67");
+  await page.locator('input[name="delivery"]').first().check();
+  await page.locator("#f-pickup_point").selectOption({ index: 1 });
+  await page.locator('input[name="payment"]').nth(1).check();
+}
+
 async function login(page) {
   await page.getByLabel("Почта").fill(user.email);
   await page.getByLabel("Пароль", { exact: true }).fill(user.password);
@@ -146,9 +155,14 @@ test("обязательный путь: каталог → проект → 12 
 
   await test.step("AC-1 «Подтвердить заказ» гостем → вход → гостевая корзина в аккаунте", async () => {
     await expect(page.getByText(/Чтобы подтвердить заказ, войдите или зарегистрируйтесь/)).toBeVisible();
+    // Пустая форма: гость остаётся в корзине, фокус на первом незаполненном поле (баг 6)
+    await page.getByRole("button", { name: "Подтвердить заказ" }).click();
+    await expect(page).toHaveURL(/\/cart/);
+    await expect(page.getByLabel("Имя и фамилия")).toBeFocused();
+    await fillCheckout(page);
     await page.getByRole("button", { name: "Подтвердить заказ" }).click();
     await expect(page).toHaveURL(/\/login\?reason=checkout/);
-    await expect(page.getByRole("link", { name: "Продолжить как гость" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Вернуться в корзину" })).toBeVisible(); // баг 7: не тупик «Продолжить как гость»
     await expect(page.getByText(/парол[ья]\s*[:—-]/i)).toHaveCount(0); // никаких демо-паролей на экране входа
     await login(page);
     await expect(page).toHaveURL(/\/cart/);

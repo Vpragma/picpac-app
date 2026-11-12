@@ -45,6 +45,12 @@ test("сбой GET /me после входа: корзина переносит�
   await toCart.click();
   await expect(page).toHaveURL(/\/cart/);
 
+  // Гость заполняет обязательные поля до входа (баг 6: иначе вход, а потом незаполненная форма)
+  await page.getByLabel("Имя и фамилия").fill("Тест Тестович");
+  await page.getByLabel("Телефон").fill("+375 (29) 123-45-67");
+  await page.locator('input[name="delivery"]').first().check();
+  await page.locator("#f-pickup_point").selectOption({ index: 1 });
+  await page.locator('input[name="payment"]').nth(1).check();
   await page.getByRole("button", { name: "Подтвердить заказ" }).click();
   await expect(page).toHaveURL(/\/login\?reason=checkout/);
 

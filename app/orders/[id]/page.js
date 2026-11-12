@@ -107,6 +107,9 @@ export default function OrderPage() {
       <section className="card">
         <h3>Статус</h3>
         <Timeline order={o} />
+        <p className="muted small" style={{ margin: "4px 0 0" }}>
+          Время в заказе — по Минску.
+        </p>
         {o.isDemo && o.status !== "done" && <p className="muted small">Демо-заказ: статусы присылает симулятор производства (события ERP), шаг ≈ 30 секунд после оплаты.</p>}
       </section>
 
@@ -263,7 +266,7 @@ function Support({ order: o, onCreated }) {
             <span className="chip">{it.status === "open" ? "Ждёт ответа" : it.status === "answered" ? "Есть ответ" : "Закрыто"}</span>
           </div>
           <div className="muted small">
-            {minskTime(it.createdAt)} · ответим до {minskTime(it.slaDue)}
+            {minskTime(it.createdAt)} · ответим до {minskTime(it.slaDue)} (по Минску)
           </div>
           <button type="button" className="btn btn-small" onClick={() => show(it.id)} aria-expanded={!!threads[it.id]}>
             {threads[it.id] ? "Скрыть переписку" : "Показать переписку"}
