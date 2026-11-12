@@ -111,3 +111,33 @@ for (const theme of ["light", "dark"]) {
     expect(bad, bad.join("\n")).toEqual([]);
   });
 }
+
+// N7: у «Печати фото» нигде не пишем «книга» — шаги редактора и тост при уходе из редактора
+test("печать фото: в редакторе и после ухода из него нет слова «книга»", async ({ page }) => {
+  test.slow();
+  const noBook = async (where) => {
+    const txt = (await page.locator("main").innerText()).replace(/Мои книги/g, "");
+    expect(txt, where).not.toMatch(/[Кк]ниг/);
+  };
+  await page.goto("/product/photo");
+  await noBook("страница продукта");
+  await page.getByRole("button", { name: "Выбрать фото" }).click();
+  await expect(page).toHaveURL(/\/editor/);
+  await page.getByRole("button", { name: "Тестовая галерея" }).click();
+  const gallery = page.getByRole("region", { name: "Тестовая галерея" });
+  await expect(gallery.locator("input[type=checkbox]").first()).toBeVisible();
+  await gallery.getByRole("button", { name: "Снять выбор" }).click();
+  for (const f of ["nesvizh-small", "cat-dark"]) await gallery.locator(`label[data-file="${f}.jpg"] input[type=checkbox]`).check();
+  await gallery.getByRole("button", { name: "Добавить 2 фото" }).click();
+  await expect(page.locator(".photo-cell img")).toHaveCount(2, { timeout: 120_000 });
+  await noBook("шаг «Фото»");
+  for (const step of ["Автомакет", "Правки", "Проверка"]) {
+    await page.getByRole("button", { name: step, exact: true }).click();
+    await page.waitForTimeout(800);
+    await noBook(`шаг «${step}»`);
+  }
+  await page.waitForTimeout(400); // черновик пишется в IndexedDB
+  await page.getByRole("link", { name: "PicPac — на главную" }).click();
+  await expect(page.locator(".toast", { hasText: "Фото сохранены" })).toBeVisible();
+  await expect(page.locator(".toast", { hasText: /[Кк]ниг/ })).toHaveCount(0);
+});
