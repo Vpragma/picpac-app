@@ -105,6 +105,44 @@ test("D1: «Резкость для печати» — принимается ф
   assert.match(sameSize.json.error.message, /вдвое/);
 });
 
+// Файлы в папке печатных версий фото (для проверки, что брошенных файлов не остаётся)
+async function printFiles() {
+  const dir = `${C.id}/${s.project.id}/print/${s.photo.id}`;
+  const { data } = await admin.storage.from("photos").list(dir, { limit: 100 });
+  return (data || []).map((f) => `${dir}/${f.name}`);
+}
+async function uploadPrint(buf = JPEG) {
+  const u = await printUrl(C, buf.length);
+  assert.equal(u.status, 200, u.text);
+  assert.ok((await fetch(u.json.upload.url, { method: "PUT", headers: u.json.upload.headers, body: buf })).ok);
+  return u.json.upload.path;
+}
+
+test("D1 fix1: правки фото больше 20 КБ → 400 edits_too_large, загруженный файл сразу удалён", async () => {
+  const path = await uploadPrint();
+  assert.ok((await printFiles()).includes(path));
+  const big = { ...EDITS, ops: [{ kind: "mask", act: "darken", id: "x1", m: "a" }], masks: { a: { w: 10, h: 10, rle: "A".repeat(20_100) } } };
+  const r = await save(C, { path, edits: big });
+  assert.equal(r.status, 400, r.text);
+  assert.equal(r.json.error.code, "edits_too_large");
+  assert.match(r.json.error.message, /слишком много правок/);
+  assert.ok(!(await printFiles()).includes(path), "файл без ссылки остался в хранилище");
+  // и без файла (правки параметрами) — тот же честный отказ
+  const r2 = await save(C, { path: null, edits: big });
+  assert.equal(r2.status, 400, r2.text);
+  assert.equal(r2.json.error.code, "edits_too_large");
+});
+
+test("D1 fix1: после сохранения в папке печатных версий фото один файл — брошенные после сбоя удаляются", async () => {
+  const abandoned = await uploadPrint(); // загрузили, но сохранить не успели (сбой связи)
+  const kept = await uploadPrint();
+  const r = await save(C, { path: kept, edits: EDITS });
+  assert.equal(r.status, 200, r.text);
+  const files = await printFiles();
+  assert.deepEqual(files, [kept], "остались: " + files.join(", "));
+  assert.ok(!files.includes(abandoned));
+});
+
 test("печатная версия: файл того же размера + правки → в снимке заказа, оригинал отдельно", async () => {
   const u = await printUrl(C);
   assert.equal(u.status, 200, u.text);

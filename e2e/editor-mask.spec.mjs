@@ -118,12 +118,30 @@ test("выделение касанием: размыть фон, убрать �
     for (let k = 0; k < 3; k++) expect(Math.abs(dog[k] - dogBefore[k])).toBeLessThan(4);
   });
 
+  await test.step("fix1: «Готово» → снова «Выделить касанием» на том же фото — сразу, без повторного изучения", async () => {
+    await page.locator(".pe-select").getByRole("button", { name: "Готово" }).click();
+    await expect(page.getByRole("button", { name: "Выделить касанием" })).toBeVisible();
+    const t0 = Date.now();
+    await page.getByRole("button", { name: "Выделить касанием" }).click();
+    await expect(page.locator('.pe-select[data-ready="true"]')).toBeVisible({ timeout: 5_000 });
+    expect(Date.now() - t0).toBeLessThan(5_000);
+    // «− Убрать часть» до первой точки не выглядит нажатой
+    await expect(page.locator(".pe-select").getByRole("button", { name: "− Убрать часть" })).toHaveAttribute("aria-pressed", "false");
+  });
+
   await test.step("касание мяча (новое выделение) → «Убрать»: мяч исчез", async () => {
-    await page.locator(".pe-select").getByRole("button", { name: "Сбросить" }).click();
+    // после «Готово» и повторного «Выделить касанием» выделение пустое — «Сбросить» не нужен (и недоступен)
+    await expect(page.locator(".pe-select").getByRole("button", { name: "Сбросить" })).toBeDisabled();
     await tap(page, BALL);
     await expect(page.getByText(/^Выделено\./)).toBeVisible({ timeout: 30_000 });
     await page.locator(".pe-select").getByRole("button", { name: "Убрать", exact: true }).click();
+    await expect(page.locator(".pe-answer")).toHaveText(/Убираем выделенное/);
+    // Критик D1, п. 2: пока ластик считается — «Выделить касанием» → «Отмена». Ластик не должен зависнуть
+    await page.getByRole("button", { name: "Выделить касанием" }).click();
+    await page.locator(".pe-select").getByRole("button", { name: "Отмена" }).click();
     await expect(page.locator(".pe-busy")).toHaveCount(0, { timeout: 120_000 });
+    // п. 5: строка ответа — уже не «Убираем…»
+    await expect(page.locator(".pe-answer")).toHaveText(/Убрали выделенное/);
     await expect(page.locator(".pe-after[data-rendered]")).toHaveCount(1);
     await expect.poll(async () => {
       const b = await px(page, ".pe-after", ...BALL);
@@ -154,6 +172,9 @@ test("выделение касанием: размыть фон, убрать �
 
   let order;
   await test.step("корзина → заказ: печатные версии собраны на устройстве", async () => {
+    // Оба фото уже в аккаунте (на медленной сети маленькое фото догружается дольше собаки)
+    await page.getByRole("navigation", { name: "Шаги редактора" }).getByRole("button", { name: "Фото" }).click();
+    for (const f of ["dog.jpg", "nesvizh-small.jpg"]) await expect(page.locator(`.photo-cell[data-photo="${f}"] [data-upload]`)).toHaveText("Загружено", { timeout: 180_000 });
     await page.getByRole("navigation", { name: "Шаги редактора" }).getByRole("button", { name: "Проверка" }).click();
     const toCart = page.getByRole("button", { name: /^(В корзину|Обновить в корзине)$/ });
     await expect(toCart).toBeVisible();
@@ -226,3 +247,180 @@ test("выделение касанием: размыть фон, убрать �
 
   expect(errors).toEqual([]);
 });
+
+// Критик D1, п. 1: много правок по выделению на одном фото не ломают заказ. «Осенний лес», сложное выделение
+// (листва), «Затемнить» и «Осветлить» по очереди 8 раз → девятая — честный отказ → заказ оформлен, правки фото < 20 КБ.
+// Плюс «Отмена» ластика: правка «Убрать» снимается, фото как было.
+test("fix1: 8 правок по выделению на одном фото — заказ оформлен; «Отмена» ластика", async ({ page }) => {
+  test.setTimeout(10 * 60_000);
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  page.on("console", (m) => m.type() === "error" && !/ServiceWorker|fetching the script/i.test(m.text()) && errors.push(m.text()));
+  await page.goto("/login");
+  await page.getByLabel("Почта").fill(user.email);
+  await page.getByLabel("Пароль", { exact: true }).fill(user.password);
+  await page.getByRole("button", { name: "Войти", exact: true }).click();
+  await page.waitForURL((u) => !u.pathname.startsWith("/login"));
+  await page.goto("/product/photo");
+  await page.getByRole("button", { name: "Выбрать фото" }).click();
+  await page.getByRole("button", { name: "Тестовая галерея" }).click();
+  const gallery = page.getByRole("region", { name: "Тестовая галерея" });
+  await expect(gallery.locator("input[type=checkbox]").first()).toBeVisible();
+  await gallery.getByRole("button", { name: "Снять выбор" }).click();
+  await gallery.locator('label:has(img[src="/demo-gallery/autumn-forest.jpg"]) input[type=checkbox]').check();
+  await gallery.getByRole("button", { name: "Добавить 1 фото" }).click();
+  await expect(page.locator('.photo-cell[data-photo="autumn-forest.jpg"] [data-upload]')).toHaveText("Загружено", { timeout: 90_000 });
+  await page.getByRole("button", { name: "Правки", exact: true }).click();
+  await expect(page.locator(".pe-after[data-rendered]")).toHaveCount(1);
+  await page.getByRole("button", { name: "Выделить касанием" }).click();
+  await expect(page.locator('.pe-select[data-ready="true"]')).toBeVisible({ timeout: 120_000 });
+
+  await test.step("«Убрать» → сразу «Отмена» под фото: правка снята, фото как было", async () => {
+    await tap(page, [0.5, 0.3]);
+    await expect(page.getByText(/^Выделено\./)).toBeVisible({ timeout: 30_000 });
+    await page.locator(".pe-select").getByRole("button", { name: "Убрать", exact: true }).click();
+    await page.locator(".pe-erase").getByRole("button", { name: "Отмена" }).click();
+    await expect(page.locator(".pe-answer")).toHaveText(/Ластик остановили/);
+    await expect(page.locator(".pe-busy")).toHaveCount(0);
+    await expect(page.locator(".pe-main .pe-name + .pe-badges .pe-badge")).toHaveCount(0); // правок нет — значка «ИИ» нет
+  });
+
+  await test.step("2 касания по листве, «Затемнить»/«Осветлить» × 8, девятая — честный отказ", async () => {
+    await page.getByRole("button", { name: "Выделить касанием" }).click();
+    await expect(page.locator('.pe-select[data-ready="true"]')).toBeVisible({ timeout: 120_000 });
+    await tap(page, [0.5, 0.3]);
+    await expect(page.getByText(/^Выделено\./)).toBeVisible({ timeout: 30_000 });
+    await tap(page, [0.25, 0.2]);
+    await expect(page.getByText(/^Выделено\./)).toBeVisible({ timeout: 30_000 });
+    for (let i = 0; i < 8; i++) {
+      await page.locator(".pe-select").getByRole("button", { name: i % 2 ? "Осветлить" : "Затемнить", exact: true }).click();
+      await expect(page.locator(".pe-answer")).toHaveText(i % 2 ? /Осветлили/ : /Затемнили/);
+    }
+    await page.locator(".pe-select").getByRole("button", { name: "Затемнить", exact: true }).click();
+    await expect(page.locator(".pe-answer")).toHaveText(/не больше 8 правок по выделению/);
+  });
+
+  await test.step("корзина → заказ оформлен; правки фото в заказе меньше 20 КБ, маска одна, печатная версия есть", async () => {
+    await page.getByRole("navigation", { name: "Шаги редактора" }).getByRole("button", { name: "Проверка" }).click();
+    const toCart = page.getByRole("button", { name: /^(В корзину|Обновить в корзине)$/ });
+    await expect(toCart).toBeVisible();
+    for (let i = 0; i < 6 && (await toCart.isDisabled()); i++) {
+      const go = page.getByRole("button", { name: "Продолжить всё равно" }).first();
+      if (await go.isVisible().catch(() => false)) await go.click();
+    }
+    await toCart.click();
+    await expect(page).toHaveURL(/\/cart/);
+    await page.getByLabel("Имя и фамилия").fill("Тест Тестович");
+    await page.getByLabel("Телефон").fill("+375 (29) 123-45-67");
+    await page.locator('input[name="delivery"]').first().check();
+    await page.locator("#f-pickup_point").selectOption({ index: 1 });
+    await page.locator('input[name="payment"]').nth(1).check();
+    await page.getByRole("button", { name: "Подтвердить заказ" }).click();
+    await expect(page.getByRole("heading", { name: "Заказ оформлен" })).toBeVisible({ timeout: 300_000 });
+    const { data } = await admin.from("orders").select("id, order_items(snapshot)").eq("user_id", user.id);
+    const ph = data[0].order_items.flatMap((it) => it.snapshot?.photos || [])[0];
+    expect(ph.edits.ops.filter((o) => o.kind === "mask")).toHaveLength(8);
+    expect(Object.keys(ph.edits.masks || {})).toHaveLength(1);
+    const { print, ...rest } = ph.edits;
+    expect(JSON.stringify(rest).length).toBeLessThan(20_000);
+    expect(print?.path).toBeTruthy();
+    expect([print.width, print.height]).toEqual([ph.width, ph.height]);
+  });
+  expect(errors).toEqual([]);
+});
+
+// Критик D1, п. 1: если правки фото всё же не помещаются (черновик старого вида) — честный текст и ссылка на правки,
+// без «Проверьте интернет», без бесконечного «Повторить», без загрузки файла печатной версии и без заказа.
+test("fix1: правки фото больше предела — честный отказ при оформлении, файл не загружен", async ({ page }) => {
+  test.setTimeout(6 * 60_000);
+  await page.goto("/login");
+  await page.getByLabel("Почта").fill(user.email);
+  await page.getByLabel("Пароль", { exact: true }).fill(user.password);
+  await page.getByRole("button", { name: "Войти", exact: true }).click();
+  await page.waitForURL((u) => !u.pathname.startsWith("/login"));
+  await page.goto("/product/photo");
+  await page.getByRole("button", { name: "Выбрать фото" }).click();
+  await page.getByRole("button", { name: "Тестовая галерея" }).click();
+  const gallery = page.getByRole("region", { name: "Тестовая галерея" });
+  await expect(gallery.locator("input[type=checkbox]").first()).toBeVisible();
+  await gallery.getByRole("button", { name: "Снять выбор" }).click();
+  await gallery.locator('label:has(img[src="/demo-gallery/flowers.jpg"]) input[type=checkbox]').check();
+  await gallery.getByRole("button", { name: "Добавить 1 фото" }).click();
+  await expect(page.locator('.photo-cell[data-photo="flowers.jpg"] [data-upload]')).toHaveText("Загружено", { timeout: 90_000 });
+  await page.waitForTimeout(2_000); // анализ фото дописал черновик
+
+  // Черновик старого вида: 4 разные сложные маски внутри правок (≈ 24 КБ) — больше предела фото 20 КБ
+  await page.evaluate(
+    () =>
+      new Promise((resolve, reject) => {
+        const enc = (w, h, L) => {
+          const bytes = [];
+          let left = w * h;
+          for (let i = 0; left > 0; i++) {
+            const r = Math.min(L + (i % 3), left);
+            let v = r;
+            while (v > 127) {
+              bytes.push((v & 127) | 128);
+              v >>>= 7;
+            }
+            bytes.push(v);
+            left -= r;
+          }
+          return { w, h, rle: btoa(String.fromCharCode(...bytes)) };
+        };
+        const ops = [14, 15, 16, 17].map((L, i) => ({ kind: "mask", act: i % 2 ? "lighten" : "darken", id: "old" + i, mask: enc(320, 240, L) }));
+        const req = indexedDB.open("picpac");
+        req.onerror = () => reject(req.error);
+        req.onsuccess = () => {
+          const db = req.result;
+          const tx = db.transaction("kv", "readwrite");
+          const store = tx.objectStore("kv");
+          const all = store.getAll(IDBKeyRange.bound("project:", "project:\uffff"));
+          all.onsuccess = () => {
+            for (const p of all.result) {
+              if (!p.photos?.length) continue;
+              p.photos = p.photos.map((ph) => ({ ...ph, edits: { v: 1, auto: null, autoOff: false, manual: {}, ops, by: "command" } }));
+              store.put(p, "project:" + p.id);
+            }
+          };
+          tx.oncomplete = () => {
+            db.close();
+            resolve();
+          };
+          tx.onerror = () => reject(tx.error);
+        };
+      }),
+  );
+  await page.reload();
+  await page.getByRole("navigation", { name: "Шаги редактора" }).getByRole("button", { name: "Проверка" }).click();
+  const toCart = page.getByRole("button", { name: /^(В корзину|Обновить в корзине)$/ });
+  await expect(toCart).toBeVisible();
+  await toCart.click();
+  await expect(page).toHaveURL(/\/cart/);
+  await page.getByLabel("Имя и фамилия").fill("Тест Тестович");
+  await page.getByLabel("Телефон").fill("+375 (29) 123-45-67");
+  await page.locator('input[name="delivery"]').first().check();
+  await page.locator("#f-pickup_point").selectOption({ index: 1 });
+  await page.locator('input[name="payment"]').nth(1).check();
+  await page.getByRole("button", { name: "Подтвердить заказ" }).click();
+  const alert = page.locator('[role="alert"][data-final="true"]');
+  await expect(alert).toContainText(/слишком много правок по выделению/, { timeout: 120_000 });
+  await expect(alert).not.toContainText(/интернет/i);
+  await expect(alert.getByRole("link", { name: "Открыть правки" })).toHaveAttribute("href", /\/editor\?project=.+&step=edits/);
+  // кнопка не зовёт «Повторить»; повторное нажатие — тот же честный ответ сразу
+  await expect(page.getByRole("button", { name: "Подтвердить заказ" })).toBeVisible();
+  await page.getByRole("button", { name: "Подтвердить заказ" }).click();
+  await expect(alert).toContainText(/слишком много правок по выделению/);
+  // заказа нет, файлов печатных версий нет
+  const { data: orders } = await admin.from("orders").select("id").eq("user_id", user.id);
+  expect(orders).toHaveLength(0);
+  const { data: projects } = await admin.from("projects").select("id").eq("user_id", user.id);
+  for (const p of projects || []) {
+    const { data: dirs } = await admin.storage.from("photos").list(`${user.id}/${p.id}/print`, { limit: 100 });
+    expect(dirs || []).toHaveLength(0);
+  }
+  // «Открыть правки» ведёт на шаг «Правки» этого проекта
+  await alert.getByRole("link", { name: "Открыть правки" }).click();
+  await expect(page.getByRole("button", { name: "Выделить касанием" })).toBeVisible({ timeout: 30_000 });
+});
+
