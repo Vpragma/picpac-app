@@ -4,7 +4,7 @@ import { notFound, parseBody, requireUser, serverError, z } from "@/lib/server/a
 import { json } from "@/lib/server/http";
 import { getOwnOrder, loadOrderFull } from "@/lib/server/orders";
 
-const schema = z.object({ method: z.enum(["card_test", "erip_test"], { error: "Выберите тестовую оплату: карта или ЕРИП." }) });
+const schema = z.strictObject({ method: z.enum(["card_test", "erip_test"], { error: "Выберите тестовую оплату: карта или ЕРИП." }) });
 
 export async function POST(request, { params }) {
   const { id } = await params;

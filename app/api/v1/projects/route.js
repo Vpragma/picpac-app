@@ -5,7 +5,7 @@ import { findProduct, loadCatalog, normalizeOptions } from "@/lib/server/catalog
 import { json, jsonError } from "@/lib/server/http";
 import { optionsSchema, PROJECT_FIELDS, shapeProject } from "@/lib/server/projects";
 
-const createSchema = z.object({
+const createSchema = z.strictObject({
   productSlug: z.string().regex(/^[a-z0-9-]{2,40}$/, "Выберите продукт из каталога."),
   title: z.string().trim().max(100, "Название — до 100 символов.").optional(),
   options: optionsSchema.optional(),

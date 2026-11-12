@@ -6,7 +6,7 @@ import { findProduct, loadCatalog, normalizeOptions } from "@/lib/server/catalog
 import { json, jsonError, sameOrigin } from "@/lib/server/http";
 import { getOwnProject, listPhotos, optionsSchema, PROJECT_FIELDS, removeFiles, shapeProject } from "@/lib/server/projects";
 
-const patchSchema = z.object({
+const patchSchema = z.strictObject({
   version: z.number({ error: "Нужна версия проекта: обновите страницу." }).int().min(1),
   title: z.string().trim().max(100, "Название — до 100 символов.").optional(),
   options: optionsSchema.optional(),
@@ -20,7 +20,11 @@ export async function GET(request, { params }) {
   if (badId(id)) return notFound("Проект");
   try {
     const project = await getOwnProject(ctx, id);
-    if (!project) return notFound("Проект");
+    if (!project) {
+      // Чтение чужого или несуществующего проекта — в журнал (IDOR-попытки видны админу); своё чтение не пишем — его делает синхронизация
+      await ctx.audit("project.view", "project", id, "denied", { reason: "not_found_or_foreign" });
+      return notFound("Проект");
+    }
     return json({ ok: true, project: shapeProject(project, await listPhotos(ctx, id)) });
   } catch {
     return serverError();
@@ -86,9 +90,15 @@ export async function DELETE(request, { params }) {
   if (project.status === "ordered") return jsonError(409, "project_ordered", "Проект уже в заказе. Фото заказа можно удалить в профиле: «Удалить мои фото».");
   try {
     const photos = await listPhotos(ctx, id);
-    await removeFiles(ctx.admin, photos.flatMap((p) => [p.storage_path, p.print_path]));
-    const { error } = await ctx.admin.from("projects").delete().eq("id", id).eq("user_id", ctx.userId);
+    // Сначала строка (только если проект не заказан — параллельный create_order держит её FOR UPDATE,
+    // и после него условие уже не выполнится), файлы — только после успешного удаления строки
+    const { data: gone, error } = await ctx.admin.from("projects").delete().eq("id", id).eq("user_id", ctx.userId).neq("status", "ordered").select("id");
     if (error) throw new Error(error.message);
+    if (!gone?.length) {
+      await ctx.audit("project.delete", "project", id, "denied", { reason: "ordered" });
+      return jsonError(409, "project_ordered", "Проект уже в заказе. Фото заказа можно удалить в профиле: «Удалить мои фото».");
+    }
+    await removeFiles(ctx.admin, photos.flatMap((p) => [p.storage_path, p.print_path]));
     await ctx.audit("project.delete", "project", id, "success", { photos: photos.length });
     return json({ ok: true, deletedPhotos: photos.length });
   } catch (e) {

@@ -6,7 +6,7 @@ import { findProduct, loadCatalog } from "@/lib/server/catalog";
 import { json, jsonError } from "@/lib/server/http";
 import { getOwnProject } from "@/lib/server/projects";
 
-const schema = z.object({
+const schema = z.strictObject({
   mime: z.enum(PHOTO_MIMES, { error: "Подходят только JPEG и PNG." }),
   bytes: z
     .number({ error: "Укажите размер файла в байтах." })

@@ -9,7 +9,7 @@ import { json } from "@/lib/server/http";
 import { loadCart } from "@/lib/server/projects";
 import { getAuth } from "@/lib/server/session";
 
-const schema = z.object({
+const schema = z.strictObject({
   code: z.string().trim().min(1, "Введите промокод.").max(30, "Промокод — до 30 символов."),
   subtotal: z.number().min(0).max(100000).optional(),
 });

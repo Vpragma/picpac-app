@@ -4,7 +4,7 @@ import { badId, notFound, parseBody, rateLimited, requireUser, serverError, tooM
 import { json, jsonError } from "@/lib/server/http";
 import { shapeInteraction } from "@/lib/server/orders";
 
-const schema = z.object({ body: z.string().trim().min(1, "Напишите сообщение.").max(2000, "Сообщение — до 2000 символов.") });
+const schema = z.strictObject({ body: z.string().trim().min(1, "Напишите сообщение.").max(2000, "Сообщение — до 2000 символов.") });
 
 async function ownInteraction(ctx, id) {
   if (badId(id)) return null;

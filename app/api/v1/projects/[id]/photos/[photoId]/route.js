@@ -20,9 +20,20 @@ export async function DELETE(request, { params }) {
   }
   if (project.status === "ordered") return jsonError(409, "project_ordered", "Фото уже в заказе. Удалить его можно в профиле: «Удалить мои фото».");
 
-  const { error: e1 } = await ctx.admin.storage.from(BUCKET).remove([photo.storage_path, photo.print_path].filter(Boolean));
+  // Сначала строка, затем проверка: если проект успели заказать (гонка с POST /orders), файлы не трогаем —
+  // их держит снимок заказа. Файлы удаляются только у незаказанного проекта.
   const { error: e2 } = await ctx.admin.from("project_photos").delete().eq("id", photoId).eq("user_id", ctx.userId);
-  if (e1 || e2) {
+  if (e2) {
+    await ctx.audit("photo.delete", "photo", photoId, "error");
+    return serverError();
+  }
+  const { data: after } = await ctx.admin.from("projects").select("status").eq("id", id).maybeSingle();
+  if (after?.status === "ordered") {
+    await ctx.audit("photo.delete", "photo", photoId, "denied", { reason: "ordered_during_delete", project: id });
+    return jsonError(409, "project_ordered", "Фото уже в заказе. Удалить его можно в профиле: «Удалить мои фото».");
+  }
+  const { error: e1 } = await ctx.admin.storage.from(BUCKET).remove([photo.storage_path, photo.print_path].filter(Boolean));
+  if (e1) {
     await ctx.audit("photo.delete", "photo", photoId, "error");
     return serverError();
   }

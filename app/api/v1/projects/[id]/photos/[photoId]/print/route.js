@@ -10,14 +10,14 @@ import { badId, BUCKET, MAX_PHOTO_BYTES, notFound, parseBody, rateLimited, requi
 import { json, jsonError, sameOrigin } from "@/lib/server/http";
 import { getOwnProject } from "@/lib/server/projects";
 
-const urlSchema = z.object({
+const urlSchema = z.strictObject({
   bytes: z
     .number({ error: "Укажите размер файла в байтах." })
     .int()
     .min(1, "Файл пустой.")
     .max(MAX_PHOTO_BYTES, "Печатная версия больше 25 МБ."),
 });
-const saveSchema = z.object({
+const saveSchema = z.strictObject({
   path: z.string().max(300).nullable(),
   edits: z.record(z.string(), z.unknown()).optional(),
 });

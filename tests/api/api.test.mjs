@@ -96,6 +96,38 @@ for (const [method, path, body] of closed) {
   });
 }
 
+// ───── Единый формат ошибки (S04) ─────
+
+test("единый формат ошибки: неизвестный /api → JSON 404, неверный метод → JSON 405 с Allow, отказ proxy.js → requestId", async () => {
+  const nf = await guest.req("/api/v1/nope-" + RUN);
+  assert.equal(nf.status, 404);
+  assert.equal(nf.json?.error?.code, "not_found");
+  assert.ok(nf.json.error.requestId && nf.headers.get("x-request-id"));
+  const nm = await guest.req("/api/v1/catalog", { method: "DELETE" });
+  assert.equal(nm.status, 405);
+  assert.equal(nm.json?.error?.code, "method_not_allowed");
+  assert.match(nm.headers.get("allow") || "", /GET/);
+  assert.ok(nm.json.error.requestId);
+  // Статический сегмент важнее [id]: DELETE /photos/order — это маршрут порядка (только PATCH) → 405
+  const ord = await A.client.req(`/api/v1/projects/${NIL}/photos/order`, { method: "DELETE" });
+  assert.equal(ord.status, 405);
+  const px = await guest.req("/api/v1/admin/audit");
+  assert.equal(px.status, 401);
+  assert.equal(px.json.error.code, "unauthorized");
+  assert.ok(px.json.error.requestId, "отказ proxy.js с requestId");
+  const pxM = await M.client.req("/api/v1/admin/audit");
+  assert.equal(pxM.status, 403);
+  assert.ok(pxM.json.error.requestId);
+});
+
+test("SEC-05: лишние поля в теле запроса отклоняются (400), а не отбрасываются молча", async () => {
+  const r = await A.client.req("/api/v1/projects", { method: "POST", body: { productSlug: "layflat", user_id: NIL, status: "ordered" } });
+  assert.equal(r.status, 400);
+  assert.equal(r.json.error.code, "invalid_input");
+  const c = await A.client.req("/api/v1/cart", { method: "PUT", body: { items: [], price: 1 } });
+  assert.equal(c.status, 400);
+});
+
 // ───── Роли: 403 ─────
 
 test("клиент и модератор → админский журнал → 403", async () => {
@@ -267,9 +299,12 @@ test("заказ: адрес обязателен для способа дост
   assert.ok(r.json.error.fields["delivery.address.city"]);
 });
 
-test("сервер пересчитывает итог: подменённые цены в запросе игнорируются", async () => {
+test("сервер пересчитывает итог: подменённые цены в запросе отклоняются (лишние поля → 400), итог считает сервер", async () => {
   s.key1 = `${RUN}-1`;
-  const r = await order(A, s.key1, { total: 0.01, totalKop: 1, goods_kop: 1, items: [{ projectId: s.project.id, price: 0.01 }], promoCode: "TEST10" });
+  const forged = await order(A, s.key1, { total: 0.01, totalKop: 1, goods_kop: 1, items: [{ projectId: s.project.id, price: 0.01 }], promoCode: "TEST10" });
+  assert.equal(forged.status, 400, forged.text);
+  assert.equal(forged.json.error.code, "invalid_input");
+  const r = await order(A, s.key1, { promoCode: "TEST10" });
   assert.equal(r.status, 201, r.text);
   const o = r.json.order;
   assert.equal(o.goodsKop, 8100);
@@ -351,6 +386,48 @@ test("IDOR: B не видит и не оплачивает заказ A (по id
   assert.equal((await B.client.req(`/api/v1/orders/${s.order.id}/pay-test`, { method: "POST", body: { method: "card_test" } })).status, 404);
   assert.equal((await B.client.req(`/api/v1/orders/${s.order.id}/interactions`, { method: "POST", body: { topic: "x", message: "y" } })).status, 404);
   assert.equal((await B.client.req("/api/v1/orders")).json.items.length, 0);
+});
+
+test("гонка «удалить проект» + «оформить заказ» (клиент B): либо заказ и проект с файлами целы, либо проект удалён и заказа нет", async () => {
+  const p = await B.client.req("/api/v1/projects", { method: "POST", body: { productSlug: "pages-book", options: { size: "20x20", pages: 24 } } });
+  assert.equal(p.status, 201);
+  const pid = p.json.project.id;
+  const up = await uploadPhoto(B, pid);
+  assert.equal(up.commit.status, 201);
+  const put = await B.client.req("/api/v1/cart", { method: "PUT", body: { items: [{ projectId: pid, quantity: 1 }] } });
+  assert.equal(put.status, 200, put.text);
+  const [del, ord] = await Promise.all([B.client.req(`/api/v1/projects/${pid}`, { method: "DELETE" }), order(B, `${RUN}-del-race`)]);
+  const { data: row } = await admin.from("projects").select("id, status").eq("id", pid).maybeSingle();
+  const { data: file } = await admin.storage.from("photos").download(up.path);
+  if (ord.status === 201) {
+    assert.equal(del.status, 409, "заказ создан — удаление проекта отклонено: " + del.text);
+    assert.equal(row?.status, "ordered");
+    assert.ok(file, "файл фото заказа на месте");
+  } else {
+    assert.equal(del.status, 200, del.text);
+    assert.equal(row, null);
+    assert.equal(ord.status, 409, ord.text);
+    const { count } = await admin.from("orders").select("id", { count: "exact", head: true }).eq("idempotency_key", `${RUN}-del-race`);
+    assert.equal(count, 0);
+  }
+  // Удаление уже заказанного проекта — 409, файлы на месте
+  if (ord.status === 201) {
+    const again = await B.client.req(`/api/v1/projects/${pid}`, { method: "DELETE" });
+    assert.equal(again.status, 409);
+  }
+});
+
+test("журнал: чтение чужого проекта и перенос чужого проекта в корзину — отказ (denied)", async () => {
+  const p = await A.client.req("/api/v1/projects", { method: "POST", body: { productSlug: "layflat" } });
+  const pid = p.json.project.id;
+  assert.equal((await B.client.req(`/api/v1/projects/${pid}`)).status, 404);
+  const m = await B.client.req("/api/v1/cart/merge", { method: "POST", body: { items: [{ projectId: pid, quantity: 1 }] } });
+  assert.equal(m.status, 200);
+  assert.equal(m.json.skipped, 1);
+  const { data: rows } = await admin.from("audit_log").select("action, result").eq("user_id", B.id).in("action", ["project.view", "cart.merge"]);
+  assert.ok(rows.some((r) => r.action === "project.view" && r.result === "denied"), JSON.stringify(rows));
+  assert.ok(rows.some((r) => r.action === "cart.merge" && r.result === "denied"), JSON.stringify(rows));
+  await A.client.req(`/api/v1/projects/${pid}`, { method: "DELETE" });
 });
 
 test("тестовая оплата: проходит один раз, без данных карты", async () => {

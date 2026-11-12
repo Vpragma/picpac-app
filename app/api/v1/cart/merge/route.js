@@ -4,8 +4,8 @@ import { parseBody, requireUser, serverError, uuid, z } from "@/lib/server/api";
 import { json } from "@/lib/server/http";
 import { loadCart, shapeCart } from "@/lib/server/projects";
 
-const schema = z.object({
-  items: z.array(z.object({ projectId: uuid, quantity: z.number().int().min(1).max(99) })).max(50, "В корзине может быть до 50 позиций."),
+const schema = z.strictObject({
+  items: z.array(z.strictObject({ projectId: uuid, quantity: z.number().int().min(1).max(99) })).max(50, "В корзине может быть до 50 позиций."),
 });
 
 export async function POST(request) {
@@ -35,7 +35,8 @@ export async function POST(request) {
       await ctx.admin.from("projects").update({ status: "in_cart" }).eq("user_id", ctx.userId).in("id", [...allowed]).eq("status", "draft");
     }
     const skipped = body.items.length - rows.length;
-    await ctx.audit("cart.merge", "cart", ctx.userId, "success", { merged: rows.length, skipped });
+    // Чужой, заказанный или несуществующий проект в запросе — отказ в журнале (не «успех»)
+    await ctx.audit("cart.merge", "cart", ctx.userId, skipped ? "denied" : "success", { merged: rows.length, skipped, ...(skipped ? { reason: "foreign_or_ordered" } : {}) });
     return json({ ok: true, merged: rows.length, skipped, cart: shapeCart(await loadCart(ctx)) });
   } catch (e) {
     console.error(e?.message);

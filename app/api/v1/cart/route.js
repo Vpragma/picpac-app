@@ -7,9 +7,9 @@ import { findDelivery, findPromo } from "@/lib/server/catalog";
 import { json, jsonError } from "@/lib/server/http";
 import { loadCart, shapeCart } from "@/lib/server/projects";
 
-const schema = z.object({
+const schema = z.strictObject({
   items: z
-    .array(z.object({ projectId: uuid, quantity: z.number().int().min(1, "Количество — от 1.").max(99, "Количество — до 99.") }))
+    .array(z.strictObject({ projectId: uuid, quantity: z.number().int().min(1, "Количество — от 1.").max(99, "Количество — до 99.") }))
     .max(50, "В корзине может быть до 50 позиций."),
 });
 

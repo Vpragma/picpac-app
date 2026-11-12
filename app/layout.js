@@ -1,4 +1,5 @@
 import { Jost } from "next/font/google";
+import { headers } from "next/headers";
 import "./picpac.css";
 import "./globals.css";
 import Shell from "../components/Shell";
@@ -25,7 +26,10 @@ export const viewport = {
   ],
 };
 
-export default function RootLayout({ children }) {
+// Чтение заголовков делает страницы динамическими: каждая получает свой nonce из CSP (proxy.js).
+// Без этого страницы ISR отдавались бы со скриптами без nonce, и строгая CSP их заблокировала бы.
+export default async function RootLayout({ children }) {
+  await headers();
   return (
     <html lang="ru" data-theme="picpac" className={jost.variable}>
       <body>

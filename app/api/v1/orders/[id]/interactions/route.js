@@ -4,7 +4,7 @@ import { notFound, parseBody, rateLimited, requireUser, serverError, tooMany, z 
 import { json } from "@/lib/server/http";
 import { getOwnOrder, shapeInteraction } from "@/lib/server/orders";
 
-const schema = z.object({
+const schema = z.strictObject({
   topic: z.string().trim().min(1, "Выберите тему обращения.").max(120, "Тема — до 120 символов."),
   kind: z.enum(["support", "reprint"]).default("support"),
   message: z.string().trim().min(1, "Напишите, что случилось.").max(2000, "Сообщение — до 2000 символов."),

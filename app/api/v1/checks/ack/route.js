@@ -4,7 +4,7 @@
 import { parseBody, rateLimited, requireUser, tooMany, z } from "@/lib/server/api";
 import { json } from "@/lib/server/http";
 
-const schema = z.object({
+const schema = z.strictObject({
   issue: z.string().trim().min(1, "Не указано предупреждение.").max(80, "Слишком длинный код предупреждения."),
   title: z.string().trim().max(120, "Слишком длинный заголовок.").optional(),
   productSlug: z.string().regex(/^[a-z0-9-]{2,40}$/, "Выберите продукт из каталога.").optional(),

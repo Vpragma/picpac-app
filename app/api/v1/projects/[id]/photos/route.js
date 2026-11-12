@@ -7,12 +7,12 @@ import { json, jsonError } from "@/lib/server/http";
 import { getOwnProject, needsModeration, PHOTO_FIELDS, shapePhoto } from "@/lib/server/projects";
 
 const score = z.number().min(0).max(1);
-const schema = z.object({
+const schema = z.strictObject({
   path: z.string().max(300),
   edits: z.record(z.string(), z.unknown()).optional(),
   quality: z.record(z.string(), z.unknown()).optional(),
   // Результат проверки цензуры на устройстве (nsfwjs): вероятности классов
-  nsfw: z.object({ porn: score, hentai: score, sexy: score, neutral: score.optional(), drawing: score.optional() }).optional(),
+  nsfw: z.strictObject({ porn: score, hentai: score, sexy: score, neutral: score.optional(), drawing: score.optional() }).optional(),
 });
 
 export async function POST(request, { params }) {

@@ -4,7 +4,7 @@ import { badId, notFound, parseBody, requireUser, serverError, uuid, z } from "@
 import { json, jsonError } from "@/lib/server/http";
 import { getOwnProject, listPhotos } from "@/lib/server/projects";
 
-const schema = z.object({ order: z.array(uuid).min(1, "Список фото пуст.").max(500) });
+const schema = z.strictObject({ order: z.array(uuid).min(1, "Список фото пуст.").max(500) });
 
 export async function PATCH(request, { params }) {
   const { id } = await params;

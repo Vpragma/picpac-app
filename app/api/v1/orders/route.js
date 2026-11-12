@@ -11,8 +11,8 @@ import { getOwnOrder, loadOrderFull, ORDER_FIELDS, shapeOrder } from "@/lib/serv
 import { loadCart } from "@/lib/server/projects";
 
 const text = (max, msg) => z.string().trim().max(max, msg);
-const schema = z.object({
-  delivery: z.object({
+const schema = z.strictObject({
+  delivery: z.strictObject({
     code: z.string().regex(/^[a-z0-9-]{2,30}$/, "Выберите способ доставки."),
     address: z
       .object({
@@ -27,7 +27,7 @@ const schema = z.object({
       })
       .default({}),
   }),
-  recipient: z.object({
+  recipient: z.strictObject({
     name: z.string().trim().min(2, "Введите имя получателя.").max(100, "Имя — до 100 символов."),
     phone: z.string().trim().regex(/^\+?[0-9 ()-]{7,20}$/, "Телефон в формате +375 29 123-45-67."),
     email: z.string().trim().email("Почта в формате name@example.com.").max(200).optional(),
