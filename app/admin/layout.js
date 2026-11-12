@@ -15,6 +15,11 @@ export default async function AdminLayout({ children }) {
             Заказы
           </Link>
           {auth.activeRole === "admin" && (
+            <Link href="/admin/stats" className="btn btn-small">
+              Статистика
+            </Link>
+          )}
+          {auth.activeRole === "admin" && (
             <Link href="/admin/audit" className="btn btn-small">
               Журнал действий
             </Link>

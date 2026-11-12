@@ -9,6 +9,7 @@ import { json, jsonError } from "@/lib/server/http";
 import { advanceDemoOrders, loadItemsForFlags } from "@/lib/server/orderFlow";
 import { getOwnOrder, loadOrderFull, ORDER_FIELDS, shapeOrder } from "@/lib/server/orders";
 import { loadCart } from "@/lib/server/projects";
+import { trackServer } from "@/lib/server/analytics";
 
 const text = (max, msg) => z.string().trim().max(max, msg);
 const schema = z.strictObject({
@@ -176,5 +177,6 @@ export async function POST(request) {
     promo: order.promo_code,
     delivery: order.delivery_code,
   });
+  if (created) await trackServer("order_created", ctx.userId, { product: cart.items[0]?.product?.slug || null, items: cart.items.length });
   return json({ ok: true, replayed: !created, order: await loadOrderFull(ctx, order) }, created ? 201 : 200);
 }

@@ -16,6 +16,7 @@ import { photoBadges } from "../../lib/photo/badges";
 import { applyOps, findSun } from "../../lib/photo/local";
 import { setAutoEnhance, useAutoEnhance } from "../../lib/photo/settings";
 import { notify } from "../../lib/store";
+import { track } from "@/lib/analytics";
 
 const PREVIEW_SIDE = 1280;
 
@@ -122,6 +123,7 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
     if (readOnly) return;
     const r = parseCommand(text, { last });
     if (!r.ok) return setAnswer({ ok: false, say: r.say });
+    track("ai_edit", { props: { kind: "command" } });
     let next = saved;
     const said = [];
     for (const step of r.steps) {

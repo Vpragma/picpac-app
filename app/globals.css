@@ -378,3 +378,34 @@ button, input, select { font: inherit; color: inherit; }
 }
 .photo-upload-waiting { background: var(--ds-color-warning-bg); color: #8a3f22; border: 1px solid var(--ds-color-warning); }
 .photo-upload-done { color: #1f5c43; }
+
+/* Админка → Статистика */
+.stat-filters { margin: 12px 0; }
+.stat-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.stat-tile {
+  background: var(--ds-color-bg-surface); border: 1px solid var(--ds-color-card-border);
+  border-radius: var(--ds-radius-md); padding: 10px 12px; box-shadow: var(--ds-shadow-card);
+}
+.stat-tile b { display: block; font-size: 1.5rem; font-weight: 500; color: var(--ds-color-text-strong); margin-top: 4px; }
+.stat-tile.warn b { color: var(--ds-color-accent); }
+.stat-big { font-size: 3rem; font-weight: 500; line-height: 1.1; margin: 8px 0 4px; color: var(--ds-color-text-strong); }
+.funnel { list-style: none; padding: 0; margin: 12px 0 0; }
+.funnel li + li { margin-top: 12px; }
+.funnel-bar { height: 10px; border-radius: 999px; background: var(--ds-color-bg-muted); overflow: hidden; margin: 4px 0 2px; }
+.funnel-bar span { display: block; height: 100%; background: var(--ds-gradient-accent); border-radius: 999px; }
+.stat-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+.stat-table th, .stat-table td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--ds-color-border); font-weight: 400; }
+.stat-table thead th { font-size: 13px; color: var(--ds-color-text-secondary); }
+.stat-table tr.worst th, .stat-table tr.worst td { background: var(--ds-color-bg-hover); }
+.formula { display: inline-block; position: relative; vertical-align: middle; }
+.formula summary {
+  list-style: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 999px; border: 1px solid var(--ds-color-border);
+  font-size: 14px; color: var(--ds-color-text-secondary); background: var(--ds-color-bg-surface);
+}
+.formula summary::-webkit-details-marker { display: none; }
+.formula[open] p {
+  position: absolute; right: 0; z-index: 5; width: min(280px, 80vw); margin: 6px 0 0; padding: 10px 12px;
+  background: var(--ds-color-bg-surface); color: var(--ds-color-text-strong); border: 1px solid var(--ds-color-border);
+  border-radius: var(--ds-radius-md); box-shadow: var(--ds-shadow-popover);
+}

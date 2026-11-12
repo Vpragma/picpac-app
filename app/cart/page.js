@@ -20,6 +20,7 @@ import { applyPromo, calcTotals, daysWord, etaFromDay, formatEtaRange, linePrice
 import { notify, readKey, useLocalValue } from "../../lib/store";
 import { syncProject, useSyncState } from "../../lib/sync";
 import { useCatalog } from "../../lib/useCatalog";
+import { track } from "@/lib/analytics";
 
 const EMPTY_FORM = { name: "", phone: "", email: "", delivery: "", address: {}, date: "", payment: "card_test", promo: null, saveAddress: true };
 const NO_ADDRESSES = [];
@@ -167,6 +168,7 @@ export default function CartPage() {
   async function confirm() {
     if (lock.current) return;
     setFailure(null);
+    track("checkout_start");
     if (me?.unknown) {
       // Сервер не ответил, кто вошёл: не отправляем на вход по кругу — спрашиваем ещё раз
       const m = await refreshMe();

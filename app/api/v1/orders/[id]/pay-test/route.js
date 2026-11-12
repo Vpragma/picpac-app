@@ -3,6 +3,7 @@
 import { notFound, parseBody, requireUser, serverError, z } from "@/lib/server/api";
 import { json } from "@/lib/server/http";
 import { getOwnOrder, loadOrderFull } from "@/lib/server/orders";
+import { trackServer } from "@/lib/server/analytics";
 
 const schema = z.strictObject({ method: z.enum(["card_test", "erip_test"], { error: "Выберите тестовую оплату: карта или ЕРИП." }) });
 
@@ -33,6 +34,7 @@ export async function POST(request, { params }) {
     return serverError();
   }
   await ctx.audit("order.pay_test", "order", order.number, "success", { method: body.method, total_kop: order.total_kop });
+  await trackServer("payment_test", ctx.userId, { method: body.method });
   const fresh = await getOwnOrder(ctx, order.id);
   return json({ ok: true, message: "Оплата прошла (тест). Деньги не списываются.", order: await loadOrderFull(ctx, fresh) });
 }

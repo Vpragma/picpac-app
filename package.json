@@ -19,7 +19,10 @@
     "test:api": "node --env-file-if-exists=.env.local --test --test-concurrency=1 tests/api/",
     "e2e": "playwright test",
     "test:all": "node --env-file-if-exists=.env.local scripts/test-all.mjs",
-    "security:scan": "node --env-file-if-exists=.env.local scripts/security-scan.mjs"
+    "security:scan": "node --env-file-if-exists=.env.local scripts/security-scan.mjs",
+    "seed:synthetic": "node --env-file-if-exists=.env.local scripts/demo-data.mjs synthetic",
+    "seed:demo": "node --env-file-if-exists=.env.local scripts/demo-data.mjs demo",
+    "reset:demo": "node --env-file-if-exists=.env.local scripts/demo-data.mjs reset"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

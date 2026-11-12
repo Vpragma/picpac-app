@@ -36,6 +36,7 @@ import DraftError from "../../components/DraftError";
 import { IconAlert, IconCheck, IconLeft, IconRight, IconTrash, IconUpload } from "../../components/icons";
 import { photoBadges } from "../../lib/photo/badges";
 import { ANALYSIS_VERSION, findDuplicates } from "../../lib/photo/analyze";
+import { useStepTimer } from "@/lib/analytics";
 
 // ИИ-редактор (шаг «Правки») — отдельный кусок кода, грузится только при открытии шага
 const PhotoEditor = dynamic(() => import("../../components/editor/PhotoEditor"), {
@@ -111,6 +112,7 @@ export default function EditorPage() {
   const { ready, error, draft, thumbs, uploads } = useDraft();
   const { product, loading } = useProduct(draft?.productSlug);
   const [step, setStep] = useState("photos");
+  useStepTimer(step);
   useAnalysis(draft);
   const lowDpi = useLowDpi(draft, product);
   const dups = useMemo(() => findDuplicates(draft?.photos || []), [draft?.photos]);

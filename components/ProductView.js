@@ -1,6 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { track } from "../lib/analytics";
 import Link from "next/link";
 import { useProduct } from "../lib/useCatalog";
 import { pagesForPhotos, photoHint } from "../lib/price";
@@ -18,6 +19,9 @@ const GROUPS = [
 ];
 
 export default function ProductView({ slug, initial, serverToday }) {
+  useEffect(() => {
+    if (slug) track("product_view", { props: /^[a-z0-9-]{1,40}$/.test(slug) ? { product: slug } : undefined });
+  }, [slug]);
   const { product, catalog, loading, error, retry } = useProduct(slug, initial);
   if (loading) return <p className="muted">Загружаем…</p>;
   if (error)
