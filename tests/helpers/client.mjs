@@ -65,11 +65,16 @@ export async function createTestUser(admin, roles = ["client"], label = "user") 
 // Удалить тестового пользователя и его файлы
 export async function deleteTestUser(admin, user) {
   if (!user?.id) return;
-  const { data: folders } = await admin.storage.from("photos").list(user.id, { limit: 1000 });
-  for (const f of folders || []) {
-    const { data: files } = await admin.storage.from("photos").list(`${user.id}/${f.name}`, { limit: 1000 });
-    const paths = (files || []).map((x) => `${user.id}/${f.name}/${x.name}`);
+  // Файлы пользователя, включая печатные версии ({user}/{project}/print/{photo}/{file}) — обходим папки вглубь
+  const walk = async (prefix, depth) => {
+    const { data: items } = await admin.storage.from("photos").list(prefix, { limit: 1000 });
+    const paths = [];
+    for (const x of items || []) {
+      if (x.id) paths.push(`${prefix}/${x.name}`);
+      else if (depth < 4) await walk(`${prefix}/${x.name}`, depth + 1);
+    }
     if (paths.length) await admin.storage.from("photos").remove(paths);
-  }
+  };
+  await walk(user.id, 1);
   await admin.auth.admin.deleteUser(user.id).catch(() => {});
 }

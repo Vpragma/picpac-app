@@ -86,7 +86,7 @@ export async function DELETE(request, { params }) {
   if (project.status === "ordered") return jsonError(409, "project_ordered", "Проект уже в заказе. Фото заказа можно удалить в профиле: «Удалить мои фото».");
   try {
     const photos = await listPhotos(ctx, id);
-    await removeFiles(ctx.admin, photos.map((p) => p.storage_path));
+    await removeFiles(ctx.admin, photos.flatMap((p) => [p.storage_path, p.print_path]));
     const { error } = await ctx.admin.from("projects").delete().eq("id", id).eq("user_id", ctx.userId);
     if (error) throw new Error(error.message);
     await ctx.audit("project.delete", "project", id, "success", { photos: photos.length });
