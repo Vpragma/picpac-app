@@ -6,7 +6,8 @@ import AxeBuilder from "@axe-core/playwright";
 
 const PAGES = [
   ["/", "Главная"],
-  ["/product/classic", "Карточка Classic"],
+  ["/product/pages-book", "Карточка фотокниги"],
+  ["/product/photo", "Карточка «Печать фото»"],
   ["/books", "Мои книги"],
   ["/editor", "Редактор"],
   ["/cart", "Корзина"],
