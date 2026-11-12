@@ -44,7 +44,7 @@ function Toasts({ hidden = false }) {
 }
 
 // logo — картинка логотипа, собранная на сервере (getImageProps в app/layout.js): без лишнего JS в браузере
-export default function Shell({ children, logo }) {
+export default function Shell({ children, logo, phoneQr = null }) {
   const path = usePathname() || "/";
   const count = cartCount(useCart());
   // Проекты вошедшего клиента синхронизируются с аккаунтом (гость работает только на устройстве)
@@ -109,6 +109,7 @@ export default function Shell({ children, logo }) {
           <a href={SUPPORT.emailHref}>{SUPPORT.email}</a>
         </nav>
         <p>Поддержка ежедневно {SUPPORT.hours}</p>
+        {phoneQr}
       </footer>
       <Toasts hidden={path.startsWith("/login")} />
       <Pwa />

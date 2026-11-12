@@ -5,6 +5,8 @@ import { badId, limitWrite, notFound, parseBody, requireUser, serverError, z } f
 import { json, jsonError } from "@/lib/server/http";
 import { maskClient } from "@/lib/mask";
 import { shapeInteraction, STATUS_LABELS } from "@/lib/server/orders";
+import { after } from "next/server";
+import { pushPendingNotifications } from "@/lib/server/push";
 
 const schema = z.strictObject({
   body: z.string().trim().min(2, "Напишите ответ — от 2 символов.").max(2000, "Ответ — до 2000 символов."),
@@ -63,5 +65,7 @@ export async function POST(request, { params }) {
   const status = body.close ? "closed" : "answered";
   await ctx.admin.from("interactions").update({ status, assignee_id: ctx.userId, updated_at: new Date().toISOString() }).eq("id", id);
   await ctx.audit("interaction.reply", "interaction", id, "success", { order: it.orders?.number, close: !!body.close });
+  // D9: пуш «Ответ поддержки» сразу, не задерживая ответ (строку центра уведомлений создаёт триггер базы)
+  after(() => pushPendingNotifications().catch(() => {}));
   return json({ ok: true, message: shapeMessage(data), status }, 201);
 }
