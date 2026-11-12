@@ -6,8 +6,9 @@
 // - превью: оригинал из IndexedDB уменьшается до ≤ 1280 точек, пиксели правятся таблицами (canvas 2D), «до» — второй слой;
 // - команды разбирает словарь на устройстве (lib/photo/commands.js); «убери солнце» — без нейросети (lib/photo/local.js);
 // - D1: выделение касанием (SlimSAM в воркере, lib/photo/ai.js) → «Размыть фон», «Осветлить», «Затемнить», «Убрать»
-//   (ластик MI-GAN). Правка хранит маску (lib/photo/mask.js), превью и печать считают её одинаково;
-//   ластик — до света и цвета (результат кэшируется), остальное — после;
+//   (ластик MI-GAN в своём воркере). Маска хранится в правках фото один раз (lib/photo/maskStore.js), превью и печать
+//   считают её одинаково (lib/photo/mask.js); ластик — до света и цвета (результат кэшируется), остальное — после;
+//   правки фото всегда помещаются в предел сервера (PHOTO_EDITS_MAX) — проверяем до сохранения;
 // - D1: «Резкость для печати» ×2 (UpscalerJS, lib/photo/upscale.js) для фото, которым не хватает точек;
 // - история шагов — в памяти редактора (кнопка «Отменить»), каждый шаг сразу сохраняется в черновике.
 import { useEffect, useRef, useState } from "react";
@@ -17,14 +18,18 @@ import { autoParams } from "../../lib/photo/analyze";
 import { SUGGESTIONS, parseCommand } from "../../lib/photo/commands";
 import { photoBadges } from "../../lib/photo/badges";
 import { applyOps, findSun } from "../../lib/photo/local";
-import { MAX_MASK_OPS, eraseKey, makeMaskOp, maskArea, splitOps } from "../../lib/photo/mask";
-import { aiSupport, embedImage, eraseImage, isCancelled, segmentPoints, stopAi } from "../../lib/photo/ai";
+import { MAX_MASK_OPS, addMaskOp, editsFit, eraseKey, hydrateOps, maskArea, splitOps } from "../../lib/photo/mask";
+import { aiSupport, aiWhy, embedImage, embeddedFor, eraseImage, isCancelled, segmentPoints, stopAi, stopEraser } from "../../lib/photo/ai";
+import { MIGAN_FILE, ORT_WASM, SAM_FILES, mb } from "../../lib/photo/modelFiles";
 import { UPSCALE_MAX_SIDE, stopUpscale, upscaleBlob, upscaleKey } from "../../lib/photo/upscale";
 import { setAutoEnhance, useAutoEnhance } from "../../lib/photo/settings";
 import { notify } from "../../lib/store";
 import { track } from "@/lib/analytics";
 
 const PREVIEW_SIDE = 1280;
+const MIN_PREVIEW_SIDE = 640; // очень маленькие фото (48×32) показываем крупно — по ним можно попасть пальцем
+const SAM_MB = mb([...SAM_FILES, ORT_WASM]);
+const ERASER_MB = mb([MIGAN_FILE, ORT_WASM]);
 
 // Местные правки без выделения. «Убери солнце/блики» — поиск самой яркой компактной области и заливка
 // (lib/photo/local.js), правка — в edits.ops. Правки по выделению касанием — maskStep() в редакторе.
@@ -61,7 +66,8 @@ async function loadSource(id, thumbUrl) {
   if (!blob && thumbUrl) blob = await fetch(thumbUrl).then((r) => r.blob());
   if (!blob) throw new Error("Нет файла фото на устройстве");
   const bmp = await createImageBitmap(blob);
-  const k = Math.min(1, PREVIEW_SIDE / Math.max(bmp.width, bmp.height));
+  const long = Math.max(bmp.width, bmp.height);
+  const k = long < MIN_PREVIEW_SIDE ? MIN_PREVIEW_SIDE / long : Math.min(1, PREVIEW_SIDE / long);
   const w = Math.max(1, Math.round(bmp.width * k));
   const h = Math.max(1, Math.round(bmp.height * k));
   const c = document.createElement("canvas");
@@ -77,27 +83,40 @@ async function loadSource(id, thumbUrl) {
   return img;
 }
 
-// Ластик (D1): результат «Убрать» для превью считается в воркере один раз и кэшируется по набору правок
+// Ластик (D1): результат «Убрать» для превью считается в воркере ластика один раз и кэшируется по набору правок.
+// Ход (загрузка модели в первый раз с процентом, затем расчёт) — общий: его видят превью и строка ответа.
 const erasedCache = new Map();
-const erasing = new Map();
-function ensureErased(photoId, src, eraseOps, onProgress) {
+const erasing = new Map(); // ключ → Promise
+const eraseState = new Map(); // ключ → { stage: "load" | "erase", p }
+const eraseListeners = new Set();
+const emitErase = () => eraseListeners.forEach((f) => f());
+function ensureErased(photoId, src, eraseOps) {
   if (!eraseOps.length) return Promise.resolve(src);
   const key = eraseKey(photoId, eraseOps);
   if (erasedCache.has(key)) return Promise.resolve(erasedCache.get(key));
   if (!erasing.has(key)) {
-    const p = eraseImage(src, eraseOps, onProgress).then(
+    eraseState.set(key, { stage: "load", p: 0 });
+    const p = eraseImage(src, eraseOps, (m) => {
+      eraseState.set(key, { stage: m.stage, p: m.p || 0 });
+      emitErase();
+    }).then(
       (img) => {
         erasedCache.set(key, img);
         if (erasedCache.size > 4) erasedCache.delete(erasedCache.keys().next().value);
         erasing.delete(key);
+        eraseState.delete(key);
+        emitErase();
         return img;
       },
       (e) => {
         erasing.delete(key);
+        eraseState.delete(key);
+        emitErase();
         throw e;
       },
     );
     erasing.set(key, p);
+    emitErase();
   }
   return erasing.get(key);
 }
@@ -122,6 +141,8 @@ function toSide(img, side) {
 }
 
 const MASK_SAY = { blurBg: "Размыли фон — главное осталось чётким", lighten: "Осветлили выделенное", darken: "Затемнили выделенное", erase: "Убираем выделенное…" };
+const ERASED_SAY = "Убрали выделенное. «Отменить» вернёт как было.";
+const MASK_VERB = { blurBg: "Размыть фон", lighten: "Осветлить выделенное", darken: "Затемнить выделенное", erase: "Убрать" };
 const AI_OFF = { status: "off" };
 
 export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds, extra }) {
@@ -139,11 +160,14 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
   const aiRef = useRef(AI_OFF);
   const segN = useRef(0);
   const [up, setUp] = useState(null); // «Резкость для печати»: { photoId, status: run|error, p, say }
+  const [pendingErase, setPendingErase] = useState(null); // { photoId, opId } — «Убрать», нажатое в этом сеансе
+  const aiOk = aiSupport().ok; // выделение касанием на этом устройстве возможно (иначе — честные ответы)
 
   // Память воркеров ИИ освобождаем, когда редактор закрыт
   useEffect(
     () => () => {
       stopAi();
+      stopEraser();
       stopUpscale();
     },
     [],
@@ -168,10 +192,11 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
 
   function choose(id) {
     if (live && live.id === photo.id) commit(live.edits); // ползунок двигали, но не отпустили — не теряем
+    // Другое фото — результат кодировщика больше не нужен: освобождаем память воркера выделения
+    if (id !== photo.id) stopAi();
     setSel(id);
     setLive(null);
     setAnswer(null);
-    if (aiRef.current.status === "loading") stopAi();
     setAi(AI_OFF);
   }
 
@@ -186,15 +211,26 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
     if (a.status === "loading" && a.photoId === photo.id && a.key === curKey) return setAi({ ...a, pending });
     const key = curKey;
     const pid = photo.id;
-    const eraseOps = splitOps(saved.ops).erase;
+    // То же фото после «Готово»: результат кодировщика ещё в воркере — выделение готово сразу
+    const done = embeddedFor(key);
+    if (done) return setAi({ status: "ready", photoId: pid, key, w: done.w, h: done.h, points: [], mask: null, add: true, pending, shown: true });
+    const eraseOps = splitOps(hydrateOps(saved)).erase;
     setAi({ status: "loading", photoId: pid, key, stage: "load", p: 0, points: [], mask: null, add: true, pending, shown: true });
     try {
+      const still = () => aiRef.current.status === "loading" && aiRef.current.key === key && aiRef.current.photoId === pid;
       const src = await loadSource(pid, thumbs[pid]);
+      // Пока считается ластик — ждём его (выделяем уже без убранного предмета); «Отмена» в это время — просто выход
       const base = await ensureErased(pid, src, eraseOps);
-      const r = await embedImage(key, toSide(base, 1024), (m) => setAi((b) => (b.key === key && b.status === "loading" ? { ...b, stage: m.stage, p: m.p } : b)));
+      if (!still()) return;
+      const order = { load: 0, start: 1, embed: 2 };
+      const r = await embedImage(key, toSide(base, 1024), (m) =>
+        // Ход только вперёд: загрузка (процент по байтам) → запуск → «Изучаем фото»
+        setAi((b) => (b.key === key && b.status === "loading" && order[m.stage] >= order[b.stage || "load"] ? { ...b, stage: m.stage, p: m.stage === b.stage ? Math.max(b.p || 0, m.p || 0) : m.p || 0 } : b)),
+      );
       setAi((b) => (b.key === key && b.photoId === pid ? { ...b, status: "ready", w: r.w, h: r.h } : b));
     } catch (e) {
-      if (isCancelled(e)) return;
+      // Остановили (выделение или ластик, которого ждали) — не висим в «Загружаем…»
+      if (isCancelled(e)) return setAi((b) => (b.key === key && b.status === "loading" ? AI_OFF : b));
       console.error(e, e?.workerStack || "");
       setAi((b) => (b.key === key ? { status: "error", photoId: pid, say: "Не получилось подготовить выделение. Попробуйте ещё раз — или пользуйтесь командами и ползунками." } : b));
     }
@@ -208,7 +244,7 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
   async function segment(points) {
     const a = aiRef.current;
     const n = ++segN.current;
-    if (!points.length) return setAi({ ...a, points, mask: null, busy: false });
+    if (!points.length) return setAi({ ...a, points, mask: null, busy: false, add: true });
     setAi({ ...a, points, busy: true, shown: true });
     try {
       const r = await segmentPoints(a.key, points);
@@ -238,6 +274,8 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
 
   // Правка по выделению поверх base (правки фото) → { edits, say } или { say } без правки
   function maskStep(act, base) {
+    const sup = aiSupport();
+    if (!sup.ok) return { say: `«${MASK_VERB[act]}» на этом устройстве не получится: нужно выделение касанием, а ${aiWhy(sup)}. Работают свет и цвет: «ярче», «теплее», «убери пересвет».` };
     if (!hasMask) {
       startSelect(act);
       const what = act === "blurBg" ? "главного на фото — того, что должно остаться чётким" : act === "erase" ? "того, что убрать" : "того, что изменить";
@@ -247,13 +285,41 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
     const ops = base.ops || [];
     if (ops.filter((o) => o.kind === "mask").length >= MAX_MASK_OPS)
       return { say: `Для одного фото — не больше ${MAX_MASK_OPS} правок по выделению. «Отменить» или «Вернуть оригинал» освободят место.` };
-    const op = makeMaskOp(act, mask.bits, mask.w, mask.h);
-    const next = { ...base, ops: [...ops, op], by: "command" };
+    // Маска сжимается и хранится один раз (одинаковое выделение не дублируется)
+    const { edits: packed, op } = addMaskOp(base, act, mask.bits, mask.w, mask.h);
+    const next = { ...packed, by: "command" };
+    // Правки фото должны поместиться на сервер печатной версии (тот же счёт, что у сервера) — проверяем заранее
+    if (!editsFit(compactEdits(next)))
+      return { say: "На этом фото уже много правок по выделению — новая не поместится в заказ. «Отменить» уберёт последнюю, «Вернуть оригинал» — все." };
     if (editsSize(next) > 45_000) return { say: "В проекте уже очень много правок по выделению. Отмените часть — и можно продолжить." };
     track("ai_edit", { props: { kind: "local" } });
-    if (act === "erase") setAi(AI_OFF); // предмет убран — выделять нужно заново
-    else setAi((b) => ({ ...b, pending: null, shown: false }));
+    if (act === "erase") {
+      // Предмет убран — выделение по старому фото больше не годится: освобождаем память воркера выделения,
+      // ластик считается в своём воркере (с процентом первой загрузки и «Отменой»)
+      stopAi();
+      setAi(AI_OFF);
+      setPendingErase({ photoId: photo.id, opId: op.id });
+    } else setAi((b) => ({ ...b, pending: null, shown: false }));
     return { edits: next, say: MASK_SAY[act] };
+  }
+
+  // «Отмена» ластика: остановить расчёт и убрать эту правку «Убрать» (как будто её не нажимали)
+  function cancelErase() {
+    const pe = pendingErase;
+    stopEraser();
+    setPendingErase(null);
+    if (!pe) return;
+    const ph = draft.photos.find((x) => x.id === pe.photoId);
+    if (!ph) return;
+    const ed = normEdits(ph.edits);
+    setPhotoEdits(pe.photoId, { ...ed, ops: ed.ops.filter((o) => o.id !== pe.opId) });
+    setAnswer({ ok: true, say: "Ластик остановили — фото как было." });
+  }
+
+  // Ластик досчитал или не смог — строка ответа больше не «Убираем…»
+  function eraseFinished(ok) {
+    setPendingErase(null);
+    setAnswer((a) => (a?.say === MASK_SAY.erase ? { ok, say: ok ? ERASED_SAY : "Не получилось убрать. «Отменить» вернёт как было." } : a));
   }
 
   function applyMask(act) {
@@ -352,6 +418,11 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
         // D1: правки по выделению касанием. «Убери машину»: детектора на устройстве нет — если предмет уже
         // выделен касанием, убираем выделенное, иначе просим коснуться его (облачный поиск — этап D6)
         const act = step.kind === "blurBackground" ? "blurBg" : step.kind === "maskTone" ? (step.dir > 0 ? "lighten" : "darken") : "erase";
+        const sup = aiSupport();
+        if (act === "erase" && !sup.ok && step.target !== "selection") {
+          said.push(`Убрать «${step.target}» на этом устройстве не получится: нужно выделение касанием, а ${aiWhy(sup)}. Работают свет и цвет и «убери солнце»`);
+          continue;
+        }
         if (act === "erase" && !hasMask && step.target !== "selection") {
           startSelect("erase");
           said.push(`Сам найти «${step.target}» пока не умею. Коснитесь того, что убрать, — я выделю, затем нажмите «Убрать»`);
@@ -421,8 +492,11 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
           thumb={thumbs[photo.id]}
           edits={edits}
           selecting={aiOn && ai.status === "ready"}
-          selection={aiOn && ai.status === "ready" && ai.shown !== false ? { mask, points: ai.points } : null}
+          selection={aiOn && ai.status === "ready" && ai.shown !== false ? { mask, points: ai.points, w: ai.w, h: ai.h } : null}
           onTap={tap}
+          cancelableErase={pendingErase?.photoId === photo.id ? pendingErase.opId : null}
+          onCancelErase={cancelErase}
+          onEraseDone={eraseFinished}
         />
 
         <SelectPanel
@@ -435,10 +509,9 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
           onUndoPoint={() => segment(ai.points.slice(0, -1))}
           onClear={() => segment([])}
           onAction={applyMask}
-          onDone={() => {
-            setAi(AI_OFF);
-            if (!erasing.size) stopAi(); // «Готово» — освобождаем память воркера (на телефоне это до ~2 ГБ)
-          }}
+          // «Готово»: результат кодировщика остаётся в воркере — повторное «Выделить касанием» на этом фото сразу.
+          // Память освобождается при смене фото и при закрытии редактора
+          onDone={() => setAi(AI_OFF)}
         />
 
         {(lowDpiIds?.has(photo.id) || saved.upscale === 2) && (
@@ -482,7 +555,8 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
             </button>
           </div>
           <div className="pe-chips" aria-label="Подсказки">
-            {SUGGESTIONS.map((s) => (
+            {/* «Размыть фон» без выделения касанием на этом устройстве — тупик (S12): не показываем */}
+            {SUGGESTIONS.filter((s) => aiOk || s !== "Размыть фон").map((s) => (
               <button type="button" key={s} className="btn btn-small" onClick={() => run(s)} disabled={readOnly}>
                 {s}
               </button>
@@ -619,10 +693,10 @@ function SelectPanel({ ai, hasMask, readOnly, onStart, onCancel, onMode, onUndoP
       <div className="pe-select" aria-busy="true">
         <p className="small" role="status" aria-live="polite">
           {ai.stage === "load"
-            ? pct < 100
-              ? `Загружаем выделение на устройство: ${pct}% (один раз, около 29 МБ)`
-              : "Запускаем нейросеть на устройстве…"
-            : "Изучаем фото — 10–20 секунд, один раз для этого фото. Можно пока двигать ползунки."}
+            ? `Загружаем выделение на устройство: ${pct}% (один раз, около ${SAM_MB} МБ)`
+            : ai.stage === "start"
+              ? "Запускаем нейросеть на устройстве…"
+              : "Изучаем фото — 10–20 секунд, один раз для этого фото. Можно пока двигать ползунки."}
         </p>
         <progress className="pe-progress" max={100} value={ai.stage === "load" ? pct : undefined} aria-label="Подготовка выделения" />
         <button type="button" className="btn btn-small" onClick={onCancel}>
@@ -638,10 +712,10 @@ function SelectPanel({ ai, hasMask, readOnly, onStart, onCancel, onMode, onUndoP
         {ai.busy ? "Выделяем…" : !ai.points.length ? "Коснитесь предмета на фото." : hasMask ? "Выделено. Ещё касание — добавить или убрать часть." : "Ничего не выделилось — коснитесь ещё раз."}
       </p>
       <div className="row wrap pe-select-row" role="group" aria-label="Что делает касание">
-        <button type="button" className="btn btn-small" aria-pressed={ai.add !== false} onClick={() => onMode(true)}>
+        <button type="button" className="btn btn-small" aria-pressed={ai.add !== false || !ai.points.length} onClick={() => onMode(true)}>
           + Добавить
         </button>
-        <button type="button" className="btn btn-small" aria-pressed={ai.add === false} onClick={() => onMode(false)} disabled={!ai.points.length}>
+        <button type="button" className="btn btn-small" aria-pressed={ai.add === false && ai.points.length > 0} onClick={() => onMode(false)} disabled={!ai.points.length}>
           − Убрать часть
         </button>
         <button type="button" className="btn btn-small" onClick={onUndoPoint} disabled={!ai.points.length}>
@@ -705,7 +779,7 @@ function UpscaleCard({ photo, edits, up, readOnly, onRun, onCancel, onRemove }) 
           {up.say}
         </span>
       ) : (
-        <span>Этому фото не хватает точек для печати ({photo.w}×{photo.h}). Нейросеть на телефоне увеличит его вдвое и сделает края чётче.</span>
+        <span>Этому фото не хватает точек для печати ({photo.w}×{photo.h}). Нейросеть на этом устройстве увеличит его вдвое и сделает края чётче.</span>
       )}{" "}
       <button type="button" className="btn btn-small" onClick={onRun} disabled={readOnly}>
         Резкость для печати ×2
@@ -716,7 +790,7 @@ function UpscaleCard({ photo, edits, up, readOnly, onRun, onCancel, onRemove }) 
 
 // Превью: «после» — canvas с правками, «до» — второй canvas поверх (ползунок или удержание).
 // D1: ластик — до света и цвета (воркер, кэш), выделение — третий canvas с подсветкой маски и точками.
-function Preview({ photo, thumb, edits, selecting, selection, onTap }) {
+function Preview({ photo, thumb, edits, selecting, selection, onTap, cancelableErase, onCancelErase, onEraseDone }) {
   const photoId = photo.id;
   const afterRef = useRef(null);
   const beforeRef = useRef(null);
@@ -727,7 +801,14 @@ function Preview({ photo, thumb, edits, selecting, selection, onTap }) {
   const [hold, setHold] = useState(false);
   const [erased, setErased] = useState(null); // { key, img }
   const [eraseFail, setEraseFail] = useState(null); // ключ набора «Убрать», который не получился
+  const [retry, setRetry] = useState(0); // ластик остановили не кнопкой «Отмена» — считаем заново
+  const [, setTick] = useState(0); // ход ластика (общий для превью и строки ответа)
   const timer = useRef(null);
+  useEffect(() => {
+    const f = () => setTick((t) => t + 1);
+    eraseListeners.add(f);
+    return () => eraseListeners.delete(f);
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -751,8 +832,8 @@ function Preview({ photo, thumb, edits, selecting, selection, onTap }) {
     c.getContext("2d").putImageData(src, 0, 0);
   }, [src]);
 
-  // Ластик: результат для текущего набора «Убрать» (из кэша или воркер)
-  const eraseOps = splitOps(edits?.ops).erase;
+  // Ластик: результат для текущего набора «Убрать» (из кэша или воркер ластика). Маски — из edits.masks
+  const eraseOps = splitOps(hydrateOps(edits)).erase;
   const eKey = eraseKey(photoId, eraseOps);
   const eJson = JSON.stringify(eraseOps);
   useEffect(() => {
@@ -761,16 +842,24 @@ function Preview({ photo, thumb, edits, selecting, selection, onTap }) {
     if (!ops.length) return;
     let alive = true;
     ensureErased(photoId, src, ops)
-      .then((img) => alive && setErased({ key: eKey, img }))
+      .then((img) => {
+        if (!alive) return;
+        setErased({ key: eKey, img });
+        onEraseDone?.(true);
+      })
       .catch((e) => {
-        if (!alive || isCancelled(e)) return;
+        if (!alive) return;
+        // Остановили (не нашей «Отменой» — тогда правки уже нет): правка осталась — считаем заново, а не висим
+        if (isCancelled(e)) return setTimeout(() => alive && setRetry((r) => r + 1), 300);
         console.error(e);
         setEraseFail(eKey);
+        onEraseDone?.(false);
       });
     return () => {
       alive = false;
     };
-  }, [src, photoId, eKey, eJson]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [src, photoId, eKey, eJson, retry]);
   const base = !eraseOps.length ? src : erased?.key === eKey ? erased.img : null;
 
   // «После» — с правками; частые изменения ползунка склеиваем
@@ -789,7 +878,7 @@ function Preview({ photo, thumb, edits, selecting, selection, onTap }) {
       const ed = JSON.parse(key);
       // Пока ластик считается — показываем без него (остальные правки уже видны)
       applyEdits((base || src).data, out.data, ed);
-      const rest = splitOps(ed?.ops).rest;
+      const rest = splitOps(hydrateOps(ed)).rest;
       if (rest.length) applyOps(out.data, src.width, src.height, rest);
       c.getContext("2d").putImageData(out, 0, 0);
       c.dataset.rendered = base || !eraseOps.length ? key : "";
@@ -825,8 +914,9 @@ function Preview({ photo, thumb, edits, selecting, selection, onTap }) {
       ctx.imageSmoothingEnabled = true;
       ctx.drawImage(t, 0, 0, c.width, c.height);
     }
-    const sx = m ? c.width / m.w : 1;
-    const sy = m ? c.height / m.h : 1;
+    // Точки — в точках картинки, по которой выделяем (selection.w×h), а не маски: первая точка сразу на месте
+    const sx = c.width / (selection.w || m?.w || c.width);
+    const sy = c.height / (selection.h || m?.h || c.height);
     const r = Math.max(6, Math.round(Math.max(c.width, c.height) / 90));
     for (const p of selection.points || []) {
       ctx.beginPath();
@@ -853,6 +943,9 @@ function Preview({ photo, thumb, edits, selecting, selection, onTap }) {
   }
   if (failed) return <p className="err-text small">Не получилось открыть фото на этом устройстве. Попробуйте перезагрузить страницу.</p>;
   const erasing = !!src && eraseOps.length > 0 && !base;
+  const prog = eraseState.get(eKey);
+  const ePct = Math.round((prog?.p || 0) * 100);
+  const eLoading = prog?.stage === "load";
   return (
     <div className="pe-preview">
       <div
@@ -873,11 +966,25 @@ function Preview({ photo, thumb, edits, selecting, selection, onTap }) {
         {shown > 0 && <span className="pe-tag left">До</span>}
         {shown < 100 && !selecting && <span className="pe-tag right">После</span>}
         {erasing && (
-          <span className="pe-busy small" role="status" aria-live="polite">
-            {eraseFail === eKey ? "Не получилось убрать — «Отменить» вернёт как было" : "Убираем выделенное…"}
+          <span className="pe-busy small" aria-hidden="true">
+            {eraseFail === eKey ? "Не получилось убрать — «Отменить» вернёт как было" : eLoading ? `Загружаем ластик: ${ePct}%` : "Убираем выделенное…"}
           </span>
         )}
       </div>
+      {/* Ход ластика под фото: первая загрузка модели — с процентом; «Отмена» — для «Убрать», нажатого сейчас */}
+      {erasing && eraseFail !== eKey && (
+        <div className="pe-erase" aria-busy="true">
+          <span className="small" role="status" aria-live="polite">
+            {eLoading ? `Загружаем ластик на устройство: ${ePct}% (один раз, около ${ERASER_MB} МБ)` : "Убираем выделенное…"}
+          </span>
+          <progress className="pe-progress" max={100} value={eLoading ? ePct : undefined} aria-label="Ластик" />
+          {cancelableErase && eraseOps.some((o) => o.id === cancelableErase) && (
+            <button type="button" className="btn btn-small" onClick={onCancelErase}>
+              Отмена
+            </button>
+          )}
+        </div>
+      )}
       <div className="row wrap pe-compare">
         <button
           type="button"

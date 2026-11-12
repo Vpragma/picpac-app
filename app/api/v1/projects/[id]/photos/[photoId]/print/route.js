@@ -5,9 +5,12 @@
 //        (JPEG, размеры кадра как у оригинала или ровно ×2 при «Резкости для печати»), записывает print_path и правки фото (edits.print = путь и размеры).
 //        Снимок заказа (order_items.snapshot.photos[].edits) берёт правки отсюда — печать получает и правки, и файл.
 //   PUT  { path: null } — правки сняли: печатаем оригинал; { path: null, edits } — файл не собрался, правки параметрами.
+//   Правки фото — не больше PHOTO_EDITS_MAX (20 КБ, lib/photo/edits.js), иначе 400 edits_too_large и файл удаляется.
+//   После сохранения в папке печатных версий фото остаётся один файл — прежние и брошенные удаляются.
 import { sniffImage } from "@/lib/imageMeta";
 import { badId, BUCKET, MAX_PHOTO_BYTES, notFound, parseBody, rateLimited, requireUser, serverError, tooMany, z } from "@/lib/server/api";
 import { json, jsonError, sameOrigin } from "@/lib/server/http";
+import { PHOTO_EDITS_MAX, editsBytes } from "@/lib/photo/edits";
 import { getOwnProject } from "@/lib/server/projects";
 
 const urlSchema = z.strictObject({
@@ -70,7 +73,15 @@ export async function PUT(request, { params }) {
   if (badId(id) || badId(photoId)) return notFound("Фото");
   const { body, response: bad } = await parseBody(request, saveSchema);
   if (bad) return bad;
-  if (JSON.stringify(body.edits || {}).length > 20_000) return jsonError(400, "invalid_input", "Слишком много данных о правках фото.");
+  // Путь выдаёт только сервер: {мой id}/{этот проект}/print/{это фото}/{uuid}.jpg
+  const pattern = new RegExp(`^${ctx.userId}/${id}/print/${photoId}/[0-9a-f-]{36}\\.jpg$`);
+  // Правки фото не больше PHOTO_EDITS_MAX (тот же счёт у редактора и оформления заказа). Отказ — и уже загруженный
+  // файл печатной версии удаляем сразу, чтобы в хранилище не оставалось файлов без ссылки
+  if (editsBytes(body.edits) > PHOTO_EDITS_MAX) {
+    if (typeof body.path === "string" && pattern.test(body.path)) await ctx.admin.storage.from(BUCKET).remove([body.path]).catch(() => {});
+    await ctx.audit("photo.print", "photo", photoId, "denied", { reason: "edits_too_large", bytes: editsBytes(body.edits) });
+    return jsonError(400, "edits_too_large", "На этом фото слишком много правок по выделению — их не сохранить. Уберите часть правок на шаге «Правки» («Отменить»).");
+  }
   const { project, photo } = await load(ctx, id, photoId);
   if (!photo) {
     await ctx.audit("photo.print", "photo", photoId, "denied", { reason: "not_found_or_foreign" });
@@ -78,8 +89,14 @@ export async function PUT(request, { params }) {
   }
   if (project.status === "ordered") return jsonError(409, "project_ordered", "Проект уже в заказе — менять фото нельзя.");
 
+  // Прежние печатные версии этого фото (и брошенные после сбоя связи) — удалить, оставить только keep
   const removeOld = async (keep) => {
-    if (photo.print_path && photo.print_path !== keep) await ctx.admin.storage.from(BUCKET).remove([photo.print_path]).catch(() => {});
+    const dir = `${ctx.userId}/${id}/print/${photoId}`;
+    const { data: list } = await ctx.admin.storage.from(BUCKET).list(dir, { limit: 100 }).catch(() => ({ data: null }));
+    const paths = new Set((list || []).map((f) => `${dir}/${f.name}`));
+    if (photo.print_path) paths.add(photo.print_path);
+    paths.delete(keep);
+    if (paths.size) await ctx.admin.storage.from(BUCKET).remove([...paths]).catch(() => {});
   };
 
   // Без файла: правки сняли — печатаем оригинал; или файл не собрался на устройстве — правки записываются
@@ -93,8 +110,6 @@ export async function PUT(request, { params }) {
     return json({ ok: true, print: null });
   }
 
-  // Путь выдаёт только сервер: {мой id}/{этот проект}/print/{это фото}/{uuid}.jpg
-  const pattern = new RegExp(`^${ctx.userId}/${id}/print/${photoId}/[0-9a-f-]{36}\\.jpg$`);
   if (!pattern.test(body.path)) {
     await ctx.audit("photo.print", "photo", photoId, "denied", { reason: "foreign_path" });
     return jsonError(400, "invalid_path", "Неверный путь к печатной версии. Соберите её заново.");

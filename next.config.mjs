@@ -10,6 +10,10 @@ function buildVersion() {
   }
 }
 
+const dev = process.env.NODE_ENV === "development";
+// Политика CSP воркеров: никаких внешних адресов, eval — только для компиляции wasm
+const WORKER_CSP = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; img-src 'self' blob: data:; worker-src 'self'; object-src 'none'";
+
 const nextConfig = {
   env: { NEXT_PUBLIC_APP_VERSION: buildVersion() },
   // Без заголовка X-Powered-By: Next.js (SEC-10)
@@ -39,6 +43,17 @@ const nextConfig = {
           { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
         ],
       },
+      // Воркеры (ИИ-редактор, ластик, резкость, печать, анализ фото): у воркера своя политика CSP из ответа на его
+      // скрипт — только свой сайт: код, wasm моделей ('wasm-unsafe-eval') и запросы только к себе (модели из /models,
+      // /ort). Все воркеры Turbopack стартуют с файла turbopack-worker-*.js. В `next dev` не ставим (там свой eval).
+      ...(dev
+        ? []
+        : [
+            {
+              source: "/_next/static/chunks/turbopack-worker-:file",
+              headers: [{ key: "Content-Security-Policy", value: WORKER_CSP }],
+            },
+          ]),
       // Модели ИИ и wasm (public/models, public/ort): пути версионированы папкой — браузер может долго не сверять
       {
         source: "/models/:path*",

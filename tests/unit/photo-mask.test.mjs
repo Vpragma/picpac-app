@@ -255,3 +255,150 @@ test("воркеры Turbopack: параметры из #params= перенос�
   assert.equal(fixUrl("http://x.test/a.js#params=1"), "http://x.test/a.js#params=1");
   assert.equal(fixUrl("/ort/x.mjs"), "/ort/x.mjs");
 });
+
+// ---------- D1 fix1 (критик): маски хранятся один раз и всегда помещаются в предел правок фото ----------
+
+// «Листва»: много мелких пятен (сложная маска, как у критика на «Осеннем лесе»)
+function blobs(w, h, n, seed) {
+  const m = new Uint8Array(w * h);
+  let s = seed;
+  const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < n; i++) {
+    const cx = rnd() * w;
+    const cy = rnd() * h;
+    const r = 2 + rnd() * 8;
+    for (let y = Math.max(0, Math.floor(cy - r)); y < Math.min(h, cy + r + 1); y++)
+      for (let x = Math.max(0, Math.floor(cx - r)); x < Math.min(w, cx + r + 1); x++) if ((x - cx) ** 2 + (y - cy) ** 2 <= r * r) m[y * w + x] = 1;
+  }
+  return m;
+}
+
+test("fix1: 8 правок «Затемнить/Осветлить» по одному выделению — маска хранится один раз, правки фото маленькие", async () => {
+  const { addMaskOp, MAX_MASK_OPS } = await import("../../lib/photo/mask.js");
+  const { editsBytes, compactEdits, normEdits, PHOTO_EDITS_MAX } = await import("../../lib/photo/edits.js");
+  const sel = blobs(1024, 768, 1000, 3); // очень сложное выделение
+  let ed = normEdits({});
+  for (let i = 0; i < MAX_MASK_OPS; i++) ed = addMaskOp(ed, i % 2 ? "lighten" : "darken", sel, 1024, 768).edits;
+  assert.equal(ed.ops.length, 8);
+  assert.equal(Object.keys(ed.masks).length, 1, "одна маска на 8 правок");
+  assert.ok(ed.ops.every((o) => o.m && !o.mask));
+  const bytes = editsBytes(compactEdits(ed));
+  assert.ok(bytes < 4000, "правки фото " + bytes + " Б");
+  assert.ok(bytes < PHOTO_EDITS_MAX);
+});
+
+test("fix1: 8 разных сложных выделений — каждая маска ужата до ≤ 1800 символов, все вместе помещаются в предел", async () => {
+  const { addMaskOp, encodeMaskAdaptive, MASK_RLE_MAX, editsFit } = await import("../../lib/photo/mask.js");
+  const { editsBytes, compactEdits, normEdits, PHOTO_EDITS_MAX } = await import("../../lib/photo/edits.js");
+  let ed = normEdits({});
+  for (let i = 0; i < 8; i++) {
+    const b = blobs(1024, 768, 400, 100 + i);
+    const enc = encodeMaskAdaptive(b, 1024, 768);
+    assert.ok(enc.rle.length <= MASK_RLE_MAX, `маска ${i}: ${enc.w}×${enc.h}, ${enc.rle.length}`);
+    ed = addMaskOp(ed, "darken", b, 1024, 768).edits;
+  }
+  assert.equal(Object.keys(ed.masks).length, 8);
+  const bytes = editsBytes(compactEdits(ed));
+  assert.ok(bytes < PHOTO_EDITS_MAX, "правки фото " + bytes + " Б");
+  assert.ok(editsFit(compactEdits(ed)));
+  // простое выделение (собака) остаётся в полном размере маски 320
+  const simple = encodeMaskAdaptive(circle(1024, 768, 0.5, 0.5, 0.2), 1024, 768);
+  assert.equal(Math.max(simple.w, simple.h), 320);
+});
+
+test("fix1: предел правок фото — тот же счёт у редактора и сервера; слишком большие правки не проходят editsFit", async () => {
+  const { editsFit, PHOTO_EDITS_SAFE } = await import("../../lib/photo/mask.js");
+  const { editsBytes, PHOTO_EDITS_MAX } = await import("../../lib/photo/edits.js");
+  assert.equal(PHOTO_EDITS_MAX, 20_000);
+  assert.ok(PHOTO_EDITS_SAFE < PHOTO_EDITS_MAX);
+  const big = { v: 1, ops: [], masks: { a: { w: 10, h: 10, rle: "x".repeat(PHOTO_EDITS_MAX) } } };
+  assert.ok(editsBytes(big) > PHOTO_EDITS_MAX);
+  assert.equal(editsFit(big), false);
+  assert.equal(editsFit({ v: 1, ops: [] }), true);
+  assert.equal(editsBytes(null), 2);
+});
+
+test("fix1: старые черновики (маска в каждой правке) читаются и сжимаются без потерь; лишние маски убираются", async () => {
+  const { makeMaskOp, packEdits, hydrateOps, opMask } = await import("../../lib/photo/mask.js");
+  const { normEdits } = await import("../../lib/photo/edits.js");
+  const { applyOps } = await import("../../lib/photo/local.js");
+  const bits = circle(200, 150, 0.5, 0.5, 0.2);
+  const a = makeMaskOp("lighten", bits, 200, 150);
+  const b = makeMaskOp("darken", bits, 200, 150);
+  const c = makeMaskOp("blurBg", circle(200, 150, 0.3, 0.3, 0.1), 200, 150);
+  const old = normEdits({ ops: [a, { kind: "heal", cx: 0.1, cy: 0.1, r: 0.05 }, b, c] });
+  const packed = normEdits(packEdits(old));
+  assert.equal(Object.keys(packed.masks).length, 2, "две разные маски");
+  assert.equal(packed.ops[0].m, packed.ops[2].m, "одинаковая маска — один ключ");
+  assert.equal(packed.ops[1].kind, "heal");
+  assert.ok(JSON.stringify(packed).length < JSON.stringify(old).length);
+  // те же пиксели, что и со старым видом
+  const src = frame(200, 150);
+  const viaOld = applyOps(src.slice(), 200, 150, hydrateOps(old));
+  const viaNew = applyOps(src.slice(), 200, 150, hydrateOps(packed));
+  assert.deepEqual(Array.from(viaNew), Array.from(viaOld));
+  assert.deepEqual(opMask(packed.ops[3], packed), c.mask);
+  // убрали правку — её маска, если на неё больше никто не ссылается, удаляется
+  const fewer = packEdits({ ...packed, ops: packed.ops.slice(0, 3) });
+  assert.equal(Object.keys(fewer.masks).length, 1);
+  // правка без маски (испорчена) пропускается, а не роняет превью
+  assert.equal(hydrateOps({ ops: [{ kind: "mask", act: "lighten", id: "x", m: "nope" }] }).length, 0);
+  // normEdits отбрасывает неверные записи масок
+  const n = normEdits({ masks: { ok: { w: 2, h: 2, rle: "AQ==" }, "bad key!": { w: 1, h: 1, rle: "" }, z: { w: "2", h: 2, rle: "" } } });
+  assert.deepEqual(Object.keys(n.masks), ["ok"]);
+});
+
+test("fix1: размеры файлов моделей в modelFiles.js совпадают с public/ (честный процент загрузки)", async () => {
+  const { statSync } = await import("node:fs");
+  const { SAM_FILES, ORT_WASM, MIGAN_FILE } = await import("../../lib/photo/modelFiles.js");
+  for (const f of [...SAM_FILES, ORT_WASM, MIGAN_FILE]) {
+    const size = statSync(new URL("../../public" + f.url, import.meta.url)).size;
+    assert.equal(f.size, size, f.url);
+  }
+});
+
+test("fix1: процент загрузки по байтам растёт без скачков и без Content-Length (сжатые ответы Vercel)", async () => {
+  const { fetchAll } = await import("../../lib/photo/fetchBytes.js");
+  const real = globalThis.fetch;
+  const files = [
+    { url: "/a.onnx", size: 3000 },
+    { url: "/b.wasm", size: 5000 },
+  ];
+  globalThis.fetch = async (url) => {
+    const size = files.find((f) => f.url === url).size;
+    let sent = 0;
+    const stream = new ReadableStream({
+      pull(ctrl) {
+        if (sent >= size) return ctrl.close();
+        const n = Math.min(700, size - sent);
+        ctrl.enqueue(new Uint8Array(n).fill(sent % 251));
+        sent += n;
+      },
+    });
+    return new Response(stream); // без Content-Length
+  };
+  try {
+    const seen = [];
+    const out = await fetchAll(files, (p) => seen.push(p));
+    for (let i = 1; i < seen.length; i++) assert.ok(seen[i] >= seen[i - 1], `скачок назад: ${seen[i - 1]} → ${seen[i]}`);
+    assert.equal(seen[0], 0);
+    assert.equal(seen[seen.length - 1], 1);
+    assert.ok(seen.length > 5, "процент обновляется по ходу");
+    assert.equal(out.get("/a.onnx").length, 3000);
+    assert.equal(out.get("/b.wasm").length, 5000);
+  } finally {
+    globalThis.fetch = real;
+  }
+});
+
+test("fix1: «Проверка» для фото с «Резкостью ×2» — размер и точки на дюйм про одно и то же", async () => {
+  const { runChecks } = await import("../../lib/checks.js");
+  const product = { kind: "photo", sizes: [{ id: "10x15", w: 10, h: 15 }] };
+  const photo = { id: "p1", name: "nesvizh-small.jpg", supported: true, w: 400, h: 274 };
+  const plain = runChecks({ photos: [photo], sizeId: "10x15" }, product).issues.find((i) => i.key === "dpi:p1");
+  const up = runChecks({ photos: [{ ...photo, edits: { upscale: 2 } }], sizeId: "10x15" }, product).issues.find((i) => i.key === "dpi:p1");
+  assert.match(plain.text, /400×274 точек — это \d+ точек на дюйм/);
+  assert.match(up.text, /800×548 точек \(с «Резкостью для печати ×2»\) — это \d+ точек на дюйм/);
+  const dpi = (t) => Number(t.match(/это (\d+) точек на дюйм/)[1]);
+  assert.ok(Math.abs(dpi(up.text) - dpi(plain.text) * 2) <= 1);
+});
