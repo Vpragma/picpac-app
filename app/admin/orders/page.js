@@ -21,17 +21,14 @@ export default async function AdminOrdersPage({ searchParams }) {
   const f = parsed.success ? parsed.data : {};
   const db = createSupabaseAdmin();
 
-  let res = null;
-  let failed = false;
-  const [catalog] = await Promise.all([
+  const [catalog, res] = await Promise.all([
     loadCatalog().catch(() => ({ products: [] })),
-    queryOrders(db, f)
-      .then((r) => (res = r))
-      .catch((e) => {
-        console.error(e?.message);
-        failed = true;
-      }),
+    queryOrders(db, f).catch((e) => {
+      console.error(e?.message);
+      return null;
+    }),
   ]);
+  const failed = !res;
   const names = Object.fromEntries(catalog.products.map((p) => [p.slug, p.name]));
 
   // Ссылка с теми же фильтрами + изменения
@@ -55,9 +52,9 @@ export default async function AdminOrdersPage({ searchParams }) {
       <p className="muted small">Время — по Минску. В CSV — номер, дата, продукт, сумма, статус и город: без имён, телефонов, адресов и почты. Выгрузка записывается в журнал.</p>
 
       <nav className="filters" aria-label="Быстрые фильтры заказов">
-        <a className={"filter-chip" + (!active ? " active" : "")} href="/admin/orders" aria-current={!active ? "true" : undefined}>
+        <Link className={"filter-chip" + (!active ? " active" : "")} href="/admin/orders" aria-current={!active ? "true" : undefined}>
           Все
-        </a>
+        </Link>
         <a className={"filter-chip" + (f.overdue ? " active" : "")} href={link({ overdue: f.overdue ? undefined : "1", page: undefined })} aria-current={f.overdue ? "true" : undefined} data-testid="orders-overdue">
           Просрочены
         </a>
@@ -140,9 +137,9 @@ export default async function AdminOrdersPage({ searchParams }) {
             <button className="btn btn-primary" type="submit">
               Найти
             </button>
-            <a className="btn" href="/admin/orders">
+            <Link className="btn" href="/admin/orders">
               Сбросить
-            </a>
+            </Link>
           </div>
         </form>
       </details>
