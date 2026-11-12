@@ -58,10 +58,27 @@ export default function Onboarding() {
     if (backRef.current && backRef.current.focus) backRef.current.focus();
   }
 
+  const cardRef = useRef(null);
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => {
       if (e.key === "Escape") close();
+      // фокус не уходит из окна (aria-modal): Tab по кругу между кнопками окна
+      if (e.key === "Tab" && cardRef.current) {
+        const items = [...cardRef.current.querySelectorAll("button, [tabindex='-1']")];
+        const first = items[0];
+        const last = items[items.length - 1];
+        if (!cardRef.current.contains(document.activeElement)) {
+          e.preventDefault();
+          first?.focus();
+        } else if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last?.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first?.focus();
+        }
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -72,7 +89,7 @@ export default function Onboarding() {
   const last = i === SLIDES.length - 1;
   return (
     <div className="onboarding" role="presentation" onClick={(e) => e.target === e.currentTarget && close()}>
-      <div className="onboarding-card" role="dialog" aria-modal="true" aria-labelledby="ob-title" aria-describedby="ob-text" data-testid="onboarding">
+      <div className="onboarding-card" role="dialog" aria-modal="true" aria-labelledby="ob-title" aria-describedby="ob-text" data-testid="onboarding" ref={cardRef}>
         <LineArt name={s.art} className="onboarding-art" />
         <h2 id="ob-title" tabIndex={-1} ref={titleRef}>
           {s.title}

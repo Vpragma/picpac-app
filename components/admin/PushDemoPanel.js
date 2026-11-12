@@ -77,7 +77,7 @@ export default function PushDemoPanel() {
             {a.hint}
           </p>
           {out[a.id] && (
-            <p className="small" role="status" data-testid={`pd-${a.id}`} style={{ marginBottom: 0, fontWeight: 600, color: out[a.id].err ? "var(--danger, #b42318)" : undefined }}>
+            <p className="small" role="status" data-testid={`pd-${a.id}`} style={{ marginBottom: 0, fontWeight: 600, color: out[a.id].err ? "var(--ds-color-error)" : undefined }}>
               {out[a.id].text}
             </p>
           )}
