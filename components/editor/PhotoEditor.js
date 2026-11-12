@@ -23,6 +23,7 @@ import { aiSupport, aiWhy, embedImage, embeddedFor, eraseImage, isCancelled, seg
 import { MIGAN_FILE, ORT_WASM, SAM_FILES, mb } from "../../lib/photo/modelFiles";
 import { UPSCALE_MAX_SIDE, stopUpscale, upscaleBlob, upscaleKey } from "../../lib/photo/upscale";
 import { setAutoEnhance, useAutoEnhance } from "../../lib/photo/settings";
+import AiPrefetch from "./AiPrefetch";
 import { notify } from "../../lib/store";
 import { track } from "@/lib/analytics";
 import CloudConsent from "./CloudConsent";
@@ -57,7 +58,8 @@ const LOCAL_ACTIONS = {
     return { say: "Пока не умею. Попробуйте: «ярче», «теплее», «убери пересвет»." };
   },
   keep: (step) => ({ say: step.say }),
-  creative: () => ({ say: "Творческие правки (небо, снег) появятся в облачном редакторе. Сейчас работают свет и цвет: «ярче», «теплее», «убери пересвет»." }),
+  // Творческих правок (FLUX) нет — решение 12.11: их пришлось бы встроить в печатную версию
+  creative: () => ({ say: "Дорисовывать небо, снег и другое мы не умеем — фото печатается таким, каким его сняли. Работают свет и цвет: «ярче», «теплее», «убери пересвет», и правки по выделению касанием." }),
 };
 
 // Кэш уменьшенных оригиналов (ImageData) — последние 4 фото
@@ -147,9 +149,9 @@ const ERASED_SAY = "Убрали выделенное. «Отменить» ве
 const MASK_VERB = { blurBg: "Размыть фон", lighten: "Осветлить выделенное", darken: "Затемнить выделенное", erase: "Убрать" };
 const AI_OFF = { status: "off" };
 
-export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds, extra }) {
+export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds, extra, initialPhotoId }) {
   const usable = draft.photos.filter((p) => p.supported);
-  const [sel, setSel] = useState(usable[0]?.id || null);
+  const [sel, setSel] = useState(initialPhotoId || usable[0]?.id || null);
   const photo = usable.find((p) => p.id === sel) || usable[0];
   const autoOn = useAutoEnhance();
   const [live, setLive] = useState(null); // правки во время движения ползунка (ещё не сохранены)
@@ -655,6 +657,8 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
         <p className="muted small" style={{ marginTop: 8 }}>
           Честно о пределах: полностью белые участки не восстановить, сильную размытость не исправить. Если фото будет плохо смотреться в печати — предупредим на шаге «Проверка».
         </p>
+        {/* ED (п. 4): скачать модели выделения и ластика заранее (~71 МБ) */}
+        <AiPrefetch compact />
         {photo.quality?.metrics && <QualityLine q={photo.quality} />}
       </div>
     </div>

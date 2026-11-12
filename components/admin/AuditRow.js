@@ -16,7 +16,8 @@ export default function AuditRow({ item }) {
   const d = item.details || {};
   const who = item.user_name || d.email || (item.user_id ? `аккаунт ${item.user_id.slice(0, 8)}…` : "гость");
   const object = item.object_type ? `${OBJECT_LABELS[item.object_type] || item.object_type}: ${item.object_type === "user" || item.object_type === "profile" ? item.object_id?.slice(0, 8) + "…" : item.object_id}` : "";
-  const reason = d.reason ? REASON_LABELS[d.reason] || d.reason : "";
+  // Неизвестный служебный код не показываем как есть — понятная подпись и код в скобках для разработчика
+  const reason = d.reason ? REASON_LABELS[d.reason] || `другая причина (${String(d.reason).slice(0, 40)})` : "";
   const claimed = d.claimed_role && d.claimed_role !== item.role ? `роль в cookie: ${d.claimed_role}` : "";
   return (
     <div className={"card issue audit-row " + (item.result === "success" ? "ok" : item.result === "error" ? "err" : "")} style={{ opacity: 1 }}>

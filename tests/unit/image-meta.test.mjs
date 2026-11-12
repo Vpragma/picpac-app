@@ -48,10 +48,19 @@ test("в тестовой галерее 18+ фото, у каждого ест�
   assert.ok(manifest.items.length >= 18);
   for (const item of manifest.items) {
     assert.ok(item.license && item.source && item.author, item.file);
-    assert.ok(item.bytes <= 400 * 1024, `${item.file} больше 400 КБ`);
-    assert.ok(Math.max(item.width, item.height) <= 1600, `${item.file} больше 1600 px`);
+    // День, баги команды 1–2: файлы до 3000 точек и 1,2 МБ (скачиваются только при «Добавить»), в сетке — превью до 30 КБ
+    assert.ok(item.bytes <= 1200 * 1024, `${item.file} больше 1,2 МБ`);
+    assert.ok(Math.max(item.width, item.height) <= 3000, `${item.file} больше 3000 точек`);
     const meta = sniffImage(readFileSync(new URL(item.file, gallery)));
     assert.equal(meta?.mime, "image/jpeg", item.file);
+    assert.ok(item.thumb, `${item.file}: нет превью`);
+    const thumb = readFileSync(new URL(item.thumb, gallery));
+    assert.ok(thumb.length <= 30 * 1024, `${item.thumb} больше 30 КБ`);
+    assert.equal(sniffImage(thumb)?.mime, "image/jpeg", item.thumb);
+    // «Хорошие» — для печати 21×30 без предупреждений; «плохие» по качеству остаются маленькими, чтобы проверка их ловила
+    if (item.problem === null) assert.ok(Math.max(item.width, item.height) >= 2200, `${item.file}: хорошее фото меньше 2200 точек`);
+    if (["dark", "overexposed", "color-cast", "blurry", "low-resolution", "tilted", "duplicate"].includes(item.problem))
+      assert.ok(Math.max(item.width, item.height) <= 1600, `${item.file}: «плохое» фото больше 1600 точек`);
   }
   const problems = new Set(manifest.items.map((i) => i.problem));
   for (const p of [null, "dark", "overexposed", "color-cast", "blurry", "low-resolution", "sun", "stranger", "beach", "tilted", "duplicate"]) {

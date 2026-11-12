@@ -256,11 +256,14 @@ button, input, select { font: inherit; color: inherit; }
 .warn-text { color: var(--ds-color-warning); }
 
 /* Уведомления */
+/* Тосты — внизу, над нижним меню: сверху они закрывали заголовок экрана («Корзина» после «Добавлено в корзину») */
 .toasts {
-  position: fixed; top: calc(64px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
-  width: calc(100% - 32px); max-width: 488px; z-index: 60; display: flex; flex-direction: column; gap: 8px;
+  position: fixed; bottom: calc(var(--tabbar-h, 64px) + 12px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%);
+  width: calc(100% - 32px); max-width: 488px; z-index: 60; display: flex; flex-direction: column-reverse; gap: 8px;
   pointer-events: none;
 }
+body:has(.sticky-bar) .toasts { bottom: calc(var(--tabbar-h, 64px) + var(--sticky-h, 64px) + 12px + env(safe-area-inset-bottom)); }
+body:has(.net-banner) .toasts { bottom: calc(var(--tabbar-h, 64px) + 76px + env(safe-area-inset-bottom)); }
 .toast {
   background: var(--ds-color-bg-inverse); color: var(--ds-color-text-inverse);
   padding: 12px 16px; border-radius: var(--ds-radius-md); box-shadow: var(--ds-shadow-popover);
@@ -268,7 +271,7 @@ button, input, select { font: inherit; color: inherit; }
 }
 .toast-success { border-left: 4px solid var(--ds-color-success); }
 .toast-error { border-left: 4px solid var(--ds-color-error); }
-@keyframes toast-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+@keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
 /* Чат */
 .chat { display: flex; flex-direction: column; gap: 8px; }
@@ -439,3 +442,25 @@ body:has(.sticky-bar) .net-banner { bottom: calc(var(--tabbar-h) + var(--sticky-
 .pe-upscale { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .pe-erase { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
 .pe-erase .small { flex: 1 1 100%; }
+/* Тестовая галерея (ED): плитка постоянного размера с заглушкой, превью плавно появляется */
+.gallery-thumb { position: absolute; inset: 0; display: block; background: var(--ds-color-bg-muted); }
+.gallery-thumb img { opacity: 0; transition: opacity 0.2s; }
+.gallery-thumb.loaded img { opacity: 1; }
+.gallery-retry { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: transparent; font-size: 1.5rem; color: var(--ds-color-text); cursor: pointer; }
+/* ED (п. 14): на миниатюре значки — маленькие кружки в одну строку, фото не закрывают: «!» — есть замечание,
+   «✓» — улучшено, «ИИ» — правки. Полный текст — во всплывающей подсказке, в описании кнопки и в карточке фото.
+   :root — сильнее правил app/ux.css (D2), которые подключаются позже */
+:root .pe-badges.compact { flex-wrap: nowrap; gap: 3px; left: 4px; right: auto; bottom: 4px; }
+:root .pe-badges.compact .pe-badge { font-size: 0; line-height: 0; min-width: 18px; height: 18px; padding: 0; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 0 0 1px rgb(255 255 255 / 0.8); }
+:root .pe-badges.compact .pe-badge::before { font-size: 11px; line-height: 1; font-weight: 700; }
+:root .pe-badges.compact .pe-badge.warn::before { content: "!"; }
+:root .pe-badges.compact .pe-badge.ok::before { content: "✓"; }
+:root .pe-badges.compact .pe-badge.ai { padding: 0 4px; }
+:root .pe-badges.compact .pe-badge.ai::before { content: "ИИ"; font-size: 9px; }
+:root .pe-badges.compact .pe-badge.warn ~ .pe-badge.warn { display: none; }
+.ai-prefetch { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 10px; }
+.ai-prefetch p { margin: 0; }
+/* ED (п. 5): после касания страница не прыгает — без «якорения прокрутки» в редакторе и с постоянной высотой
+   строки состояния выделения (короткий и длинный текст занимают одно место) */
+.pe { overflow-anchor: none; }
+.pe-select > p[role="status"] { min-height: 2.9em; }

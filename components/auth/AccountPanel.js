@@ -33,7 +33,7 @@ export default function AccountPanel({ name, email, roles, activeRole, isDemo, m
           <div>
             <div className="muted small">Двухфакторный вход для сотрудников</div>
             {!mfa.required ? (
-              <div className="small">Выключен на этом стенде (флаг REQUIRE_STAFF_MFA) — для входа хватает пароля.</div>
+              <div className="small">Сейчас не обязателен: для входа хватает пароля. Обязательный код для сотрудников включает администратор стенда.</div>
             ) : mfa.enrolled ? (
               <div className="small ok-text">Подключён: при входе с ролью сотрудника нужен код из приложения-аутентификатора.</div>
             ) : (

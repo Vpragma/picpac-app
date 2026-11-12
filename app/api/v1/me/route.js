@@ -20,6 +20,8 @@ export async function GET() {
     roles: auth.roles,
     activeRole: auth.activeRole,
     needsRole: !auth.activeRole && auth.roles.length > 1,
+    // Демо-инструменты (кнопка «Отправить на модерацию»): админ, аккаунты жюри и тестовые e2e-/critic-
+    testTools: auth.roles.includes("admin") || auth.user.isDemo === true || /^(e2e|critic)-/i.test(auth.user.email || ""),
   });
 }
 

@@ -88,3 +88,18 @@ test("журнал: почта — только телом POST; в адресе
   const foreign = await A.client.req("/api/v1/admin/audit", { method: "POST", body: { email: C.email }, headers: { origin: "https://evil.example" } });
   assert.equal(foreign.status, 403, "чужой сайт не может искать по почте");
 });
+
+test("журнал: роль и «Скрыть автотесты» (A4, пункт 24)", async () => {
+  const byRole = await get("role=client&limit=20");
+  assert.equal(byRole.status, 200, byRole.text);
+  assert.ok(byRole.json.items.every((i) => i.role === "client"));
+  assert.equal((await get("role=boss")).status, 400);
+  // Клиент теста — e2e-…@example.com и запросы с 127.0.0.1: со скрытием автотестов его записей нет
+  const all = await get(`user=${C.id}`);
+  assert.ok(all.json.items.length > 0);
+  const hidden = await get(`user=${C.id}&hideTests=1`);
+  assert.equal(hidden.status, 200, hidden.text);
+  assert.equal(hidden.json.items.length, 0, "записи автотестов скрыты");
+  const sample = await get("hideTests=1&limit=50");
+  assert.ok(sample.json.items.every((i) => !/^(e2e-|critic-)/.test(i.details?.email || "") && i.ip !== "127.0.0.1"));
+});

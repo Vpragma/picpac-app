@@ -4,11 +4,16 @@ import { getImageProps } from "next/image";
 import "./picpac.css";
 import "./globals.css";
 import "./ux.css";
+import "./qr.css";
+import { qrSvg, siteUrl } from "@/lib/server/qr";
 import Shell from "../components/Shell";
 
 const jost = Jost({
   subsets: ["latin", "cyrillic"],
   weight: ["400", "500"],
+  // Без preload: при переходах между страницами Next повторно вставлял <link rel=preload> уже загруженных файлов шрифта,
+  // и браузер писал в консоль «preloaded but not used». Шрифт всё равно грузится сразу из CSS (display: swap).
+  preload: false,
   variable: "--font-jost",
   display: "swap",
 });
@@ -61,6 +66,8 @@ export default async function RootLayout({ children }) {
   const largeText = (await cookies()).get("pp_text")?.value === "lg";
   // Логотип через next/image (getImageProps): на сервере, без клиентского JS; SVG отдаётся как есть
   const { props: logo } = getImageProps({ src: "/logo.svg", alt: "PicPac", width: 72, height: 40, loading: "eager" });
+  // D9: «Открыть на телефоне» — небольшой QR на адрес этого сайта (рисует сервер; виден только на компьютере)
+  const phoneSvg = await qrSvg(await siteUrl(), { margin: 1 });
   return (
     <html lang="ru" data-theme="picpac" data-text={largeText ? "lg" : undefined} className={jost.variable}>
       <body>
@@ -69,6 +76,18 @@ export default async function RootLayout({ children }) {
             <picture>
               <img {...logo} alt="PicPac" />
             </picture>
+          }
+          phoneQr={
+            phoneSvg ? (
+              <a href="/qr" className="phone-qr">
+                <span className="phone-qr-code" aria-hidden="true" dangerouslySetInnerHTML={{ __html: phoneSvg }} />
+                <span>
+                  <strong>Открыть на телефоне</strong>
+                  <br />
+                  Наведите камеру на код
+                </span>
+              </a>
+            ) : null
           }
         >
           {children}

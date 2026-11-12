@@ -35,6 +35,11 @@ export default async function AdminLayout({ children }) {
               Напоминания
             </Link>
           )}
+          {auth.activeRole === "admin" && (
+            <Link href="/admin/push" className="btn btn-small">
+              Демо пушей
+            </Link>
+          )}
         </nav>
         <span className="chip">{ROLE_LABELS[auth.activeRole]}</span>
       </div>

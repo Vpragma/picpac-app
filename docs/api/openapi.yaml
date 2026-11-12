@@ -766,6 +766,42 @@ paths:
         "200": { description: "{ ok, due, created, pushed, quiet, afterMin, source: cron }" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  /api/v1/push/test:
+    post:
+      tags: [Пуши]
+      summary: «Проверить уведомления» — тестовый пуш себе на все свои устройства (D9)
+      description: Текст — только шаблон «PicPac уведомления работают». Не чаще раза в минуту (429, Retry-After 60). Ответ — простыми словами, что сказал push-сервис.
+      requestBody: { content: { application/json: { schema: { type: object, additionalProperties: false } } } }
+      responses:
+        "200": { description: "{ ok, text: «Принято сервисом Google: 1 из 1 устройства» | «Нет подписанных устройств…», devices, accepted }" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { description: Чаще раза в минуту }
+  /api/v1/admin/push-demo:
+    get:
+      tags: [Пуши]
+      summary: Демо пушей (только admin) — тестовые клиенты, устройства клиента, последние демо-отправки
+      parameters:
+        - { name: email, in: query, schema: { type: string }, description: "client@example.com (по умолчанию), admin@example.com или временный e2e-…@example.com" }
+      responses:
+        "200": { description: "{ ok, clients, email, found, devices: [{ device, createdAt, lastOkAt }], log }" }
+        "400": { description: Не тестовый аккаунт }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Модератор или клиент }
+    post:
+      tags: [Пуши]
+      summary: Демо-пуш по шаблону (только admin, не чаще раза в 10 с, запись в журнал admin.push_demo)
+      description: "test — «PicPac: уведомления работают»; cart — «В корзине: Фотокнига Classic 20×20 и ещё 1. Оформим?» из настоящей корзины (без порога и тихих часов); advance — последний заказ клиента на следующий статус с причиной «Демонстрация» и пуш «Заказ №… передан в производство» (ровно один пуш на событие). Произвольного текста нет: лишнее поле — 400."
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false, required: [action], properties: { action: { type: string, enum: [test, cart, advance] }, email: { type: string } } }
+      responses:
+        "200": { description: "{ ok, action, text: «Принято сервисом Apple: 1 из 1 устройства» | «Нет подписанных устройств…», title, body, devices, accepted, codes, removed }" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Модератор или клиент }
+        "429": { description: Чаще раза в 10 секунд (Retry-After 10) }
   /api/v1/push/subscriptions:
     post:
       tags: [Пуши]
@@ -1132,26 +1168,6 @@ paths:
         "413": { description: Тело больше 1,5 МБ }
         "429": { description: Лимит на сегодня или слишком часто }
         "503": { description: "Облако или модель поиска недоступны (ai_unavailable, ai_detect_unavailable)" }
-  /api/v1/ai/edit:
-    post:
-      tags: [ИИ]
-      summary: Творческая правка вырезки (FLUX.2 klein 4B) — только сервер, в редакторе не подключена
-      description: |
-        Вырезка JPEG ≤ 512 точек и 500 КБ, задание до 200 символов (русское переводит gpt-oss-120b). Ответ — PNG/JPEG
-        base64 размером 256…512 (стороны кратны 16). Вклейка только внутри маски — задача редактора (не сделано, D6 ⚠️).
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { type: object, additionalProperties: false, required: [image, prompt], properties: { image: { type: string, maxLength: 700000 }, prompt: { type: string, minLength: 3, maxLength: 200 } } }
-      responses:
-        "200": { description: "Картинка: { ok, image: data URL, width, height, left }" }
-        "400": { description: Неверная вырезка или задание }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { description: Нет согласия или чужой сайт }
-        "429": { description: Лимит на сегодня или слишком часто }
-        "503": { description: Облако недоступно }
-
 components:
   securitySchemes:
     erpBearer:

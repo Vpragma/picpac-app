@@ -12,6 +12,7 @@ import { IconImage, IconTrash } from "../../components/icons";
 import { clearAfterOrder, moveLocalToServer, removeLine, retryMove, setLineQuantity, useCart } from "../../lib/cart";
 import { FIELD_LABELS, PICKUP_POINTS, formatPhone, needsDate, validateCheckout } from "../../lib/checkout";
 import { kvDel, kvGet, kvSet, markOrdered, useDraft } from "../../lib/draft";
+import ModerationNotice, { flaggedCount } from "../../components/ModerationNotice";
 import { isClient, refreshMe, useMe } from "../../lib/me";
 // Печатные версии: обычный import (не import()) — без сети на «Подтвердить» кусок кода не догрузится,
 // а нужна понятная ошибка «нет связи». Тяжёлая часть (воркер) грузится только при сборке.
@@ -181,11 +182,7 @@ export default function CartPage() {
         return;
       }
     }
-    if (me && !me.authenticated) {
-      // Корзина, проекты и форма сохранены на устройстве — после входа или регистрации вернёмся сюда
-      router.push("/login?reason=checkout&next=" + encodeURIComponent("/cart"));
-      return;
-    }
+    // Сначала обязательные поля — и у гостя тоже: иначе он уйдёт на вход и вернётся к незаполненной форме
     const minDate = eta?.from;
     const errs = validateCheckout(form, method, minDate);
     if (lines.some((l) => !l.valid)) errs.cart = "В корзине есть позиция, которую нельзя заказать: откройте проект и выберите вариант заново.";
@@ -193,6 +190,11 @@ export default function CartPage() {
     if (Object.keys(errs).length) {
       const first = Object.keys(errs)[0];
       document.getElementById("f-" + first)?.focus();
+      return;
+    }
+    if (me && !me.authenticated) {
+      // Корзина, проекты и форма сохранены на устройстве — после входа или регистрации вернёмся сюда
+      router.push("/login?reason=checkout&next=" + encodeURIComponent("/cart"));
       return;
     }
     if (!client) {
@@ -292,7 +294,7 @@ export default function CartPage() {
       </span>
     ) : null;
   const field = (k, label, props = {}) => (
-    <label className="field" key={k}>
+    <label className="field" key={k} htmlFor={"f-" + k}>
       <span>{label}</span>
       <input
         id={"f-" + k}
@@ -307,9 +309,13 @@ export default function CartPage() {
     </label>
   );
 
+  // W-15: фото с флагом цензуры в проектах корзины — плашка «Это фото проверит модератор»
+  const flagged = lines.reduce((n, l) => n + flaggedCount(projects[l.localProjectId]?.photos), 0);
+
   return (
     <div>
       <h1>Корзина</h1>
+      <ModerationNotice count={flagged} compact />
       {cart.error && (
         <p className="warn-text small" role="alert">
           {cart.error}{" "}
@@ -363,15 +369,18 @@ export default function CartPage() {
 
       <section className="card" aria-labelledby="h-recipient">
         <h2 id="h-recipient">Получатель</h2>
-        <label className="field">
+        <label className="field" htmlFor="f-name">
           <span>Имя и фамилия</span>
-          <input id="f-name" className="input" autoComplete="name" value={form.name} onChange={(e) => update({ name: e.target.value })} aria-invalid={!!errors.name} />
+          <input id="f-name" name="name" className="input" autoComplete="name" required value={form.name} onChange={(e) => update({ name: e.target.value })} aria-invalid={!!errors.name} aria-describedby={errors.name ? "e-name" : undefined} />
           {err("name")}
         </label>
-        <label className="field">
+        <label className="field" htmlFor="f-phone">
           <span>Телефон</span>
           <input
             id="f-phone"
+            name="phone"
+            required
+            aria-describedby={errors.phone ? "e-phone" : undefined}
             className="input"
             type="tel"
             inputMode="tel"
@@ -383,10 +392,12 @@ export default function CartPage() {
           />
           {err("phone")}
         </label>
-        <label className="field">
+        <label className="field" htmlFor="f-email">
           <span>Почта (необязательно)</span>
           <input
             id="f-email"
+            name="email"
+            aria-describedby={errors.email ? "e-email" : undefined}
             className="input"
             type="email"
             autoComplete="email"
@@ -415,8 +426,16 @@ export default function CartPage() {
           {catalog.delivery.map((d) => {
             const free = totals.promo?.ok && totals.promo.freeDelivery ? true : d.freeFromKop != null && totals.goodsKop - totals.discountKop >= d.freeFromKop;
             return (
-              <label key={d.code} className={"radio-row" + (d.code === form.delivery ? " selected" : "")}>
-                <input type="radio" name="delivery" checked={d.code === form.delivery} onChange={() => update({ delivery: d.code })} />
+              <label key={d.code} htmlFor={"d-" + d.code} className={"radio-row" + (d.code === form.delivery ? " selected" : "")}>
+                <input
+                  type="radio"
+                  id={"d-" + d.code}
+                  name="delivery"
+                  value={d.code}
+                  checked={d.code === form.delivery}
+                  onChange={() => update({ delivery: d.code })}
+                  aria-label={`${d.name}, ${free ? "бесплатно" : byn(d.priceKop)}${d.eta ? ", " + d.eta : ""}`}
+                />
                 <div style={{ flex: 1 }}>
                   <b style={{ color: "var(--ds-color-text-strong)" }}>{d.name}</b>{" "}
                   <span className="muted small">{d.eta ? String(d.note || "").replace(", " + d.eta, "") : d.note}</span>
@@ -526,14 +545,20 @@ export default function CartPage() {
             ["card_test", "Карта (тест)"],
             ["erip_test", "ЕРИП (тест)"],
           ].map(([id, label]) => (
-            <label key={id} className={"radio-row" + (form.payment === id ? " selected" : "")}>
-              <input type="radio" name="payment" checked={form.payment === id} onChange={() => update({ payment: id })} />
+            <label key={id} htmlFor={"p-" + id} className={"radio-row" + (form.payment === id ? " selected" : "")}>
+              <input type="radio" id={"p-" + id} name="payment" value={id} checked={form.payment === id} onChange={() => update({ payment: id })} aria-label={label} />
               <b style={{ flex: 1, color: "var(--ds-color-text-strong)" }}>{label}</b>
+              <PayLogos kind={id} />
             </label>
           ))}
         </div>
         {err("payment")}
         <p className="muted small">Деньги не списываются: оплата тестовая, данные карты не нужны.</p>
+        <p className="muted small row" style={{ gap: 6, flexWrap: "wrap", margin: 0 }}>
+          Платёжный сервис на сайте —
+          {/* eslint-disable-next-line @next/next/no-img-element -- готовый WebP 160 px */}
+          <img src="/payment/bepaid.webp" alt="bePaid" width={45} height={27} decoding="async" style={{ background: "#fff", borderRadius: 6, border: "1px solid var(--ds-color-border)" }} />
+        </p>
       </section>
 
       <section className="card" aria-labelledby="h-total">
@@ -558,7 +583,7 @@ export default function CartPage() {
         {me && !me.authenticated && (
           <p className="muted small">Чтобы подтвердить заказ, войдите или зарегистрируйтесь — после входа вернём вас сюда, корзина и проекты сохранятся.</p>
         )}
-        {client && <p className="muted small">Заказ оформляется на {me.user.name || me.user.email}.</p>}
+        {client && <p className="muted small">Заказ оформляется на аккаунт {me.user.email || me.user.name}.</p>}
         {failure && (
           <p className="err-text small" role="alert" data-final={failure.final ? "true" : undefined}>
             {failure.text || failure}{" "}
@@ -574,6 +599,28 @@ export default function CartPage() {
         </button>
       </section>
     </div>
+  );
+}
+
+// Логотипы способов оплаты (© владельцы знаков; набор — с сайта заказчика). Оплата в прототипе тестовая.
+// В тёмной теме — на белой плашке: у файлов белый фон.
+const PAY_LOGOS = {
+  card_test: [
+    ["visa", "Visa"],
+    ["mastercard", "Mastercard"],
+    ["belkart", "БЕЛКАРТ"],
+  ],
+  erip_test: [["erip", "ЕРИП"]],
+};
+
+function PayLogos({ kind }) {
+  return (
+    <span className="row" style={{ gap: 4, flexShrink: 0 }} aria-hidden="true">
+      {(PAY_LOGOS[kind] || []).map(([file, name]) => (
+        // eslint-disable-next-line @next/next/no-img-element -- маленькие готовые WebP 160 px, оптимизация не нужна
+        <img key={file} src={`/payment/${file}.webp`} alt={name} width={45} height={27} decoding="async" style={{ display: "block", background: "#fff", borderRadius: 6, border: "1px solid var(--ds-color-border)" }} />
+      ))}
+    </span>
   );
 }
 

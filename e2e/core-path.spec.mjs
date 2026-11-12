@@ -18,6 +18,8 @@ const GALLERY_DIR = path.resolve("public/demo-gallery");
 let admin;
 let user;
 
+// W-15: подмена результата классификатора nsfwjs — «чистое» фото (настоящая модель на CPU в headless ≈ 3 с на фото)
+test.beforeEach(async ({ page }) => page.addInitScript(() => (window.__PICPAC_TEST__ = { ...(window.__PICPAC_TEST__ || {}), nsfw: "clean" })));
 test.beforeEach(async ({}, info) => {
   admin = supabaseAdmin();
   user = await createTestUser(admin, ["client"], "e2e" + info.parallelIndex + Date.now().toString(36).slice(-4));
@@ -63,8 +65,17 @@ async function pickFromGallery(page, files) {
   const gallery = page.getByRole("region", { name: "Тестовая галерея" });
   await expect(gallery.locator("input[type=checkbox]").first()).toBeVisible();
   await gallery.getByRole("button", { name: "Снять выбор" }).click();
-  for (const f of files) await gallery.locator(`label:has(img[src="/demo-gallery/${f}.jpg"]) input[type=checkbox]`).check();
+  for (const f of files) await gallery.locator(`label[data-file="${f}.jpg"] input[type=checkbox]`).check();
   await gallery.getByRole("button", { name: `Добавить ${files.length} фото` }).click();
+}
+
+// Обязательные поля оформления: гость заполняет их до входа (форма сохраняется на устройстве)
+async function fillCheckout(page) {
+  await page.getByLabel("Имя и фамилия").fill("Тест Тестович");
+  await page.getByLabel("Телефон").fill("+375 (29) 123-45-67");
+  await page.locator('input[name="delivery"]').first().check();
+  await page.locator("#f-pickup_point").selectOption({ index: 1 });
+  await page.locator('input[name="payment"]').nth(1).check();
 }
 
 async function login(page) {
@@ -74,6 +85,7 @@ async function login(page) {
 }
 
 test("обязательный путь: каталог → проект → 12 фото → корзина → номер заказа, AC-1…AC-5", async ({ page }) => {
+  test.slow(); // сеть площадки ~1,4 Мбит/с: 14 фото по 3000 точек скачиваются и уходят в аккаунт минутами — общий лимит ×3
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
 
@@ -146,14 +158,20 @@ test("обязательный путь: каталог → проект → 12 
 
   await test.step("AC-1 «Подтвердить заказ» гостем → вход → гостевая корзина в аккаунте", async () => {
     await expect(page.getByText(/Чтобы подтвердить заказ, войдите или зарегистрируйтесь/)).toBeVisible();
+    // Пустая форма: гость остаётся в корзине, фокус на первом незаполненном поле (баг 6)
+    await page.getByRole("button", { name: "Подтвердить заказ" }).click();
+    await expect(page).toHaveURL(/\/cart/);
+    await expect(page.getByLabel("Имя и фамилия")).toBeFocused();
+    await fillCheckout(page);
     await page.getByRole("button", { name: "Подтвердить заказ" }).click();
     await expect(page).toHaveURL(/\/login\?reason=checkout/);
-    await expect(page.getByRole("link", { name: "Продолжить как гость" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Вернуться в корзину" })).toBeVisible(); // баг 7: не тупик «Продолжить как гость»
     await expect(page.getByText(/парол[ья]\s*[:—-]/i)).toHaveCount(0); // никаких демо-паролей на экране входа
     await login(page);
     await expect(page).toHaveURL(/\/cart/);
     await expect(page.getByLabel("Имя и фамилия")).toBeVisible();
-    await expect.poll(async () => (await user.client.req("/api/v1/cart")).json?.cart?.items?.length, { timeout: 60_000 }).toBe(1);
+    // фото галереи теперь 3000 точек (~750 КБ): на сети площадки (~1,4 Мбит/с) перенос 14 фото — минуты
+    await expect.poll(async () => (await user.client.req("/api/v1/cart")).json?.cart?.items?.length, { timeout: 300_000 }).toBe(1);
   });
 
   await test.step("AC-1 получатель, TEST10, доставка, тестовая оплата", async () => {

@@ -15,6 +15,8 @@ let admin;
 let client;
 let staff;
 
+// W-15: подмена результата классификатора nsfwjs — «чистое» фото (настоящая модель на CPU в headless ≈ 3 с на фото)
+test.beforeEach(async ({ page }) => page.addInitScript(() => (window.__PICPAC_TEST__ = { ...(window.__PICPAC_TEST__ || {}), nsfw: "clean" })));
 test.beforeEach(async ({}, info) => {
   admin = supabaseAdmin();
   const tag = Date.now().toString(36).slice(-4) + info.parallelIndex;
@@ -42,7 +44,7 @@ async function pickFromGallery(page, files) {
   const gallery = page.getByRole("region", { name: "Тестовая галерея" });
   await expect(gallery.locator("input[type=checkbox]").first()).toBeVisible();
   await gallery.getByRole("button", { name: "Снять выбор" }).click();
-  for (const f of files) await gallery.locator(`label:has(img[src="/demo-gallery/${f}.jpg"]) input[type=checkbox]`).check();
+  for (const f of files) await gallery.locator(`label[data-file="${f}.jpg"] input[type=checkbox]`).check();
   await gallery.getByRole("button", { name: `Добавить ${files.length} фото` }).click();
 }
 
@@ -82,6 +84,12 @@ async function corePath(page, shot) {
   await toCart.click();
   await expect(page).toHaveURL(/\/cart/);
 
+  // Гость заполняет обязательные поля до входа (баг 6: иначе вход, а потом незаполненная форма)
+  await page.getByLabel("Имя и фамилия").fill("Тест Тестович");
+  await page.getByLabel("Телефон").fill("+375 (29) 123-45-67");
+  await page.locator('input[name="delivery"]').first().check();
+  await page.locator("#f-pickup_point").selectOption({ index: 1 });
+  await page.locator('input[name="payment"]').nth(1).check();
   await page.getByRole("button", { name: "Подтвердить заказ" }).click();
   await expect(page).toHaveURL(/\/login\?reason=checkout/);
   await login(page, client);
@@ -109,6 +117,7 @@ async function corePath(page, shot) {
 async function adminStats(browser, info, shot) {
   const u = info.project.use;
   const ctx = await browser.newContext({ viewport: u.viewport, hasTouch: u.hasTouch, locale: "ru-RU", timezoneId: "Europe/Minsk", baseURL: u.baseURL, extraHTTPHeaders: u.extraHTTPHeaders });
+  await ctx.addInitScript(() => (window.__PICPAC_TEST__ = { ...(window.__PICPAC_TEST__ || {}), nsfw: "clean" }));
   const page = await ctx.newPage();
   await page.goto("/login");
   await login(page, staff);

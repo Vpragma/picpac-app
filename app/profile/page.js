@@ -23,7 +23,8 @@ export default async function ProfilePage() {
     const { data } = await auth.supabase.from("profiles").select("full_name, created_at").eq("id", auth.user.id).maybeSingle();
     profile = data;
     // Сотрудникам показываем, подключён ли двухфакторный вход
-    const staffRole = auth.roles.find(isStaffRole);
+    // Блок 2FA — только в роли сотрудника: клиенту он не нужен
+    const staffRole = isStaffRole(auth.activeRole) ? auth.activeRole : null;
     if (staffRole) {
       const { data: factors } = await auth.supabase.auth.mfa.listFactors();
       mfa = { required: staffMfaRequired(), enrolled: !!factors?.totp?.length, aal: auth.aal, role: staffRole };
@@ -59,7 +60,7 @@ export default async function ProfilePage() {
           </p>
         </div>
       )}
-      <Notifications />
+      {auth.user && <Notifications />}
       <TextSizeSetting initial={largeText} />
       {auth.user && <PushToggle />}
       <AutoEnhanceSetting />

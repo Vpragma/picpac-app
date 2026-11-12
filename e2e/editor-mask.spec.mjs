@@ -6,10 +6,30 @@
 // Пользователь e2e-…@example.com создаётся и удаляется тестом. Консоль без ошибок.
 import { expect, test } from "@playwright/test";
 import { createTestUser, deleteTestUser, supabaseAdmin } from "../tests/helpers/client.mjs";
+import { fileURLToPath } from "node:url";
+import { MIGAN_FILE, ORT_MJS, ORT_WASM, SAM_FILES } from "../lib/photo/modelFiles.js";
+
+// Превью (удалённый BASE_URL) по сети площадки ~1,4 Мбит/с: 57 МБ моделей и wasm качались бы минутами в каждом тесте.
+// Это те же файлы из public/ — на превью подставляем их с диска; сервис-воркер на время теста выключен, чтобы запросы
+// шли через подстановку. Что превью само отдаёт эти файлы, проверяет тест «превью отдаёт модели» в конце файла.
+const BASE = (process.env.BASE_URL || "http://127.0.0.1:3000").replace(/\/$/, "");
+const REMOTE = !/^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(BASE);
+const TYPES = { ".wasm": "application/wasm", ".mjs": "text/javascript", ".js": "text/javascript", ".json": "application/json" };
+if (REMOTE) test.use({ serviceWorkers: "block" });
+test.beforeEach(async ({ context }) => {
+  if (!REMOTE) return;
+  await context.route(/\/(models|ort)\/[^?#]+/, (route) => {
+    const path = decodeURIComponent(new URL(route.request().url()).pathname);
+    const ext = path.slice(path.lastIndexOf("."));
+    return route.fulfill({ path: fileURLToPath(new URL("../public" + path, import.meta.url)), contentType: TYPES[ext] || "application/octet-stream" });
+  });
+});
 
 let admin;
 let user;
 
+// W-15: подмена результата классификатора nsfwjs — «чистое» фото (настоящая модель на CPU в headless ≈ 3 с на фото)
+test.beforeEach(async ({ page }) => page.addInitScript(() => (window.__PICPAC_TEST__ = { ...(window.__PICPAC_TEST__ || {}), nsfw: "clean" })));
 test.beforeEach(async ({}, info) => {
   admin = supabaseAdmin();
   user = await createTestUser(admin, ["client"], "e2emask" + info.parallelIndex + Date.now().toString(36).slice(-4));
@@ -88,9 +108,9 @@ test("выделение касанием: размыть фон, убрать �
   const gallery = page.getByRole("region", { name: "Тестовая галерея" });
   await expect(gallery.locator("input[type=checkbox]").first()).toBeVisible();
   await gallery.getByRole("button", { name: "Снять выбор" }).click();
-  for (const f of ["dog", "nesvizh-small"]) await gallery.locator(`label:has(img[src="/demo-gallery/${f}.jpg"]) input[type=checkbox]`).check();
+  for (const f of ["dog", "nesvizh-small"]) await gallery.locator(`label[data-file="${f}.jpg"] input[type=checkbox]`).check();
   await gallery.getByRole("button", { name: "Добавить 2 фото" }).click();
-  await expect(page.locator('.photo-cell[data-photo="dog.jpg"] [data-upload]')).toHaveText("Загружено", { timeout: 90_000 });
+  await expect(page.locator('.photo-cell[data-photo="dog.jpg"] [data-upload]')).toHaveText("Загружено", { timeout: 300_000 });
 
   await page.getByRole("button", { name: "Правки", exact: true }).click();
   await page.locator('[data-edit-photo="dog.jpg"]').click();
@@ -267,9 +287,9 @@ test("fix1: 8 правок по выделению на одном фото — 
   const gallery = page.getByRole("region", { name: "Тестовая галерея" });
   await expect(gallery.locator("input[type=checkbox]").first()).toBeVisible();
   await gallery.getByRole("button", { name: "Снять выбор" }).click();
-  await gallery.locator('label:has(img[src="/demo-gallery/autumn-forest.jpg"]) input[type=checkbox]').check();
+  await gallery.locator('label[data-file="autumn-forest.jpg"] input[type=checkbox]').check();
   await gallery.getByRole("button", { name: "Добавить 1 фото" }).click();
-  await expect(page.locator('.photo-cell[data-photo="autumn-forest.jpg"] [data-upload]')).toHaveText("Загружено", { timeout: 90_000 });
+  await expect(page.locator('.photo-cell[data-photo="autumn-forest.jpg"] [data-upload]')).toHaveText("Загружено", { timeout: 300_000 });
   await page.getByRole("button", { name: "Правки", exact: true }).click();
   await expect(page.locator(".pe-after[data-rendered]")).toHaveCount(1);
   await page.getByRole("button", { name: "Выделить касанием" }).click();
@@ -344,9 +364,9 @@ test("fix1: правки фото больше предела — честный
   const gallery = page.getByRole("region", { name: "Тестовая галерея" });
   await expect(gallery.locator("input[type=checkbox]").first()).toBeVisible();
   await gallery.getByRole("button", { name: "Снять выбор" }).click();
-  await gallery.locator('label:has(img[src="/demo-gallery/flowers.jpg"]) input[type=checkbox]').check();
+  await gallery.locator('label[data-file="flowers.jpg"] input[type=checkbox]').check();
   await gallery.getByRole("button", { name: "Добавить 1 фото" }).click();
-  await expect(page.locator('.photo-cell[data-photo="flowers.jpg"] [data-upload]')).toHaveText("Загружено", { timeout: 90_000 });
+  await expect(page.locator('.photo-cell[data-photo="flowers.jpg"] [data-upload]')).toHaveText("Загружено", { timeout: 300_000 });
   await page.waitForTimeout(2_000); // анализ фото дописал черновик
 
   // Черновик старого вида: 4 разные сложные маски внутри правок (≈ 24 КБ) — больше предела фото 20 КБ
@@ -424,3 +444,11 @@ test("fix1: правки фото больше предела — честный
   await expect(page.getByRole("button", { name: "Выделить касанием" })).toBeVisible({ timeout: 30_000 });
 });
 
+// На превью модели подставлены с диска (см. начало файла) — здесь проверяем, что сам сайт их отдаёт
+test("превью отдаёт модели и wasm", async ({ request }) => {
+  test.skip(!REMOTE, "локально модели отдаёт свой сервер в тестах выше");
+  for (const url of [...SAM_FILES.map((f) => f.url), MIGAN_FILE.url, ORT_WASM.url, ORT_MJS]) {
+    const r = await request.head(BASE + url);
+    expect(r.status(), url).toBe(200);
+  }
+});
