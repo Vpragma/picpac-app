@@ -105,6 +105,8 @@ for (const theme of ["light", "dark"]) {
     if (theme === "dark") await page.context().addCookies([{ name: "pp_theme", value: "dark", url: test.info().project.use.baseURL }]);
     await page.goto("/help");
     await expect(page.locator("html")).toHaveAttribute("data-color-scheme", theme);
+    // N2: образцы вставляем после гидратации — иначе React при гидратации main убирает чужие узлы (тест иногда падал)
+    await page.waitForLoadState("networkidle");
     await page.evaluate((html) => document.querySelector("main").insertAdjacentHTML("afterbegin", html), SAMPLES);
     const r = await new AxeBuilder({ page }).include("#ds-samples").withRules(["color-contrast"]).analyze();
     const bad = r.violations.flatMap((v) => v.nodes.map((n) => `${n.target.join(" ")}: ${n.failureSummary?.split("\n").pop()}`));

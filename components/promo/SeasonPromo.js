@@ -50,16 +50,16 @@ export default function SeasonPromo({ place = "home", applied = null, onApply = 
   if (!promo) return null;
   const until = promo.validTo ? ` до ${promoDate(promo.validTo)}` : "";
   return (
-    <aside className="season-promo" data-season-promo={promo.season} data-testid="season-promo" aria-label="Сезонный промокод">
+    <aside className="promo-season" data-season-promo={promo.season} data-testid="promo-season" aria-label="Сезонный промокод">
       <svg width="36" height="36" viewBox="0 0 36 36" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
         <path d="M6 30 C10 18 18 10 30 6 C28 18 20 26 6 30 Z" />
         <path d="M6 30 L22 14" />
         <path d="M13 24 L13 18 M18 19 L18 13 M13 24 L19 24 M18 19 L24 19" />
       </svg>
-      <div className="season-promo-text">
+      <div className="promo-season-text">
         <b>{TITLES[promo.season]}</b>
         <span>
-          {promo.label || benefitText(promo)} по коду <span className="season-promo-code">{promo.code}</span>
+          {promo.label || benefitText(promo)} по коду <span className="promo-season-code">{promo.code}</span>
           {until}
         </span>
       </div>

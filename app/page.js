@@ -5,9 +5,13 @@ import { loadCatalog } from "@/lib/server/catalog";
 import CatalogView from "@/components/CatalogView";
 import ProductPhoto from "@/components/ProductPhoto";
 import Onboarding from "@/components/Onboarding";
-import SeasonPromo from "@/components/promo/SeasonPromo";
 import { AiBlock, HomeHero, HowItWorks, Trust } from "@/components/home/HomeSections";
 import { PRODUCT_PHOTOS } from "@/lib/productPhotos";
+import { seasonForRequest } from "@/lib/server/season";
+import { findSeasonalPromo } from "@/lib/server/promo";
+import SeasonBanner from "@/components/season/SeasonBanner";
+import SeasonPromo from "@/components/season/SeasonPromo";
+import { seasonPhotos } from "@/components/season/seasonPhotos";
 
 // Обложки карточек — фото продуктов, собранные на сервере (getImageProps + <picture>): JS главной не растёт.
 // Все лениво: приоритет на главной — у первого фото коллажа (LCP).
@@ -26,10 +30,15 @@ export default async function HomePage() {
   const covers = Object.fromEntries(
     Object.entries(PRODUCT_PHOTOS).map(([slug, photos]) => [slug, <ProductPhoto key={slug} photo={photos[0]} alt="" sizes={COVER_SIZES} />]),
   );
+  // Сезон (N2): промо-плашка над первым экраном, баннер — после него (LCP первого экрана не меняется)
+  const season = await seasonForRequest();
+  // Сезонный промокод (N8) — в плашке сезона N2: читаем на сервере, чтобы плашка не меняла высоту после загрузки
+  const seasonal = season !== "none" ? await findSeasonalPromo(season).catch(() => null) : null;
   return (
     <>
+      <SeasonPromo initial={season} code={seasonal?.code || null} />
       <HomeHero />
-      <SeasonPromo place="home" />
+      <SeasonBanner initial={season} photos={seasonPhotos()} />
       <HowItWorks />
       <CatalogView initial={catalog} covers={covers} />
       <AiBlock />

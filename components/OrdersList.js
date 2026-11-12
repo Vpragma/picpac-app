@@ -8,6 +8,7 @@ import { getMe } from "../lib/me";
 import { StatusChip, byn, minskDay } from "./OrderBits";
 import { EmptyState } from "./LineArt";
 import { CardLine } from "./promo/Postcard";
+import { SkeletonList } from "./Skeleton";
 
 const POLL_MS = 15000;
 
@@ -31,7 +32,7 @@ export default function OrdersList() {
     };
   }, []);
 
-  if (!res) return <p className="muted">Загружаем заказы…</p>;
+  if (!res) return <SkeletonList rows={3} label="Загружаем заказы…" />;
   if (res.status === 401)
     return (
       <div>

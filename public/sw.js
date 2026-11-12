@@ -190,7 +190,8 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(String(d.title || "PicPac").slice(0, 60), {
       body: String(d.body || "Есть новости в приложении PicPac").slice(0, 140),
-      icon: "/icons/icon-192.png",
+      // N2: сезонная иконка — только свои файлы /icons/season/ (сервер кладёт путь в пуш по текущему сезону)
+      icon: /^\/icons\/season\/icon-(autumn|blackfriday|newyear)-192\.png$/.test(d.icon || "") ? d.icon : "/icons/icon-192.png",
       badge: "/icons/badge-96.png",
       tag: d.tag ? String(d.tag).slice(0, 32) : undefined, // одинаковый тег заменяет прошлое уведомление
       lang: "ru",

@@ -38,6 +38,7 @@ tags:
   - name: Уведомления
   - name: Поддержка (оператор)
   - name: Модерация
+  - name: Сезон
 security:
   - session: []
 paths:
@@ -860,6 +861,40 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { description: Модератор или клиент }
         "429": { description: Чаще раза в 10 секунд (Retry-After 10) }
+  /api/v1/season:
+    get:
+      tags: [Сезон]
+      summary: Текущий сезон оформления (N2) — публично, без входа
+      description: "Договор docs/night/night2-seasons.md. Значения none (Без сезона), autumn (Осень), blackfriday (Чёрная пятница), newyear (Новый год). Кэш — 5 секунд (Cache-Control public, max-age=5, s-maxage=5); запрос с cookies входа — private, no-store (к ответу может добавиться обновлённая сессия). Нет ответа базы — none: сезонных элементов нет, всё работает. Клиент читает сезон при загрузке, при возврате на вкладку и раз в 30 секунд; атрибут data-season на <html> сервер ставит сам."
+      security: []
+      responses:
+        "200":
+          description: "{ season }"
+          content:
+            application/json:
+              schema: { type: object, required: [season], properties: { season: { type: string, enum: [none, autumn, blackfriday, newyear] } } }
+  /api/v1/admin/season:
+    get:
+      tags: [Сезон]
+      summary: Сезон для админки — текущий, когда и кем включён (только admin)
+      responses:
+        "200": { description: "{ ok, season, updatedAt, updatedBy }" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Модератор или клиент (отказ — в журнале access.denied) }
+    put:
+      tags: [Сезон]
+      summary: Сменить сезон оформления (только admin, запись в журнал admin.season_set «от → к»)
+      description: "Смена сразу у всех клиентов: сервер отдаёт новый сезон со следующей страницей, открытые вкладки перечитывают его при возврате и раз в 30 секунд. Меняются только сезонные элементы (баннер, промо-плашка, линейная графика, цвет логотипа). Лимит — 30 смен в минуту."
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false, required: [season], properties: { season: { type: string, enum: [none, autumn, blackfriday, newyear] } } }
+      responses:
+        "200": { description: "{ ok: true, season, previous }" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Модератор, клиент или запрос с чужого сайта }
+        "429": { description: Слишком часто (Retry-After) }
   /api/v1/push/subscriptions:
     post:
       tags: [Пуши]

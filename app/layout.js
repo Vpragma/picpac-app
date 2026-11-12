@@ -6,9 +6,14 @@ import "./globals.css";
 import "./ux.css";
 import "./qr.css";
 import "./brand.css";
+import "./season.css";
+import "./motion.css";
 import { qrSvg, siteUrl } from "@/lib/server/qr";
 import Shell from "../components/Shell";
 import { THEME_COLORS, THEME_COOKIE, parseTheme } from "@/lib/themeShared";
+import { seasonForRequest } from "@/lib/server/season";
+import SeasonSync from "../components/season/SeasonSync";
+import MotionFx from "../components/MotionFx";
 
 const jost = Jost({
   subsets: ["latin", "cyrillic"],
@@ -76,13 +81,17 @@ export default async function RootLayout({ children }) {
   const largeText = jar.get("pp_text")?.value === "lg";
   // Тема (N1): светлая по умолчанию у всех, независимо от настройки телефона; выбор — в профиле (cookie pp_theme)
   const theme = parseTheme(jar.get(THEME_COOKIE)?.value);
+  // Сезон (N2): атрибут data-season ставит сервер — сезонные элементы без мигания; браузер сверяет его с сервером (SeasonSync)
+  const season = await seasonForRequest();
   // Логотип через next/image (getImageProps): на сервере, без клиентского JS; SVG отдаётся как есть
   const { props: logo } = getImageProps({ src: "/logo.svg", alt: "PicPac", width: 72, height: 40, loading: "eager" });
   // D9: «Открыть на телефоне» — небольшой QR на адрес этого сайта (рисует сервер; виден только на компьютере)
   const phoneSvg = await qrSvg(await siteUrl(), { margin: 1 });
   return (
-    <html lang="ru" data-theme="picpac" data-color-scheme={theme} data-text={largeText ? "lg" : undefined} className={jost.variable}>
+    <html lang="ru" data-theme="picpac" data-color-scheme={theme} data-season={season} data-text={largeText ? "lg" : undefined} className={jost.variable}>
       <body>
+        <SeasonSync />
+        <MotionFx />
         <Shell
           logo={
             <picture>

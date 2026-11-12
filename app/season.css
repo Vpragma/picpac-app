@@ -1,0 +1,229 @@
+/*
+ * PicPac · сезоны оформления (N2, ночь 2). Подключается после brand.css.
+ * Договор — docs/night/night2-seasons.md: data-season на <html> (none | autumn | blackfriday | newyear), палитры --season-*.
+ * Меняются ТОЛЬКО сезонные элементы: промо-плашка, баннер, линейная графика, цвет логотипа.
+ * Кнопки, текст и фон интерфейса — фирменные (--ds-*). Текст на сезонных элементах — только --season-ink на --season-bg (AA).
+ * .season-palette-<сезон> — та же палитра на отдельном элементе (превью в админке не зависит от включённого сезона).
+ */
+
+/* ── 1. Палитры (таблица договора) ───────────────────────────────────────── */
+:root[data-season='autumn'],
+.season-palette-autumn {
+  --season-bg: #f6ebdd; /* кремовый */
+  --season-ink: #3a2a22; /* тёмно-коричневый */
+  --season-1: #c98a2e; /* охра */
+  --season-2: #b95c3a; /* терракота */
+  --season-3: #7a2833; /* бордо */
+  --season-4: #2f4a3f; /* глубокий зелёный */
+  --season-5: #e2a84b; /* золотой лист */
+}
+:root[data-season='blackfriday'],
+.season-palette-blackfriday {
+  --season-bg: #1c1f1e;
+  --season-ink: #f6efe6;
+  --season-1: #dd5757; /* красный логотипа */
+  --season-2: #e8996c; /* персиковый */
+  --season-3: #aeb4b3; /* серый */
+  --season-4: #ffffff;
+  --season-5: #38524f; /* зелёный бренда */
+}
+:root[data-season='newyear'],
+.season-palette-newyear {
+  --season-bg: #24443b; /* глубокий зелёный */
+  --season-ink: #ffffff;
+  --season-1: #d6a84a; /* золото */
+  --season-2: #cfdde7; /* ледяной */
+  --season-3: #bd3434; /* ягодный */
+  --season-4: #faf7f7; /* снег */
+  --season-5: #7aa45a; /* хвоя */
+}
+
+/* ── 2. Логотип в цветах сезона: та же форма (маска из /logo.svg), без теней, контуров и поворотов ──
+ * Цвет — свой для светлой и тёмной шапки. .season-palette-* — образец логотипа в превью админки. */
+:root[data-season='autumn'], .season-palette-autumn { --season-logo: #b95c3a; }
+:root[data-season='blackfriday'], .season-palette-blackfriday { --season-logo: #1c1f1e; }
+:root[data-season='newyear'], .season-palette-newyear { --season-logo: #24443b; }
+:root[data-season='autumn'][data-color-scheme='dark'], :root[data-color-scheme='dark'] .season-palette-autumn { --season-logo: #e2a84b; }
+:root[data-season='blackfriday'][data-color-scheme='dark'], :root[data-color-scheme='dark'] .season-palette-blackfriday { --season-logo: #f6efe6; }
+:root[data-season='newyear'][data-color-scheme='dark'], :root[data-color-scheme='dark'] .season-palette-newyear { --season-logo: #d6a84a; }
+@media (prefers-color-scheme: dark) {
+  :root[data-season='autumn'][data-color-scheme='system'], :root[data-color-scheme='system'] .season-palette-autumn { --season-logo: #e2a84b; }
+  :root[data-season='blackfriday'][data-color-scheme='system'], :root[data-color-scheme='system'] .season-palette-blackfriday { --season-logo: #f6efe6; }
+  :root[data-season='newyear'][data-color-scheme='system'], :root[data-color-scheme='system'] .season-palette-newyear { --season-logo: #d6a84a; }
+}
+.topbar .logo picture { display: block; position: relative; }
+:root:is([data-season='autumn'], [data-season='blackfriday'], [data-season='newyear']) .topbar .logo img { opacity: 0; }
+:root:is([data-season='autumn'], [data-season='blackfriday'], [data-season='newyear']) .topbar .logo picture::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--season-logo);
+  -webkit-mask: url(/logo.svg) center / contain no-repeat;
+  mask: url(/logo.svg) center / contain no-repeat;
+  pointer-events: none;
+}
+
+/* ── 3. Линейная графика сезона: основная линия — --season-ink, акценты .s1….s5 ── */
+.season-art { color: var(--season-ink); }
+.season-art :is(path, circle, rect, ellipse) { vector-effect: non-scaling-stroke; }
+.season-art .s1 { color: var(--season-1); }
+.season-art .s2 { color: var(--season-2); }
+.season-art .s3 { color: var(--season-3); }
+.season-art .s4 { color: var(--season-4); }
+.season-art .s5 { color: var(--season-5); }
+.season-art .sb-berry { fill: var(--season-bg); }
+
+/* ── 4. Промо-плашка над первым экраном главной (место под сезонный промокод N8) ── */
+.season-promo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-2) 0 0;
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-4);
+  min-height: 52px;
+  background: var(--season-bg);
+  color: var(--season-ink);
+  border: 1px solid var(--season-1);
+  border-radius: var(--ds-radius-lg);
+}
+.season-icon { width: 28px; height: 28px; flex: none; }
+.season-promo-text { margin: 0; flex: 1; font-size: var(--ds-text-sm); line-height: 1.4; font-weight: 500; color: var(--season-ink); }
+.season-code {
+  display: inline-block;
+  padding: 0 var(--space-2);
+  border: 1px dashed var(--season-ink);
+  border-radius: var(--ds-radius-xs);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.season-promo-slot { flex: none; }
+.season-promo-link {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  color: var(--season-ink);
+  font-size: var(--ds-text-sm);
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+.season-promo-link:hover { text-decoration-thickness: 2px; }
+.season-promo-link:focus-visible { outline: 2px solid var(--season-ink); outline-offset: 2px; border-radius: var(--ds-radius-xs); }
+
+/* ── 5. Баннер после первого экрана ─────────────────────────────────────── */
+.season-banner {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: grid;
+  gap: var(--space-6);
+  margin: var(--space-6) 0 var(--space-4);
+  padding: var(--space-6) var(--space-5) var(--space-8);
+  background: var(--season-bg);
+  color: var(--season-ink);
+  border-radius: var(--ds-radius-xl);
+  scroll-margin-top: 80px;
+}
+.sb-text { position: relative; z-index: 2; }
+.sb-eyebrow {
+  margin: 0 0 var(--space-2);
+  font-size: var(--ds-text-sm);
+  font-weight: 500;
+  letter-spacing: var(--ds-tracking-caps);
+  text-transform: uppercase;
+  color: var(--season-ink);
+}
+.sb-title {
+  margin: 0 0 var(--space-3);
+  font-size: clamp(1.75rem, 1.25rem + 2vw, 2.5rem);
+  line-height: var(--ds-leading-tight);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--season-ink);
+  text-wrap: balance;
+}
+.season-palette-blackfriday .sb-title { text-transform: uppercase; letter-spacing: 0.04em; }
+.sb-lead { margin: 0 0 var(--space-5); max-width: 32rem; font-size: var(--ds-text-lg); line-height: 1.5; color: var(--season-ink); }
+.sb-media { position: relative; z-index: 1; aspect-ratio: 5 / 4; width: 100%; max-width: 30rem; margin: 0 auto; }
+.sb-art { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.sb-art-back { z-index: 0; }
+.sb-art-front { z-index: 4; }
+.sb-print { position: absolute; margin: 0; padding: 5px; background: var(--pp-white); border-radius: 4px; box-shadow: var(--ds-shadow-photo); }
+.sb-print picture, .sb-print img { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: 2px; }
+.sb-print-a { left: 6%; top: 10%; width: 56%; aspect-ratio: 4 / 3; z-index: 2; }
+.sb-print-b { right: 3%; top: 2%; width: 32%; aspect-ratio: 3 / 4; z-index: 1; }
+.sb-print-c { right: 8%; bottom: 4%; width: 42%; aspect-ratio: 3 / 2; z-index: 3; }
+.season-palette-newyear .sb-print-a { top: 16%; }
+.season-palette-newyear .sb-print-c { right: 4%; bottom: 2%; }
+@media (min-width: 900px) {
+  .season-banner {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+    align-items: center;
+    gap: var(--space-10);
+    padding: var(--space-10);
+  }
+  .sb-media { max-width: 32rem; }
+}
+
+/* Листопад — только внутри осеннего баннера, за текстом и фото; только transform и opacity */
+.sb-leaves { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; container-type: size; }
+.sb-leaf {
+  position: absolute;
+  top: 0;
+  left: var(--x, 10%);
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  color: var(--season-1);
+  opacity: 0;
+  transform: translate3d(0, -40px, 0);
+  animation: sb-fall var(--d, 12s) linear var(--delay, 0s) infinite;
+}
+.sb-leaf path { vector-effect: non-scaling-stroke; stroke-width: 1.6px; }
+.sb-leaf:nth-child(1) { --x: 6%; --d: 13s; --delay: -1s; --sway: 26px; --rest-y: 18cqh; --rest-r: 20deg; }
+.sb-leaf:nth-child(2) { --x: 22%; --d: 16s; --delay: -9s; --sway: -30px; --rest-y: 64cqh; --rest-r: -30deg; color: var(--season-2); width: 26px; height: 26px; }
+.sb-leaf:nth-child(3) { --x: 41%; --d: 12s; --delay: -5s; --sway: 22px; --rest-y: 8cqh; --rest-r: 110deg; color: var(--season-5); }
+.sb-leaf:nth-child(4) { --x: 58%; --d: 15s; --delay: -12s; --sway: -24px; --rest-y: 86cqh; --rest-r: 60deg; color: var(--season-3); width: 18px; height: 18px; }
+.sb-leaf:nth-child(5) { --x: 73%; --d: 14s; --delay: -3s; --sway: 30px; --rest-y: 40cqh; --rest-r: -60deg; color: var(--season-2); }
+.sb-leaf:nth-child(6) { --x: 88%; --d: 17s; --delay: -7s; --sway: -20px; --rest-y: 70cqh; --rest-r: 150deg; color: var(--season-1); width: 18px; height: 18px; }
+.sb-leaf:nth-child(7) { --x: 50%; --d: 18s; --delay: -14s; --sway: 18px; --rest-y: 94cqh; --rest-r: 200deg; color: var(--season-5); width: 16px; height: 16px; }
+@keyframes sb-fall {
+  0% { opacity: 0; transform: translate3d(0, -40px, 0) rotate(0deg); }
+  8% { opacity: 0.85; }
+  35% { transform: translate3d(var(--sway, 24px), 32cqh, 0) rotate(100deg); }
+  65% { transform: translate3d(calc(var(--sway, 24px) * -0.6), 66cqh, 0) rotate(210deg); }
+  90% { opacity: 0.85; }
+  100% { opacity: 0; transform: translate3d(calc(var(--sway, 24px) * 0.4), calc(100cqh + 24px), 0) rotate(330deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sb-leaf { animation: none; opacity: 0.55; transform: translate3d(0, var(--rest-y, 20cqh), 0) rotate(var(--rest-r, 0deg)); }
+}
+
+/* ── 6. Админка → «Сезон»: варианты с превью ─────────────────────────────── */
+.season-options { display: grid; gap: var(--space-3); grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); margin: var(--space-4) 0; padding: 0; border: 0; }
+.season-option { position: relative; display: grid; gap: var(--space-2); padding: var(--space-3); border: 1.5px solid var(--ds-color-border); border-radius: var(--ds-radius-lg); background: var(--ds-color-bg-surface); cursor: pointer; }
+.season-option:has(input:checked) { border-color: var(--ds-color-accent); background: var(--ds-color-bg-selected); }
+.season-option:has(input:focus-visible) { outline: 2px solid var(--ds-color-focus); outline-offset: 2px; }
+.season-option input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.season-option-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); min-height: var(--tap); font-weight: 500; color: var(--ds-color-text-strong); }
+.season-option-mark { width: 22px; height: 22px; flex: none; border-radius: 999px; border: 2px solid var(--ds-color-border-input); }
+.season-option:has(input:checked) .season-option-mark { border: 7px solid var(--ds-color-accent); }
+.season-preview { position: relative; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr) 42%; align-items: center; gap: var(--space-2); min-height: 112px; padding: var(--space-3); border-radius: var(--ds-radius-md); background: var(--season-bg, var(--ds-color-bg-muted)); color: var(--season-ink, var(--ds-color-text)); }
+.season-preview-title { margin: 0; font-size: var(--ds-text-base); font-weight: 500; line-height: 1.25; color: var(--season-ink, var(--ds-color-text-strong)); }
+.season-preview-art { position: relative; aspect-ratio: 5 / 4; }
+.season-preview-art .sb-art { position: absolute; inset: 0; width: 100%; height: 100%; }
+.season-logo-sample { display: flex; align-items: center; gap: var(--space-3); min-height: 44px; padding: 0 var(--space-3); border-radius: var(--ds-radius-sm); background: var(--ds-color-bg-raised); border: 1px solid var(--ds-color-border); font-size: var(--ds-text-sm); color: var(--ds-color-text-secondary); }
+.season-logo-sample::before { content: ''; flex: none; width: 58px; height: 32px; background: var(--season-logo, var(--ds-color-logo)); -webkit-mask: url(/logo.svg) center / contain no-repeat; mask: url(/logo.svg) center / contain no-repeat; }
+.season-swatches { display: flex; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.season-swatches li { width: 20px; height: 20px; border-radius: 999px; border: 1px solid var(--ds-color-border); }
+.season-option-note { margin: 0; font-size: var(--ds-text-sm); color: var(--ds-color-text-secondary); }
+.season-current { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+/* «Без сезона» в превью: фирменные цвета, даже если на сайте сейчас включён сезон */
+.season-palette-none { --season-bg: var(--ds-color-bg-muted); --season-ink: var(--ds-color-text-strong); --season-logo: var(--ds-color-logo); }
+.season-preview .empty-art { width: 100%; height: auto; color: var(--ds-color-line-art); }
+.season-preview .empty-art .ink2 { color: var(--ds-color-line-art-2); }

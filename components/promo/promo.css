@@ -23,21 +23,21 @@
 .promo-msg { margin-top: var(--space-2); }
 
 /* ── Сезонная плашка: цвета сезона, если N2 их задал; иначе фирменная пастель. Пары — с контрастом AA ── */
-.season-promo {
+.promo-season {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3);
   padding: var(--space-3) var(--space-4); border-radius: var(--ds-radius-lg);
   background: var(--season-bg, var(--pp-sand)); color: var(--season-ink, var(--pp-green-900));
   border: 1px solid var(--season-1, var(--pp-frame));
   margin: var(--space-3) 0;
 }
-.season-promo-text { flex: 1 1 14rem; min-width: 0; }
-.season-promo-text b { display: block; font-weight: 500; font-size: var(--ds-text-lg); }
-.season-promo-code {
+.promo-season-text { flex: 1 1 14rem; min-width: 0; }
+.promo-season-text b { display: block; font-weight: 500; font-size: var(--ds-text-lg); }
+.promo-season-code {
   display: inline-block; padding: 2px 12px; border-radius: var(--ds-radius-pill); font-weight: 500; letter-spacing: 0.06em;
   background: var(--pp-white); color: var(--pp-green-900); border: 1px dashed var(--season-3, var(--pp-red));
 }
-.season-promo svg { flex: none; color: var(--season-2, var(--pp-logo)); }
-.season-promo .btn { flex: none; }
+.promo-season svg { flex: none; color: var(--season-2, var(--pp-logo)); }
+.promo-season .btn { flex: none; }
 
 /* ── Админка «Промокоды» ── */
 .promo-form { margin-bottom: var(--space-4); }

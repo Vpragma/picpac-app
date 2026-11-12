@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { callApi } from "../lib/api";
 import { minskTime } from "./OrderBits";
 import { EmptyState } from "./LineArt";
+import { SkeletonList } from "./Skeleton";
 
 export default function NotificationCenter({ limit = 50, compact = false }) {
   const [res, setRes] = useState(null);
@@ -39,7 +40,7 @@ export default function NotificationCenter({ limit = 50, compact = false }) {
     if (!n.read) await callApi("/api/v1/notifications/read", { body: { ids: [n.id] } });
   }
 
-  if (!res) return <p className="muted">Загружаем уведомления…</p>;
+  if (!res) return <SkeletonList rows={3} label="Загружаем уведомления…" />;
   if (res.status === 401)
     return (
       <p>
