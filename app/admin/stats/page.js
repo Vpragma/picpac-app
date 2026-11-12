@@ -22,7 +22,7 @@ function Formula({ children }) {
   );
 }
 
-function Tile({ label, value, formula, warn }) {
+function Tile({ label, value, sub, formula, warn }) {
   return (
     <div className={"stat-tile" + (warn ? " warn" : "")}>
       <div className="row between" style={{ alignItems: "flex-start" }}>
@@ -30,6 +30,7 @@ function Tile({ label, value, formula, warn }) {
         <Formula>{formula}</Formula>
       </div>
       <b>{value}</b>
+      {sub && <span className="muted small">{sub}</span>}
     </div>
   );
 }
@@ -73,8 +74,8 @@ export default async function StatsPage({ searchParams }) {
         <>
           <p className="muted small">
             {s.label === "демо-данные"
-              ? `В расчёте есть демо-данные: синтетических событий ${num(s.synthetic.events)}, демо- и синтетических заказов ${num(s.synthetic.orders)}. «Только реальные» — без них.`
-              : "Только реальные данные: синтетические и демо-строки исключены."}{" "}
+              ? `В расчёте есть демо-данные: синтетических событий ${num(s.synthetic.events)}, синтетических заказов ${num(s.synthetic.orders)}. «Только реальные» — без них (заказы и события из приложения остаются).`
+              : "Только реальные данные: синтетические строки исключены."}{" "}
             Период — последние {s.days} дней, время по Минску.
           </p>
 
@@ -83,7 +84,7 @@ export default async function StatsPage({ searchParams }) {
             <Tile label="В работе" value={num(s.tiles.inWork)} formula="Заказы в статусах «Принят», «Модерация» и «Производство» сейчас." />
             <Tile label="Просрочено" value={num(s.tiles.overdue)} warn={s.tiles.overdue > 0} formula="Заказы не в статусах «Готов / передан в доставку» и «Завершён», у которых крайний срок готовности (eta_to) уже прошёл." />
             <Tile label="На модерации" value={num(s.tiles.onModeration)} formula="Заказы в статусе «Модерация» сейчас." />
-            <Tile label="Обращения без ответа" value={`${num(s.tiles.unanswered)}${s.tiles.unansweredOverdue ? ` · ${num(s.tiles.unansweredOverdue)} после SLA` : ""}`} warn={s.tiles.unansweredOverdue > 0} formula="Обращения в статусе «Ждёт ответа». «После SLA» — срок ответа (sla_due) уже прошёл." />
+            <Tile label="Обращения без ответа" value={num(s.tiles.unanswered)} sub={s.tiles.unansweredOverdue ? `${num(s.tiles.unansweredOverdue)} — срок ответа прошёл` : "все в срок"} warn={s.tiles.unansweredOverdue > 0} formula="Обращения в статусе «Ждёт ответа». «После SLA» — срок ответа (sla_due) уже прошёл." />
             <Tile label={`Выручка (тест) за ${s.days} дн.`} value={byn(s.tiles.revenueKop)} formula={`Сумма «Итого» заказов с тестовой оплатой, оплаченных за последние ${s.days} дней (по paid_at). Деньги не списывались. Оплаченных заказов: ${num(s.tiles.paidPeriod)}, всего заказов за период: ${num(s.tiles.ordersPeriod)}.`} />
           </section>
 
