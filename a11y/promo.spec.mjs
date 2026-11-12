@@ -22,6 +22,8 @@ test.afterEach(async () => {
 });
 
 async function axe(page, name) {
+  // Сверху страницы: иначе axe считает «закрытыми» цели, оказавшиеся под липкой шапкой при прокрутке
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.waitForTimeout(400);
   const result = await new AxeBuilder({ page }).withTags(TAGS).analyze();
   const bad = result.violations.filter((v) => v.impact === "serious" || v.impact === "critical");
