@@ -25,7 +25,10 @@
     "seed:demo": "node --env-file-if-exists=.env.local scripts/demo-data.mjs demo",
     "reset:demo": "node --env-file-if-exists=.env.local scripts/demo-data.mjs reset",
     "test:a11y": "playwright test -c playwright.a11y.config.mjs",
-    "licenses:check": "node scripts/gen-licenses.mjs --check"
+    "licenses:check": "node scripts/gen-licenses.mjs --check",
+    "present:screens": "node --env-file-if-exists=.env.local scripts/present-screens.mjs",
+    "present:before-after": "node --env-file-if-exists=.env.local scripts/present-before-after.mjs",
+    "present:video": "node --env-file-if-exists=.env.local scripts/present-video.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
