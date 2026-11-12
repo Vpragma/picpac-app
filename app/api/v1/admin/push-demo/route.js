@@ -82,15 +82,23 @@ export async function POST(request) {
       // Текст — из настоящей корзины клиента (без порога 5 минут и тихих часов: только эта кнопка)
       const { data: items } = await ctx.admin
         .from("cart_items")
-        .select("updated_at, projects(title, product_slug, status)")
+        .select("updated_at, projects(title, product_slug, status, options)")
         .eq("user_id", user.id)
         .order("updated_at", { ascending: false })
         .limit(20);
       const live = (items || []).filter((x) => x.projects && x.projects.status !== "ordered");
       if (!live.length) return done("denied", "Корзина клиента пуста — добавьте книгу в корзину на телефоне.");
       const cat = await loadCatalog().catch(() => null);
-      const names = Object.fromEntries((cat?.products || []).map((p) => [p.slug, p.name]));
-      message = demoPushText("cart", { products: live.map((x) => names[x.projects.product_slug] || "Фотокнига") });
+      const bySlug = Object.fromEntries((cat?.products || []).map((p) => [p.slug, p]));
+      // «Фотокнига Classic 20×20»: вид товара, название из каталога и формат проекта (название книги от клиента в пуш не попадает)
+      const label = (pr) => {
+        const p = bySlug[pr.product_slug];
+        const name = p?.name || "Фотокнига";
+        const kind = p?.kind === "book" && !/^фото/i.test(name) ? "Фотокнига " : "";
+        const size = /^\d{1,3}x\d{1,3}$/.test(pr.options?.size || "") ? " " + pr.options.size.replace("x", "×") : "";
+        return kind + name + size;
+      };
+      message = demoPushText("cart", { products: live.map((x) => label(x.projects)) });
     } else {
       // Последний заказ клиента → следующий статус с причиной «Демонстрация» (та же функция, что у ERP и админки)
       const { data: order } = await ctx.admin.from("orders").select("id, number, status").eq("user_id", user.id).order("created_at", { ascending: false }).limit(1).maybeSingle();

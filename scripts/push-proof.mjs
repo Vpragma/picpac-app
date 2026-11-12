@@ -5,7 +5,7 @@
 // registration.getNotifications() показывает уведомление с нужным текстом. Временные аккаунты удаляются.
 // Запуск: BASE_URL=https://<превью> node --env-file-if-exists=.env.local scripts/push-proof.mjs
 // Пароли временных аккаунтов случайные и не печатаются.
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -38,7 +38,10 @@ let ctx;
 try {
   [U, A] = await Promise.all([createTestUser(admin, ["client"], "pushproof"), createTestUser(admin, ["admin"], "pushproofadm")]);
   log("временные аккаунты созданы");
-  ctx = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir(), "pp-chrome-")), { channel: "chrome", headless: false, viewport: { width: 1280, height: 800 } });
+  // Постоянный профиль: регистрация Chrome в push-сервисе Google сохраняется между запусками
+  const profile = join(tmpdir(), "picpac-push-proof-chrome");
+  mkdirSync(profile, { recursive: true });
+  ctx = await chromium.launchPersistentContext(profile, { channel: "chrome", headless: false, viewport: { width: 1280, height: 800 } });
   await ctx.grantPermissions(["notifications"], { origin: BASE });
   const page = ctx.pages()[0] || (await ctx.newPage());
   await page.goto(BASE + "/help");
@@ -50,7 +53,7 @@ try {
   await page.goto(BASE + "/profile");
   await page.evaluate(() => navigator.serviceWorker.ready.then(() => true));
   await page.getByRole("button", { name: "Сообщать о заказах и важном" }).click();
-  await page.getByText("Включены на этом устройстве").waitFor({ timeout: 30000 });
+  await page.getByText("Включены на этом устройстве").waitFor({ timeout: 90000 });
   const { data: subs } = await admin.from("push_subscriptions").select("device, endpoint").eq("user_id", U.id);
   log("подписка:", subs?.length, subs?.map((s) => s.device + " @ " + new URL(s.endpoint).hostname).join(", "));
 
