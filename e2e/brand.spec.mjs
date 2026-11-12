@@ -110,6 +110,8 @@ for (const theme of ["light", "dark"]) {
     const AxeBuilder = (await import("@axe-core/playwright")).default;
     if (theme === "dark") await page.context().addCookies([{ name: "pp_theme", value: "dark", url: test.info().project.use.baseURL }]);
     await page.goto("/help");
+    // N5: под нагрузкой гидратация идёт и после networkidle — ждём, пока React «привяжет» main (свойство __reactFiber…)
+    await page.waitForFunction(() => Object.keys(document.querySelector("main") || {}).some((k) => k.startsWith("__reactFiber")));
     await expect(page.locator("html")).toHaveAttribute("data-color-scheme", theme);
     // N2: образцы вставляем после гидратации — иначе React при гидратации main убирает чужие узлы (тест иногда падал)
     await page.waitForLoadState("networkidle");
