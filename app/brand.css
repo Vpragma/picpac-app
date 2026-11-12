@@ -200,7 +200,7 @@ a.card:hover .go-arrow { background: var(--ds-color-primary); border-color: var(
 .option:hover:not(.selected) { border-color: var(--ds-color-border-strong); }
 .option.selected:not([role='tab'])::after {
   content: ""; position: absolute; top: 10px; right: 10px; width: 18px; height: 18px; border-radius: 999px;
-  background: var(--ds-color-accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / 12px no-repeat;
+  background: var(--ds-color-primary) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / 12px no-repeat;
 }
 .product-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
 .product-head h1 { margin: 0; }
@@ -251,6 +251,7 @@ a.card:hover .go-arrow { background: var(--ds-color-primary); border-color: var(
 .onboarding-art { width: 148px; height: 112px; margin: 0 auto var(--space-3); color: var(--ds-color-line-art); display: block; }
 .onboarding-art .ink2 { color: var(--ds-color-line-art-2); }
 .onboarding h2 { font-size: var(--ds-text-xl); margin: 0 0 var(--space-2); }
+.onboarding h2:focus { outline: none; } /* фокус на заголовке — для экранного диктора, не для клика */
 .onboarding p { color: var(--ds-color-text-secondary); margin: 0 0 var(--space-4); }
 .onboarding-dots { display: flex; justify-content: center; gap: 6px; margin: 0 0 var(--space-4); padding: 0; list-style: none; }
 .onboarding-dots li { width: 8px; height: 8px; border-radius: 999px; background: var(--ds-color-step-todo); }
@@ -355,3 +356,11 @@ html[data-text='lg'] { --sticky-h: 92px; }
     grid-column: 2; grid-row: 1 / span 60; position: sticky; top: calc(var(--topbar-h, 61px) + var(--space-4));
   }
 }
+
+/* ── 26. Превью печати фото: белые поля и мягкая тень — как настоящий отпечаток ── */
+.photo-grid:has(> div > .page) { gap: var(--space-5); padding: var(--space-2); }
+.photo-grid > div > .page { box-shadow: 0 0 0 5px var(--pp-white), var(--ds-shadow-photo); border-radius: 1px; }
+
+/* ── 27. «Всё хорошо — можно заказывать»: без полупрозрачности (текст читается), спокойная зелёная пастель ── */
+.issue.ok { opacity: 1; background: var(--ds-color-success-bg); border-left-color: var(--ds-color-success); }
+.issue.ok svg { color: var(--ds-color-success); }

@@ -45,7 +45,9 @@ PWA для заказа фотокниг и печати фото в фирме�
 
 ## 6. Стек
 
-Next.js 16 и React 19 (JavaScript), Supabase (Postgres, RLS, Auth, Storage), `zod`, `@dnd-kit`, свой Service Worker (PWA, офлайн, пуши), `web-push`; ИИ в Web Worker — `@huggingface/transformers`, `onnxruntime-web`, `upscaler`, `@tensorflow/tfjs`, `nsfwjs`; Cloudflare Workers AI; pg_cron; тесты — Playwright, `node:test`, axe-core. Хостинг — Vercel. Шрифт Jost (с нашего домена); дизайн-система — токены в `app/picpac.css`, компоненты в `app/brand.css` ([docs/design-system.md](docs/design-system.md)); светлая тема по умолчанию у всех, тёмная и «как в системе» — в профиле.
+Next.js 16 и React 19 (JavaScript), Supabase (Postgres, RLS, Auth, Storage), `zod`, `@dnd-kit`, свой Service Worker (PWA, офлайн, пуши), `web-push`; ИИ в Web Worker — `@huggingface/transformers`, `onnxruntime-web`, `upscaler`, `@tensorflow/tfjs`, `nsfwjs`; Cloudflare Workers AI; pg_cron; тесты — Playwright, `node:test`, axe-core. Хостинг — Vercel. Шрифт Jost, стиль super.picpac.by.
+
+**Оформление (N1):** фирменный стиль PicPac — шрифт Jost с нашего домена, токены в `app/picpac.css`, компоненты в `app/brand.css` ([docs/design-system.md](docs/design-system.md)); светлая тема по умолчанию у всех, тёмная и «как в системе» — в профиле.
 
 ## 7. Запуск за 15 минут
 
