@@ -12,6 +12,7 @@ const admin = supabaseAdmin();
 const RUN = `e2e-print-${randomUUID().slice(0, 8)}`;
 const JPEG = readFileSync(new URL("../../public/demo-gallery/nesvizh-small.jpg", import.meta.url)); // 800×549
 const OTHER = readFileSync(new URL("../../public/demo-gallery/cat-dark.jpg", import.meta.url)); // другой размер
+const DOUBLE = readFileSync(new URL("../../public/demo-gallery/nesvizh.jpg", import.meta.url)); // 1600×1098 — ровно ×2
 const recipient = { name: "Тест Тестович", phone: "+375 (29) 000-00-00" };
 const EDITS = { v: 1, auto: null, autoOff: false, manual: { exposure: 20, warmth: 10 }, ops: [], by: "command" };
 
@@ -82,6 +83,26 @@ test("печатная версия удаляется вместе с фото"
     const { data } = await admin.storage.from("photos").list(path.split("/").slice(0, -1).join("/"), { search: path.split("/").pop() });
     assert.equal((data || []).length, 0, `файл остался: ${path}`);
   }
+});
+
+test("D1: «Резкость для печати» — принимается файл ровно ×2 только с правкой upscale = 2", async () => {
+  const up = async (buf, edits) => {
+    const u = await printUrl(C, buf.length);
+    assert.equal(u.status, 200, u.text);
+    assert.ok((await fetch(u.json.upload.url, { method: "PUT", headers: u.json.upload.headers, body: buf })).ok);
+    return save(C, { path: u.json.upload.path, edits });
+  };
+  const ok = await up(DOUBLE, { ...EDITS, upscale: 2 });
+  assert.equal(ok.status, 200, ok.text);
+  assert.equal(ok.json.print.width, 1600);
+  assert.equal(ok.json.print.height, 1098);
+  // ×2 без правки — другой размер; правка ×2, а файл того же размера — тоже нет
+  const noFlag = await up(DOUBLE, EDITS);
+  assert.equal(noFlag.status, 400, noFlag.text);
+  assert.equal(noFlag.json.error.code, "size_mismatch");
+  const sameSize = await up(JPEG, { ...EDITS, upscale: 2 });
+  assert.equal(sameSize.status, 400, sameSize.text);
+  assert.match(sameSize.json.error.message, /вдвое/);
 });
 
 test("печатная версия: файл того же размера + правки → в снимке заказа, оригинал отдельно", async () => {
