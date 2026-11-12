@@ -979,8 +979,11 @@ paths:
     get:
       tags: [Админ]
       summary: Лента сотрудника — админ видит все заказы и обращения, модератор только модерацию
+      description: >-
+        Уведомления по заказам и обращениям тестовых аккаунтов (e2e-…, critic-…, night2-…) видит только тестовый сотрудник.
+        Шаги симулятора ERP — одна сводка за день («Симулятор ERP · сводка за ДД.ММ», count — сколько смен статуса в ней).
       responses:
-        "200": { description: Лента, content: { application/json: { example: { ok: true, unread: 2, items: [{ id: 1, kind: order_new, audience: admin, title: "Новый заказ PP-…", body: "Заказ создан", link: "/admin/orders/…", unread: true }] } } } }
+        "200": { description: Лента, content: { application/json: { example: { ok: true, unread: 2, items: [{ id: 1, kind: order_new, audience: admin, title: "Новый заказ PP-…", body: "Заказ создан", link: "/admin/orders/…", count: 1, unread: true }, { id: 2, kind: order_status, audience: admin, title: "Симулятор ERP · сводка за 13.11", body: "Смен статуса: 12. Последняя: PP-… → Завершён", link: "/admin", count: 12, unread: true }] } } } }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
     post:

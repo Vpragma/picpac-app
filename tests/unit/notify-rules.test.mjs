@@ -1,7 +1,7 @@
 // D5: тихие часы, правило напоминания о корзине, адрес подписки (SSRF), содержимое пуша — без сети и базы
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { allowedEndpoint, cartKeySource, cartReminderText, deviceLabel, dueCarts, isQuietHours, pushPayload } from "../../lib/notifyRules.js";
+import { allowedEndpoint, cartKeySource, cartReminderText, deviceLabel, dueCarts, isQuietHours, isTestEmail, pushPayload } from "../../lib/notifyRules.js";
 
 const minsk = (hhmm) => new Date(`2026-11-12T${hhmm}:00+03:00`);
 
@@ -73,4 +73,10 @@ test("N7: напоминание о печати фото — не «книга�
   assert.match(t.inbox.title, /Фото ждут в корзине/);
   const b = cartReminderText({ title: "Свадьба", productName: "Classic", productSlug: "layflat" });
   assert.match(b.inbox.title, /Книга ждёт в корзине/);
+});
+
+test("N10: тестовый аккаунт — e2e-…, critic-…, night2-… (зеркало private.is_test_email)", () => {
+  for (const e of ["e2e-a-1234@example.com", "E2E-x@example.com", "critic-run1@example.com", "night2-promo@example.com"]) assert.equal(isTestEmail(e), true, e);
+  for (const e of ["client@example.com", "admin@example.com", "moderator@example.com", "synthetic-001@example.com", "anna.e2e-@mail.by", "", null, undefined])
+    assert.equal(isTestEmail(e), false, String(e));
 });
