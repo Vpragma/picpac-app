@@ -122,6 +122,9 @@ async function tryBookPreview(page, device) {
     await page.waitForTimeout(2500);
     await snap(page, "10b-prevyu-knigi-listat", device);
     log(`ok   10b-prevyu-knigi-listat-${device}`);
+    // закрыть превью (окно или полноэкранный режим), чтобы шаги редактора снова были доступны
+    const close = page.getByRole("button", { name: /^(Закрыть|Готово|Назад к книге|×)$/i });
+    if (await close.first().isVisible().catch(() => false)) await close.first().click().catch(() => {});
     await page.keyboard.press("Escape").catch(() => {});
     await page.waitForTimeout(500);
     return true;
@@ -522,8 +525,8 @@ try {
       } catch (e) {
         log(`FAIL подготовка модерации: ${e.message.slice(0, 200)}`);
       }
-      const staff = await createUser("admin", ["admin"], "Администратор Проверки");
-      for (const device of DEVICES) await adminScreens(browser, device, staff, modNumber);
+      const staff = await createUser("admin", ["admin"], "Администратор Проверки").catch((e) => (log(`FAIL админ: ${e.message}`), null));
+      if (staff) for (const device of DEVICES) await adminScreens(browser, device, staff, modNumber);
     } else skip("20…26 админка", "all", "нет --auth-base на 127.0.0.1");
   }
 } finally {
