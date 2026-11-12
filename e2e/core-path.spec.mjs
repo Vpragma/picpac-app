@@ -151,9 +151,11 @@ test("обязательный путь: каталог → проект → 12 
       if (await fit.isVisible().catch(() => false)) await fit.click();
       else if (await go.isVisible().catch(() => false)) await go.click();
     }
-    await toCart.click();
+    // N7: двойное нажатие — одна позиция и одно уведомление
+    await toCart.dblclick();
     await expect(page).toHaveURL(/\/cart/);
     await expect(page.locator(".cart-btn .badge")).toHaveText("1");
+    await expect(page.getByText("Добавлено в корзину")).toHaveCount(1);
   });
 
   await test.step("AC-1 «Подтвердить заказ» гостем → вход → гостевая корзина в аккаунте", async () => {
