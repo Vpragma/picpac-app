@@ -14,6 +14,9 @@ export default async function AdminLayout({ children }) {
           <Link href="/admin" className="btn btn-small">
             Обзор
           </Link>
+          <Link href="/admin/moderation" className="btn btn-small">
+            Модерация
+          </Link>
           <Link href="/admin/notifications" className="btn btn-small">
             Уведомления
           </Link>

@@ -105,6 +105,26 @@ export default function OrderPage() {
         {o.isDemo && o.status !== "done" && <p className="muted small">Демо-заказ: статусы присылает симулятор производства (события ERP), шаг ≈ 30 секунд после оплаты.</p>}
       </section>
 
+      {o.moderation?.state === "checking" && (
+        <div className="card" role="status" data-testid="moderation-checking" style={{ background: "var(--ds-color-info-bg)" }}>
+          <b>Это фото проверит модератор.</b> Обычно это занимает до 1 часа. Как только он одобрит, заказ уйдёт в печать.
+        </div>
+      )}
+      {o.moderation?.state === "needs_replacement" && (
+        <div className="card" role="alert" data-testid="moderation-returned" style={{ borderLeft: "4px solid var(--ds-color-error)" }}>
+          <h3 style={{ marginTop: 0 }}>Нужно заменить фото</h3>
+          {o.moderation.returned.map((r) => (
+            <p key={r.reviewId} className="small" style={{ margin: "4px 0", overflowWrap: "anywhere" }}>
+              Фото № {(r.index ?? 0) + 1}: {r.reasonLabel}
+              {r.comment ? ` — «${r.comment}»` : ""}
+            </p>
+          ))}
+          <p className="small" style={{ margin: 0 }}>
+            Напишите в поддержку ниже — оператор поможет заменить фото, и заказ продолжит путь.
+          </p>
+        </div>
+      )}
+
       <section className="card">
         <h3>Состав</h3>
         {(o.items || []).map((i) => (

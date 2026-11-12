@@ -59,3 +59,14 @@ test("SEC-14: маски имени, телефона, почты и адрес�
   assert.equal(mod.address, undefined, "модератор не видит адрес");
   assert.ok(!JSON.stringify(mod).includes("1234567"));
 });
+
+test("D4: пороги цензуры — граница не включается, мусор не даёт флага", async () => {
+  const { needsModeration, RETURN_REASONS } = await import("../../lib/moderation.js");
+  assert.equal(needsModeration({ porn: 0.6, hentai: 0.1, sexy: 0 }), false, "ровно 0,7 — не флаг");
+  assert.equal(needsModeration({ porn: 0.6, hentai: 0.1001, sexy: 0 }), true);
+  assert.equal(needsModeration({ porn: 0, hentai: 0, sexy: 0.85 }), false);
+  assert.equal(needsModeration({ porn: 0, hentai: 0, sexy: 0.8501 }), true);
+  assert.equal(needsModeration(null), false);
+  assert.equal(needsModeration({ porn: NaN, hentai: "x", sexy: undefined }), false);
+  assert.ok(RETURN_REASONS.quality && Object.keys(RETURN_REASONS).length === 6);
+});

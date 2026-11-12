@@ -40,7 +40,14 @@ export default function NotificationBell() {
 
   if (unread === null) return null;
   return (
-    <Link href="/notifications" className="cart-btn" aria-label={unread ? `Уведомления, непрочитанных: ${unread}` : "Уведомления"} data-testid="notification-bell">
+    // Свой класс, не .cart-btn: тесты и стили корзины ищут именно её значок
+    <Link
+      href="/notifications"
+      className="bell-btn"
+      style={{ position: "relative", color: "var(--ds-color-text-strong)", padding: 8, display: "flex" }}
+      aria-label={unread ? `Уведомления, непрочитанных: ${unread}` : "Уведомления"}
+      data-testid="notification-bell"
+    >
       <IconBell />
       {unread > 0 && <span className="badge">{unread > 99 ? "99+" : unread}</span>}
     </Link>

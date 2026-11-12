@@ -6,6 +6,7 @@ import { json } from "@/lib/server/http";
 import { findDelivery, findProduct, loadCatalog } from "@/lib/server/catalog";
 import { advanceDemoOrders } from "@/lib/server/orderFlow";
 import { getOwnOrder, loadOrderFull } from "@/lib/server/orders";
+import { RETURN_REASONS } from "@/lib/moderation";
 
 const THUMBS_PER_ITEM = 8;
 
@@ -23,6 +24,7 @@ export async function GET(request, { params }) {
       if (await advanceDemoOrders(ctx, [order])) order = await getOwnOrder(ctx, order.id);
     }
     const full = await loadOrderFull(ctx, order);
+    if (full.status === "moderation") full.moderation = await moderationState(ctx, full.id);
     await addThumbs(ctx, full);
     await addLabels(full);
     return json({ ok: true, order: full });
@@ -30,6 +32,17 @@ export async function GET(request, { params }) {
     console.error(e?.message);
     return serverError();
   }
+}
+
+// Модерация фото своего заказа (читаем сервисным ключом после проверки владельца; имя модератора не отдаём)
+async function moderationState(ctx, orderId) {
+  const { data } = await ctx.admin.from("moderation_reviews").select("id, decision, reason, comment, photo_index").eq("order_id", orderId);
+  const rows = data || [];
+  const returned = rows
+    .filter((r) => r.decision === "rejected")
+    .map((r) => ({ reviewId: r.id, index: r.photo_index, reasonLabel: RETURN_REASONS[r.reason] || "Другое", comment: r.comment || null }));
+  const pending = rows.filter((r) => r.decision === "pending").length;
+  return { state: returned.length ? "needs_replacement" : pending ? "checking" : "none", pending, returned };
 }
 
 // Миниатюры состава: первые фото каждой позиции по подписанным ссылкам (бакет приватный)
