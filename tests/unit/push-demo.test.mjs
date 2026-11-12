@@ -2,7 +2,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { demoPushText, NEXT_STATUS, pushOutcome, pushResultText, pushServiceName } from "../../lib/notifyRules.js";
-import { sendToSubscriptions } from "../../lib/pushSend.js";
+import { createECDH, randomBytes } from "node:crypto";
+import { failReason, sendToSubscriptions, vapidPrivateKey } from "../../lib/pushSend.js";
 
 // Подмена базы: запоминает, что обновили и что удалили
 function fakeDb() {
@@ -77,4 +78,22 @@ test("текст под кнопкой: принято сервисом, нет 
   assert.equal(pushResultText([]), "Нет подписанных устройств — включите уведомления в профиле на телефоне.");
   assert.match(pushResultText([], { noVapid: true }), /VAPID/);
   assert.equal(pushResultText([{ service: "Google", ok: false, status: 403 }]), "Не принято сервисом Google: 0 из 1 устройства (ошибка 403)");
+});
+
+test("ключ VAPID: 31 байт (потерян ведущий ноль) дополняется до 32 и подходит к открытому ключу; ошибка без утечки", () => {
+  const full = Buffer.concat([Buffer.from([0]), randomBytes(31)]); // закрытый ключ с ведущим нулём
+  const ecdh = createECDH("prime256v1");
+  ecdh.setPrivateKey(full);
+  const pub = ecdh.getPublicKey().toString("base64url");
+  const short = full.subarray(1).toString("base64url"); // как в окружении: 31 байт
+  const fixed = vapidPrivateKey(short);
+  assert.equal(Buffer.from(fixed, "base64url").length, 32);
+  const check = createECDH("prime256v1");
+  check.setPrivateKey(Buffer.from(fixed, "base64url"));
+  assert.equal(check.getPublicKey().toString("base64url"), pub);
+  const ok32 = randomBytes(32).toString("base64url");
+  assert.equal(vapidPrivateKey(" " + ok32 + "\n"), ok32, "правильный ключ не меняется, пробелы убраны");
+  assert.equal(failReason(new Error("Vapid private key should be 32 bytes long when decoded.")), "ключи VAPID");
+  assert.equal(failReason(new Error("The subject value must be … mailto: a@b.c")), "ключи VAPID");
+  assert.equal(failReason(Object.assign(new Error("x"), { code: "ETIMEDOUT" })), "ETIMEDOUT");
 });
