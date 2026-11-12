@@ -17,9 +17,12 @@ const SERVICE_ONLY = {
   ai_cloud_consents: "согласия на облачный ИИ — читает и пишет сервер после проверки входа",
   ai_cloud_usage: "учёт вызовов облачного ИИ — сервер",
   cart_reminders: "отметки отправленных напоминаний о корзине — расписание на сервере",
+  promo_redemptions: "применения промокодов (N8): сколько раз и на какую сумму — пишет и читает только сервер",
 };
-// Таблицы, которые по задумке может читать любой вошедший (сейчас таких нет: каталог отдаёт сервер)
-const PUBLIC_READ = new Set([]);
+// Таблицы, которые по задумке читают все, даже гость (запись — только сервер): текущий сезон оформления (N2)
+const PUBLIC_ALL_READ = new Set(["site_season"]);
+// Таблицы, которые по задумке может читать любой вошедший (каталог отдаёт сервер) — плюс общедоступные
+const PUBLIC_READ = new Set([...PUBLIC_ALL_READ]);
 
 const sql = postgres(process.env.POSTGRES_URL_NON_POOLING, { max: 1, connect_timeout: 30, onnotice: () => {} });
 const DEMO_CLIENT = "client@example.com";
@@ -105,7 +108,7 @@ test("гость (anon): ни одной таблицы не читает и н�
     const out = [];
     for (const t of tables) {
       const sel = await attempt(tx, `select count(*)::int as n from ${q(t.name)}`);
-      if (sel.ok && sel.rows[0].n > 0) out.push(`${t.name}: гость видит строк ${sel.rows[0].n}`);
+      if (sel.ok && sel.rows[0].n > 0 && !PUBLIC_ALL_READ.has(t.name)) out.push(`${t.name}: гость видит строк ${sel.rows[0].n}`);
       const ins = await attempt(tx, `insert into ${q(t.name)} default values`);
       if (ins.ok) out.push(`${t.name}: гость вставил строку`);
       if (t.col) {
@@ -196,7 +199,7 @@ test("гость через настоящий API Supabase (ключ гостя
   const problems = [];
   for (const t of tables) {
     const { data, error } = await anon.from(t.name).select("*").limit(1);
-    if (!error && data?.length) problems.push(`${t.name}: гость читает через API`);
+    if (!error && data?.length && !PUBLIC_ALL_READ.has(t.name)) problems.push(`${t.name}: гость читает через API`);
     const ins = await anon.from(t.name).insert({}).select();
     if (!ins.error) problems.push(`${t.name}: гость вставил через API`);
   }
