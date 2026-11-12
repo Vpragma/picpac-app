@@ -15,6 +15,19 @@ export const dynamic = "force-dynamic";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const time = (iso) => (iso ? new Date(iso).toLocaleString("ru-RU", { timeZone: "Europe/Minsk", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "");
 const SOURCE = { erp: "ERP", admin: "сотрудник", system: "система" };
+const THUMBS_PER_ITEM = 12;
+
+// A8: миниатюры состава — первые фото каждой позиции по подписанным ссылкам на 10 минут (бакет приватный)
+async function signThumbs(db, items) {
+  const paths = [];
+  for (const it of items) for (const p of (it.snapshot?.photos || []).slice(0, THUMBS_PER_ITEM)) if (p?.path) paths.push(p.path);
+  const urls = {};
+  if (paths.length) {
+    const { data } = await db.storage.from("photos").createSignedUrls(paths, 600);
+    for (const r of data || []) if (r.signedUrl && !r.error) urls[r.path] = r.signedUrl;
+  }
+  return urls;
+}
 
 export default async function AdminOrderPage({ params }) {
   const { id } = await params;
@@ -33,6 +46,7 @@ export default async function AdminOrderPage({ params }) {
     db.from("interactions").select("id, topic, status, created_at").eq("order_id", id).order("created_at"),
   ]);
   const client = maskClient(o, "admin");
+  const thumbs = await signThumbs(db, items || []);
   return (
     <div>
       <Link href="/admin" className="back-link">
@@ -73,20 +87,42 @@ export default async function AdminOrderPage({ params }) {
           {client.name || "—"} · {client.phone || "—"} · {client.email || "—"}
           {client.address ? ` · ${client.address}` : ""}
         </p>
-        <p className="muted small">Полные контакты и адрес видит только служба доставки. Скрыто по правилу SEC-14.</p>
+        <p className="muted small">Данные клиента скрыты: полные контакты и адрес видит только служба доставки.</p>
       </section>
 
       <section className="card">
         <h3>Состав</h3>
-        {(items || []).map((i) => (
-          <div key={i.id} className="sum-line small">
-            <span>
-              {i.title}
-              {i.quantity > 1 ? ` × ${i.quantity}` : ""}
-            </span>
-            <span className="muted">{i.snapshot?.photoCount ?? (i.snapshot?.photos || []).length} фото</span>
-          </div>
-        ))}
+        {(items || []).map((i) => {
+          const photos = i.snapshot?.photos || [];
+          const count = i.snapshot?.photoCount ?? photos.length;
+          const shown = photos.slice(0, THUMBS_PER_ITEM);
+          return (
+            <div key={i.id} style={{ marginBottom: 12 }}>
+              <div className="sum-line small">
+                <span>
+                  {i.title}
+                  {i.quantity > 1 ? ` × ${i.quantity}` : ""}
+                </span>
+                <span className="muted">{count} фото</span>
+              </div>
+              {!!shown.length && (
+                <ul className="admin-thumbs" aria-label={`Фото позиции «${i.title}»`} data-testid="admin-order-thumbs">
+                  {shown.map((p, n) => (
+                    <li key={p.id || n}>
+                      {thumbs[p.path] ? (
+                        // eslint-disable-next-line @next/next/no-img-element -- подписанная ссылка на 10 минут на фото клиента, оптимизатор не нужен
+                        <img src={thumbs[p.path]} alt={`Фото ${n + 1}`} width="72" height="72" loading="lazy" />
+                      ) : (
+                        <span className="admin-thumb-empty" title="Фото недоступно" />
+                      )}
+                    </li>
+                  ))}
+                  {count > shown.length && <li className="muted small admin-thumbs-more">и ещё {count - shown.length}</li>}
+                </ul>
+              )}
+            </div>
+          );
+        })}
       </section>
 
       {!!interactions?.length && (
