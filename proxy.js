@@ -48,7 +48,7 @@ export function matchApiRoute(path) {
 export async function proxy(request) {
   if (request.nextUrl.pathname.startsWith("/api/")) return handle(request);
   const nonce = newNonce();
-  const csp = buildCsp(nonce, { dev: process.env.NODE_ENV === "development", https: secureCookies(), supabase: process.env.SUPABASE_URL || "" });
+  const csp = buildCsp(nonce, { dev: process.env.NODE_ENV === "development", https: secureCookies(), supabase: process.env.SUPABASE_URL || "", preview: process.env.VERCEL_ENV === "preview" });
   request.headers.set("x-nonce", nonce);
   request.headers.set("Content-Security-Policy", csp);
   const res = await handle(request);

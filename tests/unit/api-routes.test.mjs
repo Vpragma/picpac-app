@@ -22,4 +22,8 @@ test("CSP: скрипты только с nonce, без unsafe-inline/unsafe-eva
   assert.match(csp, /connect-src 'self' data: blob: https:\/\/x\.supabase\.co/);
   assert.match(csp, /upgrade-insecure-requests/);
   assert.doesNotMatch(buildCsp("abc", {}), /upgrade-insecure-requests/);
+  // Панель Vercel — только на превью; на основном сайте рамки запрещены
+  assert.match(csp, /frame-src 'none'/);
+  assert.doesNotMatch(csp, /vercel\.live/);
+  assert.match(buildCsp("abc", { preview: true }), /frame-src https:\/\/vercel\.live/);
 });
