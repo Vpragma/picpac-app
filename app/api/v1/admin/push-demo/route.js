@@ -44,9 +44,9 @@ export async function GET(request) {
   const user = await findUser(ctx.admin, parsed.data);
   const { data: log } = await ctx.admin
     .from("audit_log")
-    .select("created_at, result, details")
+    .select("at, result, details")
     .eq("action", "admin.push_demo")
-    .order("created_at", { ascending: false })
+    .order("at", { ascending: false })
     .limit(10);
   return json({
     ok: true,
@@ -54,7 +54,7 @@ export async function GET(request) {
     email: parsed.data,
     found: !!user,
     devices: user ? await devicesOf(ctx.admin, user.id) : [],
-    log: (log || []).map((r) => ({ at: r.created_at, result: r.result, action: r.details?.action, email: r.details?.email, text: r.details?.text })),
+    log: (log || []).map((r) => ({ at: r.at, result: r.result, action: r.details?.action, email: r.details?.email, text: r.details?.text })),
   });
 }
 
