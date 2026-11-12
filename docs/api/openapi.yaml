@@ -761,9 +761,15 @@ paths:
         - { name: to, in: query, schema: { type: string, format: date } }
         - { name: before, in: query, description: "курсор «Показать ещё» — значение next из прошлого ответа", schema: { type: integer } }
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+        - { name: quick, in: query, description: "N9: быстрый фильтр — входы, отказы (denied и error), ручные смены статуса, модерация, админские действия", schema: { type: string, enum: [logins, denied, status, moderation, admin] } }
+        - { name: days, in: query, description: "N9: последние N дней (from/to точнее и важнее)", schema: { type: string, enum: ["1", "7", "30", all] } }
+        - { name: hideTests, in: query, description: "1 — без автотестов: почта e2e-/critic-/night2-, запросы с 127.0.0.1, details.test, удалённые тестовые аккаунты (признак is_test, представление audit_log_view)", schema: { type: string, enum: ["0", "1"] } }
+        - { name: hideSystem, in: query, description: "N9: 1 — без системных событий (cron.*, notify.*)", schema: { type: string, enum: ["0", "1"] } }
+        - { name: hideErp, in: query, description: "N9: 1 — без событий ERP и симулятора (erp.*)", schema: { type: string, enum: ["0", "1"] } }
+        - { name: group, in: query, description: "N9: 1 — одинаковые события подряд (действие, результат, роль, человек или IP, тип объекта) одной группой; ответ — groups вместо items", schema: { type: string, enum: ["0", "1"] } }
       responses:
         "200":
-          description: Записи журнала
+          description: "Записи журнала (с group=1 — { groups: [{ count, items }], rows, next }). Журнал только читается: строки не меняются и не удаляются"
           content:
             application/json:
               example: { ok: true, timezone: Europe/Minsk, items: [{ id: 9393, at: "2026-11-12T09:31:37Z", action: auth.login, result: success, user_id: "…", details: { email: "…" } }], next: 9343 }
@@ -949,8 +955,9 @@ paths:
         Плитки (заказы сегодня, в работе, просрочено, на модерации, обращения без ответа, выручка (тест) за период),
         воронка «просмотр → проект → корзина → оформление → оплачено (тест)» с конверсией шагов и cartToPaid,
         медиана времени на шагах редактора и «где бросают», использование ИИ-редактора. Формулы — README «Формулы статистики».
+        N9: promo — заказы с промокодом за период (orders, withCode, sharePct), сумма скидок discountKop, top — 5 самых частых кодов.
       parameters:
-        - { name: days, in: query, schema: { type: integer, enum: [7, 30], default: 7 } }
+        - { name: days, in: query, description: "N9: сутки, 7, 30 или 90 дней", schema: { type: integer, enum: [1, 7, 30, 90], default: 7 } }
         - { name: source, in: query, description: "all — с синтетикой (подпись «демо-данные»), real — без строк is_synthetic", schema: { type: string, enum: [all, real], default: all } }
       responses:
         "200":
@@ -1112,6 +1119,124 @@ paths:
         "400": { $ref: "#/components/responses/Invalid" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooMany" }
+  /api/v1/admin/orders:
+    get:
+      tags: [Админ]
+      summary: Список заказов (N9, только admin) — поиск по номеру, фильтры, сортировка, страницы
+      description: Без персональных данных (имя, телефон, почта, адрес не отдаются) — только город. Лишний или неверный параметр → 400. Даты — по Минску.
+      parameters:
+        - { name: q, in: query, description: "часть номера: латинские буквы, цифры, дефис", schema: { type: string, maxLength: 40, pattern: "^[A-Za-z0-9-]*$" } }
+        - { name: status, in: query, schema: { type: string, enum: [accepted, moderation, production, shipped, done] } }
+        - { name: product, in: query, description: "slug продукта (заказы, где он есть)", schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: overdue, in: query, description: "1 — не готов и не завершён, срок готовности прошёл", schema: { type: string, enum: ["1"] } }
+        - { name: moderation, in: query, description: "1 — на модерации", schema: { type: string, enum: ["1"] } }
+        - { name: source, in: query, schema: { type: string, enum: [all, real, synthetic], default: all } }
+        - { name: sort, in: query, schema: { type: string, enum: [new, old, sum_desc, sum_asc, changed, eta], default: new } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: per, in: query, schema: { type: integer, minimum: 10, maximum: 100, default: 25 } }
+      responses:
+        "200":
+          description: Страница заказов
+          content: { application/json: { example: { ok: true, timezone: Europe/Minsk, total: 12, page: 1, per: 25, pages: 1, items: [{ id: "…", number: PP-261112-11889, status: moderation, statusLabel: Модерация, totalKop: 8490, paid: true, createdAt: "2026-11-12T06:33:00Z", etaTo: "…", overdue: false, promoCode: null, city: Минск, products: [pages-book], isSynthetic: true }] } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/admin/orders/export:
+    get:
+      tags: [Админ]
+      summary: Выгрузка списка заказов в CSV (N9, только admin) — те же фильтры, что у списка
+      description: |
+        Файл CSV (UTF-8 с BOM, разделитель «;», не больше 10 000 строк). Столбцы — ровно «Номер; Дата (Минск); Продукт; Сумма, BYN; Статус; Город»:
+        без имён, телефонов, адресов и почты. Продукт — название из каталога (не название проекта клиента). Текст, похожий на формулу, — с апострофом.
+        Каждая выгрузка — запись в журнал admin.orders_export { count, filters }. Ссылка с чужого сайта (Origin/Referer) → 403.
+      parameters:
+        - { name: status, in: query, schema: { type: string } }
+        - { name: overdue, in: query, schema: { type: string, enum: ["1"] } }
+      responses:
+        "200":
+          description: CSV-файл (заголовок X-Rows — число строк)
+          content: { text/csv: { example: "Номер;Дата (Минск);Продукт;Сумма, BYN;Статус;Город\r\nPP-261112-11889;12.11.2026 09:33;Lite;84,90;Модерация;Минск\r\n" } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/admin/users:
+    get:
+      tags: [Админ]
+      summary: Пользователи (N9, только admin) — поиск, фильтр по роли, страницы
+      description: Почта и имя замаскированы (a•••@example.com, «Анна К.»). Поиск — по части почты, имени или началу id. Тестовые аккаунты (e2e-/critic-/night2-) скрыты, tests=1 — показать. Сначала сотрудники.
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 100 } }
+        - { name: role, in: query, schema: { type: string, enum: [client, moderator, admin] } }
+        - { name: tests, in: query, schema: { type: string, enum: ["0", "1"] } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200": { description: Страница пользователей, content: { application/json: { example: { ok: true, total: 204, page: 1, per: 25, pages: 9, items: [{ id: "…", email: "a•••@example.com", name: "Тестовый А.", roles: [client, admin], createdAt: "…", lastSignInAt: "…", isSynthetic: false, isDemo: true, isSelf: false }] } } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/admin/users/{id}/roles:
+    post:
+      tags: [Админ]
+      summary: Выдать или снять роль модератора/администратора (N9, только admin)
+      description: |
+        Проверяет функция базы public.admin_set_role (под блокировкой): только админ; свои роли — нельзя (403 self_role), а значит и последнего администратора не снять;
+        роль «Клиент» не меняется (400 client_role); демо-аккаунты (403 demo_account) и синтетический набор жюри (403 synthetic) защищены; 409 last_admin — защита от гонки.
+        Каждая попытка — запись в журнал admin.role_grant / admin.role_revoke { role, reason }.
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false, required: [role, grant], properties: { role: { type: string, enum: [moderator, admin] }, grant: { type: boolean } } }
+            example: { role: moderator, grant: true }
+      responses:
+        "200": { description: "granted | revoked | unchanged", content: { application/json: { example: { ok: true, result: granted, roles: [client, moderator] } } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: "Не админ, свои роли, демо-аккаунт или синтетика", content: { application/json: { example: { ok: false, error: { code: self_role, message: "Свои роли менять нельзя — попросите другого администратора.", requestId: "…" } } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Последний администратор (last_admin) }
+        "429": { $ref: "#/components/responses/TooMany" }
+  /api/v1/admin/catalog:
+    get:
+      tags: [Админ]
+      summary: Каталог для правки (N9, только admin) — все продукты и размеры, цены «от», старые цены, плашки, пределы
+      responses:
+        "200": { description: Каталог, content: { application/json: { example: { ok: true, currency: BYN, badges: [новинка, скидка, выбор pic pac], limits: { basePriceKop: [100, 1000000] }, products: [{ slug: digital, name: Цифровая печать, kind: print, badge: null, oldPriceKop: null, priceFromKop: 61, sizes: [{ code: 10x15, label: Обычное фото, priceK: 1, unitPriceKop: 61 }] }] } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/admin/catalog/{slug}:
+    patch:
+      tags: [Админ]
+      summary: Правка продукта (N9, только admin) — цены, коэффициенты размеров, плашка, старая цена
+      description: |
+        Цены — целые копейки: книга 1–10 000 BYN, надбавка за 2 страницы и отпечаток 0,01–1000 BYN; коэффициент размера 0,1–10 (только у книг).
+        Старая цена (products.old_price_kop) должна быть больше новой цены «от», иначе 400 old_price; null — убрать скидку.
+        Цену заказа клиента всегда пересчитывает сервер по каталогу. Запись в журнал admin.catalog_update { changes: { поле: { from, to } } }.
+      parameters: [{ name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9-]{2,40}$" } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                basePriceKop: { type: integer, minimum: 100, maximum: 1000000 }
+                per2PagesKop: { type: integer, minimum: 1, maximum: 100000 }
+                badge: { type: string, enum: [новинка, скидка, выбор pic pac], nullable: true }
+                oldPriceKop: { type: integer, minimum: 1, maximum: 10000000, nullable: true }
+                sizes: { type: array, maxItems: 30, items: { type: object, additionalProperties: false, required: [code], properties: { code: { type: string }, priceK: { type: number, minimum: 0.1, maximum: 10 }, unitPriceKop: { type: integer, minimum: 1, maximum: 100000 } } } }
+            example: { badge: скидка, oldPriceKop: 9000 }
+      responses:
+        "200": { description: Сохранено (changed — что изменилось), content: { application/json: { example: { ok: true, changed: [badge, oldPriceKop], product: { slug: pages-book, badge: скидка, oldPriceKop: 9000, priceFromKop: 7000 } } } } }
+        "400": { description: "Цена вне пределов, лишнее поле или старая цена не больше текущей (old_price)" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "429": { $ref: "#/components/responses/TooMany" }
   /api/v1/admin/orders/{id}/status:
     post:

@@ -1,10 +1,14 @@
-// Журнал действий (ОТ-04, SEC-15): фильтры и «Показать ещё», только для роли admin. Время — по Минску.
-// Форма фильтров работает без JS (method="get"). Почты в адресе нет: поиск по почте — отдельной формой (POST).
+// Журнал действий (ОТ-04, SEC-15, N9): только для роли admin. Время — по Минску. Журнал только читается.
+// N9: по умолчанию — действия людей за 7 дней; системные события, ERP (и симулятор) и автотесты скрыты
+// и включаются кнопками «Показать также». Одинаковые события подряд — одной строкой «×N» (раскрывается).
+// Быстрые фильтры, постраничный вывод курсором. Всё работает без JS (ссылки и форма method="get").
+// Почты в адресе нет: поиск по почте — отдельной формой (POST).
 import AuditEmailSearch from "@/components/admin/AuditEmailSearch";
 import AuditRow from "@/components/admin/AuditRow";
 import { ACTION_LABELS, OBJECT_LABELS, RESULT_LABELS } from "@/lib/auditLabels";
+import { AUDIT_PERIODS, AUDIT_QUICK } from "@/lib/auditView";
 import { ROLE_LABELS } from "@/lib/roles";
-import { auditFilters, filtersFromParams, queryAudit } from "@/lib/server/auditRead";
+import { auditFilters, filtersFromParams, queryAuditGroups } from "@/lib/server/auditRead";
 import { requirePageRole } from "@/lib/server/session";
 
 export const metadata = { title: "Журнал действий — PicPac" };
@@ -25,6 +29,9 @@ const GROUP_LABELS = {
   notify: "Уведомления",
   cron: "Расписание",
   admin: "Админ",
+  moderation: "Модерация",
+  erp: "ERP",
+  ai: "Облачный ИИ",
 };
 
 // Группы и действия из подписей журнала: <optgroup> «группа» → «все действия группы» + каждое действие
@@ -39,54 +46,111 @@ function actionGroups() {
 }
 
 const PAGE = 50;
+// Кнопка-фильтр (ссылка): выбранная — class active и aria-current (aria-pressed у ссылок не бывает)
+const chip = (on) => "filter-chip" + (on ? " active" : "");
+// Что можно показать дополнительно (по умолчанию скрыто)
+const SHOW = [
+  { key: "system", label: "Системные", short: "системные события", hint: "расписание и автоматические уведомления" },
+  { key: "erp", label: "ERP и симулятор", short: "ERP и симулятор", hint: "события производства, в том числе симулятора" },
+  { key: "tests", label: "Автотесты", short: "автотесты", hint: "служебные тестовые аккаунты (и уже удалённые аккаунты) и запросы с самого сервера" },
+];
+// Ключи состояния экрана (не фильтры журнала)
+const VIEW_KEYS = ["system", "erp", "tests", "page", "sent", "hideTests"];
 
 export default async function AuditPage({ searchParams }) {
   const auth = await requirePageRole(["admin"], "/admin/audit");
   const raw = filtersFromParams(await searchParams);
-  // «Скрыть автотесты» включено по умолчанию. Форма шлёт sent=1: без галочки в ней — значит, её сняли
-  const sent = raw.sent === "1";
-  const hideTests = sent ? raw.hideTests === "1" : raw.hideTests !== "0";
-  delete raw.sent;
-  delete raw.hideTests;
+  const view = {
+    system: raw.system === "1",
+    erp: raw.erp === "1",
+    // совместимость со старыми ссылками: hideTests=0 — показать автотесты
+    tests: raw.tests === "1" || raw.hideTests === "0",
+    page: Math.min(Math.max(Number.parseInt(raw.page, 10) || 1, 1), 10_000),
+  };
+  for (const k of VIEW_KEYS) delete raw[k];
+  delete raw.limit;
+  delete raw.group;
   const parsed = auditFilters.safeParse(raw);
   const f = parsed.success ? parsed.data : {};
-  if (hideTests) f.hideTests = "1";
-  const active = Object.keys(f).filter((k) => k !== "before" && k !== "limit" && k !== "hideTests");
+  if (!f.days && !f.from && !f.to) f.days = "7";
+  // Точные фильтры (форма) — для счётчика «включено»
+  const exact = ["action", "result", "role", "from", "to", "objectType", "objectId", "user"].filter((k) => f[k]);
 
-  let items = [];
+  let groups = [];
+  let rows = 0;
   let next = null;
   let failed = false;
   try {
-    ({ items, next } = await queryAudit(auth.supabase, { limit: PAGE, ...f }));
+    ({ groups, rows, next } = await queryAuditGroups(
+      auth.supabase,
+      { ...f, hideTests: view.tests ? undefined : "1", hideSystem: view.system ? undefined : "1", hideErp: view.erp ? undefined : "1" },
+      { pageSize: PAGE },
+    ));
   } catch (e) {
     console.error(e?.message);
     failed = true;
   }
 
-  // Ссылка «Показать ещё»: те же фильтры + курсор
-  const more = new URLSearchParams();
-  for (const k of active) more.set(k, String(f[k]));
-  more.set("hideTests", hideTests ? "1" : "0");
-  if (next) more.set("before", String(next));
-
-  const grid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: "0 12px" };
+  // Ссылка на экран с теми же фильтрами + изменения. Смена фильтра — снова первая страница.
+  const href = (patch = {}, { keepPage = false } = {}) => {
+    const state = { ...f, system: view.system ? "1" : undefined, erp: view.erp ? "1" : undefined, tests: view.tests ? "1" : undefined };
+    if (!keepPage) delete state.before;
+    Object.assign(state, patch);
+    if (state.days === "7" && !state.from && !state.to) delete state.days;
+    const p = new URLSearchParams();
+    for (const [k, v] of Object.entries(state)) if (v !== undefined && v !== null && v !== "") p.set(k, String(v));
+    const s = p.toString();
+    return "/admin/audit" + (s ? "?" + s : "");
+  };
+  const hidden = SHOW.filter((s) => !view[s.key]).map((s) => s.short);
 
   return (
     <div>
       <div className="row between wrap">
         <h1>Журнал действий</h1>
-        <a href="/admin/audit" className="btn btn-small">
+        <a href={href({}, { keepPage: false })} className="btn btn-small">
           Обновить
         </a>
       </div>
-      <p className="muted">Время — по Минску (UTC+3). Изменить или удалить запись нельзя — так устроена база.</p>
+      <p className="muted small">
+        Время — по Минску (UTC+3). Изменить или удалить запись нельзя — так устроена база; лишнее только скрыто на экране.
+        {hidden.length ? ` Сейчас скрыто: ${hidden.join(", ")}.` : " Показано всё."}
+      </p>
 
-      <details className="card" open>
+      <nav className="filters filters-scroll" aria-label="Быстрые фильтры журнала" data-testid="audit-quick">
+        <a className={chip(!f.quick)} href={href({ quick: undefined })} aria-current={!f.quick ? "true" : undefined}>
+          Все действия
+        </a>
+        {Object.entries(AUDIT_QUICK).map(([k, q]) => (
+          <a key={k} className={chip(f.quick === k)} href={href({ quick: k })} aria-current={f.quick === k ? "true" : undefined} title={q.hint} data-testid={`audit-quick-${k}`}>
+            {q.label}
+          </a>
+        ))}
+      </nav>
+      <div className="row wrap audit-view">
+        <nav className="filters filters-scroll" aria-label="Период">
+          {Object.entries(AUDIT_PERIODS).map(([d, label]) => (
+            <a key={d} className={chip(!f.from && !f.to && f.days === d)} href={href({ days: d, from: undefined, to: undefined })} aria-current={!f.from && !f.to && f.days === d ? "true" : undefined}>
+              {label}
+            </a>
+          ))}
+        </nav>
+        <nav className="filters filters-scroll" aria-label="Показать также">
+          <span className="muted small">Показать также:</span>
+          {SHOW.map((s) => (
+            <a key={s.key} className={chip(view[s.key])} href={href({ [s.key]: view[s.key] ? undefined : "1" })} aria-current={view[s.key] ? "true" : undefined} title={s.hint} data-testid={`audit-show-${s.key}`}>
+              {s.label}
+            </a>
+          ))}
+        </nav>
+      </div>
+
+      <details className="card" open={exact.length > 0}>
         <summary style={{ cursor: "pointer", minHeight: 44, display: "flex", alignItems: "center", fontWeight: 500 }}>
-          Фильтры{active.length ? ` · включено: ${active.length}` : ""}
+          Точные фильтры{exact.length ? ` · включено: ${exact.length}` : ""}
         </summary>
         <form method="get" action="/admin/audit" style={{ marginTop: 12 }}>
-          <div style={grid}>
+          <div className="audit-grid">
             <label className="field">
               <span>Действие</span>
               <select className="input" name="action" defaultValue={f.action || ""}>
@@ -153,17 +217,18 @@ export default async function AuditPage({ searchParams }) {
               <input className="input" name="user" maxLength={36} defaultValue={f.user || ""} autoComplete="off" spellCheck={false} />
             </label>
           </div>
-          <input type="hidden" name="sent" value="1" />
-          <label className="row small" style={{ gap: 8, minHeight: 44, marginBottom: 8 }}>
-            <input type="checkbox" name="hideTests" value="1" defaultChecked={hideTests} style={{ width: 20, height: 20 }} />
-            Скрыть записи автотестов (служебные тестовые аккаунты и запросы с самого сервера)
-          </label>
+          {/* состояние экрана сохраняется при поиске */}
+          {f.quick && <input type="hidden" name="quick" value={f.quick} />}
+          {!f.from && !f.to && f.days !== "7" && <input type="hidden" name="days" value={f.days} />}
+          {SHOW.filter((s) => view[s.key]).map((s) => (
+            <input key={s.key} type="hidden" name={s.key} value="1" />
+          ))}
           <div className="row wrap">
             <button className="btn btn-primary" type="submit">
               Найти
             </button>
             <a className="btn" href="/admin/audit">
-              Сбросить
+              Сбросить всё
             </a>
           </div>
         </form>
@@ -173,7 +238,7 @@ export default async function AuditPage({ searchParams }) {
 
       {!parsed.success && (
         <div className="card" role="alert">
-          <b className="err-text">Фильтр не распознан — показаны все записи.</b>
+          <b className="err-text">Фильтр не распознан — показаны записи без него.</b>
           <p className="muted small">{parsed.error.issues[0]?.message}</p>
         </div>
       )}
@@ -184,17 +249,30 @@ export default async function AuditPage({ searchParams }) {
         </div>
       )}
       {!failed && (
-        <p className="small" aria-live="polite">
-          {items.length ? `Показано записей: ${items.length}${next ? " (есть ещё)" : ""}` : active.length ? "По этим фильтрам записей нет." : "Записей пока нет."}
+        <p className="small" aria-live="polite" data-testid="audit-summary">
+          {groups.length
+            ? `Страница ${view.page}: строк ${groups.length}, записей ${rows}${groups.some((g) => g.count > 1) ? " (одинаковые подряд — одной строкой «×N»)" : ""}${next ? " · есть ещё" : ""}.`
+            : f.quick || exact.length
+              ? "По этим фильтрам записей нет."
+              : "За этот период действий людей нет. Включите «Показать также» или выберите период длиннее."}
         </p>
       )}
-      {items.map((item) => (
-        <AuditRow key={item.id} item={item} />
+      {groups.map((g) => (
+        <AuditRow key={g.items[0].id} item={g.items[0]} group={g.count > 1 ? g.items : null} />
       ))}
-      {next && (
-        <a className="btn" href={`/admin/audit?${more.toString()}`}>
-          Показать ещё
-        </a>
+      {(next || view.page > 1) && (
+        <nav className="row wrap audit-pager" aria-label="Страницы журнала">
+          {view.page > 1 && (
+            <a className="btn" href={href({ before: undefined, page: undefined })}>
+              ← В начало
+            </a>
+          )}
+          {next && (
+            <a className="btn btn-primary" href={href({ before: String(next), page: String(view.page + 1) }, { keepPage: true })} data-testid="audit-next">
+              Следующая страница →
+            </a>
+          )}
+        </nav>
       )}
     </div>
   );

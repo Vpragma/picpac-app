@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { fmtDuration } from "@/lib/analyticsCore";
 import { requirePageRole } from "@/lib/server/session";
-import { loadStats, parseStatsQuery } from "@/lib/server/stats";
+import { loadStats, parseStatsQuery, PERIODS } from "@/lib/server/stats";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Статистика — PicPac" };
@@ -22,7 +22,7 @@ function Formula({ children }) {
   );
 }
 
-function Tile({ label, value, sub, formula, warn }) {
+function Tile({ label, value, sub, formula, warn, href, hrefLabel }) {
   return (
     <div className={"stat-tile" + (warn ? " warn" : "")}>
       <div className="row between" style={{ alignItems: "flex-start" }}>
@@ -31,9 +31,17 @@ function Tile({ label, value, sub, formula, warn }) {
       </div>
       <b>{value}</b>
       {sub && <span className="muted small">{sub}</span>}
+      {href && (
+        <Link className="small" href={href}>
+          {hrefLabel || "Открыть список"}
+        </Link>
+      )}
     </div>
   );
 }
+
+// N9: период — сутки, 7, 30 или 90 дней
+const PERIOD_LABELS = { 1: "Сутки", 7: "7 дней", 30: "30 дней", 90: "90 дней" };
 
 export default async function StatsPage({ searchParams }) {
   await requirePageRole(["admin"], "/admin/stats");
@@ -56,16 +64,18 @@ export default async function StatsPage({ searchParams }) {
         <h1 style={{ margin: 0 }}>Статистика</h1>
         {s && <span className={"chip" + (s.label === "демо-данные" ? " chip-hl" : " chip-ok")}>{s.label}</span>}
       </div>
-      <nav className="row wrap stat-filters" aria-label="Период и источник">
-        {[7, 30].map((d) => (
-          <Link key={d} href={link({ days: d })} className={"btn btn-small" + (q.days === d ? " btn-primary" : "")} aria-current={q.days === d ? "true" : undefined}>
-            {d} дней
+      <nav className="filters filters-scroll stat-filters" aria-label="Период">
+        {PERIODS.map((d) => (
+          <Link key={d} href={link({ days: d })} className={"filter-chip" + (q.days === d ? " active" : "")} aria-current={q.days === d ? "true" : undefined}>
+            {PERIOD_LABELS[d] || `${d} дней`}
           </Link>
         ))}
-        <Link href={link({ source: "all" })} className={"btn btn-small" + (q.source === "all" ? " btn-primary" : "")} aria-current={q.source === "all" ? "true" : undefined}>
-          Все данные
+      </nav>
+      <nav className="filters filters-scroll" aria-label="Источник данных">
+        <Link href={link({ source: "all" })} className={"filter-chip" + (q.source === "all" ? " active" : "")} aria-current={q.source === "all" ? "true" : undefined}>
+          Все данные (с синтетикой)
         </Link>
-        <Link href={link({ source: "real" })} className={"btn btn-small" + (q.source === "real" ? " btn-primary" : "")} aria-current={q.source === "real" ? "true" : undefined}>
+        <Link href={link({ source: "real" })} className={"filter-chip" + (q.source === "real" ? " active" : "")} aria-current={q.source === "real" ? "true" : undefined}>
           Только реальные
         </Link>
       </nav>
@@ -76,14 +86,14 @@ export default async function StatsPage({ searchParams }) {
             {s.label === "демо-данные"
               ? `В расчёте есть демо-данные: синтетических событий ${num(s.synthetic.events)}, синтетических заказов ${num(s.synthetic.orders)}. «Только реальные» — без них (заказы и события из приложения остаются).`
               : "Только реальные данные: синтетические строки исключены."}{" "}
-            Период — последние {s.days} дней, время по Минску.
+            Период — {s.days === 1 ? "последние сутки" : `последние ${s.days} дней`}, время по Минску.
           </p>
 
           <section className="stat-tiles" aria-label="Коротко">
             <Tile label="Заказы сегодня" value={num(s.tiles.ordersToday)} formula="Заказы, созданные с 00:00 сегодняшнего дня по Минску." />
             <Tile label="В работе" value={num(s.tiles.inWork)} formula="Заказы в статусах «Принят», «Модерация» и «Производство» сейчас." />
-            <Tile label="Просрочено" value={num(s.tiles.overdue)} warn={s.tiles.overdue > 0} formula="Заказы не в статусах «Готов / передан в доставку» и «Завершён», у которых крайний срок готовности уже прошёл." />
-            <Tile label="На модерации" value={num(s.tiles.onModeration)} formula="Заказы в статусе «Модерация» сейчас." />
+            <Tile label="Просрочено" value={num(s.tiles.overdue)} warn={s.tiles.overdue > 0} formula="Заказы не в статусах «Готов / передан в доставку» и «Завершён», у которых крайний срок готовности уже прошёл." href={`/admin/orders?overdue=1&sort=eta${q.source === "real" ? "&source=real" : ""}`} />
+            <Tile label="На модерации" value={num(s.tiles.onModeration)} formula="Заказы в статусе «Модерация» сейчас." href={`/admin/orders?moderation=1${q.source === "real" ? "&source=real" : ""}`} />
             <Tile label="Обращения без ответа" value={num(s.tiles.unanswered)} sub={s.tiles.unansweredOverdue ? `${num(s.tiles.unansweredOverdue)} — срок ответа прошёл` : "все в срок"} warn={s.tiles.unansweredOverdue > 0} formula="Обращения в статусе «Ждёт ответа». «После SLA» — срок ответа уже прошёл." />
             <Tile label={`Выручка (тест) за ${s.days} дн.`} value={byn(s.tiles.revenueKop)} formula={`Сумма «Итого» заказов с тестовой оплатой, оплаченных за последние ${s.days} дней (по дате оплаты). Деньги не списывались. Оплаченных заказов: ${num(s.tiles.paidPeriod)}, всего заказов за период: ${num(s.tiles.ordersPeriod)}.`} />
           </section>
@@ -120,6 +130,49 @@ export default async function StatsPage({ searchParams }) {
                 </li>
               ))}
             </ol>
+          </section>
+
+          <section className="card" data-testid="stats-promo">
+            <div className="row between">
+              <h2 style={{ margin: 0 }}>Промокоды</h2>
+              <Formula>По заказам, созданным за период: заказы с промокодом ÷ все заказы × 100%. Скидка — сумма скидок по этим заказам. Самые частые коды — по числу заказов.</Formula>
+            </div>
+            {!s.promo ? (
+              <p className="muted small">Не получилось посчитать промокоды — обновите страницу через минуту.</p>
+            ) : (
+              <>
+                <div className="stat-tiles">
+                  <Tile label="Заказов с промокодом" value={num(s.promo.withCode)} sub={`из ${num(s.promo.orders)} · ${p(s.promo.sharePct)}`} formula="Заказы за период, в которых применён промокод." />
+                  <Tile label="Скидка по промокодам" value={byn(s.promo.discountKop)} formula="Сумма скидок (discount) заказов с промокодом за период." />
+                </div>
+                {s.promo.top.length ? (
+                  <table className="stat-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">Код</th>
+                        <th scope="col" className="num">
+                          Заказов
+                        </th>
+                        <th scope="col" className="num">
+                          Скидка
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {s.promo.top.map((c) => (
+                        <tr key={c.code}>
+                          <th scope="row">{c.code}</th>
+                          <td className="num">{num(c.orders)}</td>
+                          <td className="num">{byn(c.discountKop)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <p className="muted small">За период промокоды не применяли.</p>
+                )}
+              </>
+            )}
           </section>
 
           <section className="card">

@@ -1,4 +1,4 @@
-// GET /api/v1/admin/stats?days=7|30&source=all|real — сводка дашборда. Только для роли admin.
+// GET /api/v1/admin/stats?days=1|7|30|90&source=all|real — сводка дашборда (N9: + промокоды promo). Только для роли admin.
 // Права проверяются дважды: в proxy.js и здесь. Без входа — 401, без роли admin — 403.
 import { json, jsonError } from "@/lib/server/http";
 import { requireApiRole } from "@/lib/server/session";
