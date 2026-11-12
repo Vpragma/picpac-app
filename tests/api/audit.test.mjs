@@ -63,15 +63,16 @@ test("журнал: объект и дата по Минску (02:30 по Ми�
 });
 
 test("журнал: «Показать ещё» — курсор без пропусков и повторов", async () => {
-  const all = await get("limit=6");
   const p1 = await get("limit=3");
   assert.ok(p1.json.next, "есть следующая страница");
+  assert.equal(p1.json.next, p1.json.items.at(-1).id, "курсор — последняя показанная запись");
   const p2 = await get(`limit=3&before=${p1.json.next}`);
   const ids = [...p1.json.items, ...p2.json.items].map((i) => i.id);
   assert.equal(new Set(ids).size, ids.length, "без повторов");
-  // Записи могли добавиться между запросами — сравниваем только хвост, который уже был
-  const tail = all.json.items.map((i) => i.id).filter((id) => id <= p1.json.items[0].id);
-  assert.deepEqual(ids.slice(0, tail.length), tail);
+  // База общая и журнал пополняется во время теста: новые записи получают id больше верхнего в p1,
+  // поэтому эталон — одна страница из 6 записей, начиная с той же верхней записи
+  const all = await get(`limit=6&before=${p1.json.items[0].id + 1}`);
+  assert.deepEqual(ids, all.json.items.map((i) => i.id), "без пропусков");
 });
 
 test("журнал: почта — только телом POST; в адресе почта и лишние параметры → 400", async () => {
