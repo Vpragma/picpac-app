@@ -10,7 +10,6 @@ import { callApi } from "../../../lib/api";
 import { getMe } from "../../../lib/me";
 import { notify } from "../../../lib/store";
 import { StatusChip, Timeline, byn, minskDay, minskTime } from "../../../components/OrderBits";
-import { formatEtaRange } from "../../../lib/pricing";
 import { IconChat } from "../../../components/icons";
 
 const POLL_MS = 10000;
@@ -102,15 +101,15 @@ export default function OrderPage() {
         <StatusChip status={o.status} />
       </div>
       <p className="muted small">
-        Оформлен {minskTime(o.createdAt, true)} по Минску
-        {o.eta?.from ? ` · доставим ориентировочно ${/^\d{4}-\d{2}-\d{2}$/.test(o.eta.from) && /^\d{4}-\d{2}-\d{2}$/.test(o.eta.to || o.eta.from) ? formatEtaRange(o.eta.from, o.eta.to || o.eta.from) : minskDay(o.eta.from)}` : ""}
+        Оформлен {minskTime(o.createdAt, true)} · доставим ориентировочно {minskDay(o.eta?.from)}
+        {o.eta?.to && o.eta.to !== o.eta.from ? `–${minskDay(o.eta.to)}` : ""}
       </p>
 
       <section className="card">
         <h3>Статус</h3>
         <Timeline order={o} />
         <p className="muted small" style={{ margin: "4px 0 0" }}>
-          Время — по Минску.
+          Время в заказе — по Минску.
         </p>
         {o.isDemo && o.status !== "done" && <p className="muted small">Демо-заказ: статусы присылает симулятор производства (события ERP), шаг ≈ 30 секунд после оплаты.</p>}
       </section>
