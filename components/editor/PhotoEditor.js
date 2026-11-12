@@ -25,6 +25,8 @@ import { UPSCALE_MAX_SIDE, stopUpscale, upscaleBlob, upscaleKey } from "../../li
 import { setAutoEnhance, useAutoEnhance } from "../../lib/photo/settings";
 import { notify } from "../../lib/store";
 import { track } from "@/lib/analytics";
+import CloudConsent from "./CloudConsent";
+import { cloudAsk, cloudFind, cloudRetry } from "./cloudEditor";
 
 const PREVIEW_SIDE = 1280;
 const MIN_PREVIEW_SIDE = 640; // очень маленькие фото (48×32) показываем крупно — по ним можно попасть пальцем
@@ -160,6 +162,7 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
   const aiRef = useRef(AI_OFF);
   const segN = useRef(0);
   const [up, setUp] = useState(null); // «Резкость для печати»: { photoId, status: run|error, p, say }
+  const [consentAsk, setConsentAsk] = useState(null); // D6: карточка согласия на облачный ИИ
   const [pendingErase, setPendingErase] = useState(null); // { photoId, opId } — «Убрать», нажатое в этом сеансе
   const aiOk = aiSupport().ok; // выделение касанием на этом устройстве возможно (иначе — честные ответы)
 
@@ -191,6 +194,7 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
   }
 
   function choose(id) {
+    setConsentAsk(null);
     if (live && live.id === photo.id) commit(live.edits); // ползунок двигали, но не отпустили — не теряем
     // Другое фото — результат кодировщика больше не нужен: освобождаем память воркера выделения
     if (id !== photo.id) stopAi();
@@ -390,10 +394,24 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
     setAnswer({ ok: true, say: on ? "Улучшение вернули" : "Улучшение отменили — фото как было" });
   }
 
-  function run(text) {
+  // D6: облачный ИИ (components/editor/cloudEditor.js) берёт отсюда свежие функции редактора
+  function cloudCtx() {
+    if (!photo) return null;
+    const getFrame = async () => toSide(await ensureErased(photo.id, await loadSource(photo.id, thumbs[photo.id]), splitOps(saved.ops).erase), 768);
+    return { photoId: photo.id, readOnly, run, setAnswer, setConsentAsk, startSelect, aiRef, setAi, getFrame };
+  }
+  // Контекст на момент команды; после ответа облака cloudEditor.js сверяет фото и состояние выделения (aiRef)
+  const getCloud = () => cloudCtx();
+
+  // pre — уже разобранная команда (ответ облачного ИИ в тех же шагах, что у словаря)
+  function run(text, pre) {
     if (readOnly) return;
-    const r = parseCommand(text, { last });
-    if (!r.ok) return setAnswer({ ok: false, say: r.say });
+    const r = pre || parseCommand(text, { last });
+    if (!r.ok) {
+      setAnswer({ ok: false, say: r.say });
+      if (!pre && String(text || "").trim()) cloudAsk(text, r, getCloud); // D6: словарь не понял — облачный ИИ или подсказка
+      return;
+    }
     track("ai_edit", { props: { kind: "command" } });
     let next = saved;
     const said = [];
@@ -424,8 +442,9 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
           continue;
         }
         if (act === "erase" && !hasMask && step.target !== "selection") {
-          startSelect("erase");
-          said.push(`Сам найти «${step.target}» пока не умею. Коснитесь того, что убрать, — я выделю, затем нажмите «Убрать»`);
+          // D6: найти предмет по слову в облаке (рамка → SlimSAM по рамке → маска); без облака — просьба коснуться
+          cloudFind(step.en || step.target, "erase", getCloud);
+          said.push(`Ищу «${step.target}» на фото…`);
           continue;
         }
         const res = maskStep(act, next);
@@ -566,6 +585,7 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
             {answer?.say || ""}
           </p>
         </form>
+        <CloudConsent ask={consentAsk} onAllow={() => cloudRetry(consentAsk, getCloud)} onClose={() => setConsentAsk(null)} />
 
         <div className="pe-sliders">
           {ADJUST_KEYS.map((k) => {
