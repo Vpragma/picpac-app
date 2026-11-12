@@ -82,10 +82,10 @@ export default async function StatsPage({ searchParams }) {
           <section className="stat-tiles" aria-label="Коротко">
             <Tile label="Заказы сегодня" value={num(s.tiles.ordersToday)} formula="Заказы, созданные с 00:00 сегодняшнего дня по Минску." />
             <Tile label="В работе" value={num(s.tiles.inWork)} formula="Заказы в статусах «Принят», «Модерация» и «Производство» сейчас." />
-            <Tile label="Просрочено" value={num(s.tiles.overdue)} warn={s.tiles.overdue > 0} formula="Заказы не в статусах «Готов / передан в доставку» и «Завершён», у которых крайний срок готовности (eta_to) уже прошёл." />
+            <Tile label="Просрочено" value={num(s.tiles.overdue)} warn={s.tiles.overdue > 0} formula="Заказы не в статусах «Готов / передан в доставку» и «Завершён», у которых крайний срок готовности уже прошёл." />
             <Tile label="На модерации" value={num(s.tiles.onModeration)} formula="Заказы в статусе «Модерация» сейчас." />
-            <Tile label="Обращения без ответа" value={num(s.tiles.unanswered)} sub={s.tiles.unansweredOverdue ? `${num(s.tiles.unansweredOverdue)} — срок ответа прошёл` : "все в срок"} warn={s.tiles.unansweredOverdue > 0} formula="Обращения в статусе «Ждёт ответа». «После SLA» — срок ответа (sla_due) уже прошёл." />
-            <Tile label={`Выручка (тест) за ${s.days} дн.`} value={byn(s.tiles.revenueKop)} formula={`Сумма «Итого» заказов с тестовой оплатой, оплаченных за последние ${s.days} дней (по paid_at). Деньги не списывались. Оплаченных заказов: ${num(s.tiles.paidPeriod)}, всего заказов за период: ${num(s.tiles.ordersPeriod)}.`} />
+            <Tile label="Обращения без ответа" value={num(s.tiles.unanswered)} sub={s.tiles.unansweredOverdue ? `${num(s.tiles.unansweredOverdue)} — срок ответа прошёл` : "все в срок"} warn={s.tiles.unansweredOverdue > 0} formula="Обращения в статусе «Ждёт ответа». «После SLA» — срок ответа уже прошёл." />
+            <Tile label={`Выручка (тест) за ${s.days} дн.`} value={byn(s.tiles.revenueKop)} formula={`Сумма «Итого» заказов с тестовой оплатой, оплаченных за последние ${s.days} дней (по дате оплаты). Деньги не списывались. Оплаченных заказов: ${num(s.tiles.paidPeriod)}, всего заказов за период: ${num(s.tiles.ordersPeriod)}.`} />
           </section>
 
           <section className="card">
