@@ -10,6 +10,10 @@ import { advanceDemoOrders } from "@/lib/server/orderFlow";
 import { getOwnOrder, loadOrderFull, ORDER_FIELDS, shapeOrder } from "@/lib/server/orders";
 import { loadCart } from "@/lib/server/projects";
 import { trackServer } from "@/lib/server/analytics";
+import { checkProjectsBeforeOrder } from "@/lib/server/moderationCheck";
+
+// Перед созданием заказа сервер сам проверяет фото моделями модерации (N4): до 45 с на непроверенные фото
+export const maxDuration = 120;
 
 const text = (max, msg) => z.string().trim().max(max, msg);
 const schema = z.strictObject({
@@ -155,6 +159,14 @@ export async function POST(request) {
     line_total_kop: i.lineTotalKop,
     snapshot: { photoCount: i.photoCount, productName: i.product.name, kind: i.product.kind, printDays: i.product.printDays },
   }));
+
+  // N4: оценки с устройства клиент может подделать — перед заказом сервер сам проверяет файлы, которые пойдут
+  // в печать. Снимок заказа (create_order) берёт уже итоговый флаг «проверит модератор».
+  try {
+    await checkProjectsBeforeOrder(ctx, [...new Set(cart.items.map((i) => i.projectId))]);
+  } catch (e) {
+    console.error("Проверка фото перед заказом:", e?.message);
+  }
 
   const { data: rows, error } = await ctx.admin.rpc("create_order", { _user: ctx.userId, _key: key, _order: orderRow, _items: items });
   if (error?.message === "cart_changed") {

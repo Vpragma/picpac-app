@@ -1,13 +1,12 @@
 // DELETE /api/v1/projects/{id}/photos/{photoId} — удалить фото из проекта и файл из хранилища.
-// PATCH { nsfw } — оценки проверки на устройстве (nsfwjs) для уже загруженного фото: сервер пересчитывает флаг модерации.
+// PATCH { nsfw } — оценки проверки на устройстве (N4 v 2 или старые nsfwjs) для уже загруженного фото, например
+// досланные после загрузки. Флаг модерации только ставится: снять его оценками с устройства нельзя (флаг сервера
+// или прежний флаг остаются — решает модератор).
 import { badId, BUCKET, limitWrite, notFound, parseBody, requireUser, serverError, z } from "@/lib/server/api";
 import { json, jsonError, sameOrigin } from "@/lib/server/http";
-import { getOwnProject, needsModeration, PHOTO_FIELDS, shapePhoto } from "@/lib/server/projects";
+import { deviceScoresSchema, getOwnProject, needsModeration, PHOTO_FIELDS, shapePhoto } from "@/lib/server/projects";
 
-const score = z.number().min(0).max(1);
-const patchSchema = z.strictObject({
-  nsfw: z.strictObject({ porn: score, hentai: score, sexy: score, neutral: score.optional(), drawing: score.optional() }),
-});
+const patchSchema = z.strictObject({ nsfw: deviceScoresSchema });
 
 export async function PATCH(request, { params }) {
   const { id, photoId } = await params;
@@ -24,7 +23,7 @@ export async function PATCH(request, { params }) {
   const flag = needsModeration(body.nsfw);
   const { data, error } = await ctx.admin
     .from("project_photos")
-    .update({ nsfw: body.nsfw, moderation_flag: flag })
+    .update({ nsfw: body.nsfw, ...(flag ? { moderation_flag: true } : {}) })
     .eq("id", photoId)
     .eq("project_id", id)
     .eq("user_id", ctx.userId)
@@ -32,7 +31,7 @@ export async function PATCH(request, { params }) {
     .maybeSingle();
   if (error) return serverError();
   if (!data) return notFound("Фото");
-  await ctx.audit("photo.nsfw", "photo", photoId, "success", { project: id, moderation_flag: flag });
+  await ctx.audit("photo.nsfw", "photo", photoId, "success", { project: id, moderation_flag: data.moderation_flag });
   return json({ ok: true, photo: shapePhoto(data) });
 }
 

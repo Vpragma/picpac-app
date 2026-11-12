@@ -29,6 +29,16 @@ const nextConfig = {
     // Страницы 401 и 403 (app/unauthorized.js, app/forbidden.js) для отказа в доступе
     authInterrupts: true,
   },
+  // Модерация на сервере (N4, lib/server/moderationEngine.js): onnxruntime-web в Node (wasm, без нативных библиотек)
+  // подключается как обычный пакет; в функции, которые проверяют фото, кладутся его .wasm и загрузчик и модели
+  // public/models/moderation (≈ 112 МБ; функция ≈ 150 МБ при лимите Vercel 250 МБ) — сеть для моделей не нужна.
+  serverExternalPackages: ["onnxruntime-web"],
+  outputFileTracingIncludes: Object.fromEntries(
+    ["/api/v1/orders", "/api/v1/projects/*/photos", "/api/v1/projects/*/photos/*/print", "/api/v1/moderation/health"].map((route) => [
+      route,
+      ["./node_modules/onnxruntime-web/dist/ort.node.min.mjs", "./node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.{mjs,wasm}", "./public/models/moderation/*.{onnx,json}"],
+    ]),
+  ),
   // Защитные заголовки для всех страниц
   async headers() {
     return [

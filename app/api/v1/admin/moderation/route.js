@@ -1,17 +1,83 @@
-// GET /api/v1/admin/moderation — очередь модерации (модератор и админ): фото с флагом цензуры из заказов на «Модерации».
-// Фото — по подписанной ссылке на 10 минут. Данные клиента замаскированы (SEC-14): модератор видит только инициалы,
-// без адреса. В журнал — moderation.view со списком записей.
+// GET /api/v1/admin/moderation — очередь модерации (модератор и админ): фото с флагом из заказов на «Модерации».
+//   Вывод модели — словами (N4): «Найдено: обнажённая грудь (высокая уверенность)», без процентов и сырых оценок.
+//   Фото — по подписанной ссылке на 10 минут. Данные клиента замаскированы (SEC-14): только инициалы, без адреса.
+//   stats — сколько ждёт, среднее время проверки за 7 дней, решений за сутки. В журнал — moderation.view.
+// GET ?view=history — последние 30 решений: решение модели и модератора, причина, время. Без фото и без данных клиента.
 import { requireUser, serverError } from "@/lib/server/api";
 import { json } from "@/lib/server/http";
 import { maskClient } from "@/lib/mask";
+import { describeFinding, RETURN_REASONS, reviewFindings } from "@/lib/moderation";
+
+const words = (r) => {
+  const f = reviewFindings({ verdict: r.project_photos?.moderation, device: r.project_photos?.nsfw ?? r.auto_scores });
+  return { source: f.source, findings: f.list.map((x) => ({ id: x.id, level: x.level, text: describeFinding(x) })) };
+};
+
+async function stats(ctx) {
+  const weekAgo = new Date(Date.now() - 7 * 86400_000).toISOString();
+  const dayAgo = Date.now() - 86400_000;
+  const [{ count }, { data: done }] = await Promise.all([
+    ctx.admin
+      .from("moderation_reviews")
+      .select("id, orders!inner(id)", { count: "exact", head: true })
+      .eq("decision", "pending")
+      .eq("orders.status", "moderation")
+      .eq("orders.is_synthetic", false),
+    ctx.admin
+      .from("moderation_reviews")
+      .select("created_at, decided_at, orders!inner(is_synthetic)")
+      .neq("decision", "pending")
+      .eq("orders.is_synthetic", false)
+      .gte("decided_at", weekAgo)
+      .order("decided_at", { ascending: false })
+      .limit(500),
+  ]);
+  const mins = (done || []).filter((r) => r.decided_at && r.created_at).map((r) => (new Date(r.decided_at) - new Date(r.created_at)) / 60000);
+  return {
+    pending: count || 0,
+    avgMinutes: mins.length ? Math.round((mins.reduce((a, b) => a + b, 0) / mins.length) * 10) / 10 : null,
+    decided7d: mins.length,
+    decided24h: (done || []).filter((r) => new Date(r.decided_at).getTime() >= dayAgo).length,
+  };
+}
+
+async function history(ctx) {
+  const { data, error } = await ctx.admin
+    .from("moderation_reviews")
+    .select("id, photo_index, auto_scores, decision, reason, comment, moderator_id, created_at, decided_at, project_photos(moderation, nsfw), orders!inner(number, is_synthetic)")
+    .neq("decision", "pending")
+    .eq("orders.is_synthetic", false)
+    .not("decided_at", "is", null)
+    .order("decided_at", { ascending: false })
+    .limit(30);
+  if (error) throw new Error(error.message);
+  return data.map((r) => ({
+    id: r.id,
+    orderNumber: r.orders.number,
+    photoIndex: r.photo_index,
+    decision: r.decision,
+    reason: r.reason || null,
+    reasonText: r.reason ? RETURN_REASONS[r.reason] || r.reason : null,
+    comment: r.comment || null,
+    byMe: r.moderator_id === ctx.userId,
+    createdAt: r.created_at,
+    decidedAt: r.decided_at,
+    minutes: Math.max(0, Math.round((new Date(r.decided_at) - new Date(r.created_at)) / 60000)),
+    ...words(r),
+  }));
+}
 
 export async function GET(request) {
   const { ctx, response } = await requireUser(request, ["moderator", "admin"]);
   if (response) return response;
   try {
+    if (new URL(request.url).searchParams.get("view") === "history") {
+      const [items, st] = await Promise.all([history(ctx), stats(ctx)]);
+      return json({ ok: true, items, stats: st });
+    }
     const { data, error } = await ctx.admin
       .from("moderation_reviews")
-      .select("id, order_id, photo_path, photo_index, auto_scores, created_at, orders!inner(id, number, status, is_synthetic, recipient, created_at)")
+      .select("id, order_id, photo_path, photo_index, auto_scores, created_at, project_photos(moderation, nsfw), orders!inner(id, number, status, is_synthetic, recipient, created_at)")
       .eq("decision", "pending")
       .eq("orders.status", "moderation")
       .eq("orders.is_synthetic", false)
@@ -31,12 +97,13 @@ export async function GET(request) {
       orderNumber: r.orders.number,
       photoIndex: r.photo_index,
       url: urls[r.photo_path] || null,
-      scores: r.auto_scores ? { porn: r.auto_scores.porn, hentai: r.auto_scores.hentai, sexy: r.auto_scores.sexy } : null,
+      ...words(r),
       client: maskClient(r.orders, "moderator"),
       createdAt: r.created_at,
     }));
+    const st = await stats(ctx);
     if (items.length) await ctx.audit("moderation.view", "order", null, "success", { reviews: items.map((i) => i.id).slice(0, 50) });
-    return json({ ok: true, items });
+    return json({ ok: true, items, stats: st });
   } catch (e) {
     console.error(e?.message);
     return serverError();
