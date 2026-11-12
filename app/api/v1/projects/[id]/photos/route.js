@@ -7,7 +7,7 @@ import { after } from "next/server";
 import { sniffImage, tooManyPixels } from "@/lib/imageMeta";
 import { badId, BUCKET, limitWrite, MAX_PHOTO_BYTES, notFound, parseBody, requireUser, serverError, z } from "@/lib/server/api";
 import { json, jsonError } from "@/lib/server/http";
-import { deviceScoresSchema, getOwnProject, needsModeration, PHOTO_FIELDS, shapePhoto } from "@/lib/server/projects";
+import { deviceScoresSchema, getOwnProject, needsModeration, PHOTO_FIELDS, photoEditsForServer, shapePhoto } from "@/lib/server/projects";
 import { checkPhotoById } from "@/lib/server/moderationCheck";
 
 // Фоновая проверка фото на сервере (модели загружаются один раз на экземпляр) — после ответа клиенту
@@ -107,7 +107,7 @@ export async function POST(request, { params }) {
       width: meta.width,
       height: meta.height,
       position: (last?.position ?? -1) + 1,
-      edits: body.edits || {},
+      edits: photoEditsForServer(body.edits),
       quality: body.quality || {},
       nsfw: body.nsfw || null,
       moderation_flag: flag,

@@ -3,7 +3,7 @@
 import { limitWrite, parseBody, requireUser, serverError, z } from "@/lib/server/api";
 import { findProduct, loadCatalog, normalizeOptions } from "@/lib/server/catalog";
 import { json, jsonError } from "@/lib/server/http";
-import { optionsSchema, PROJECT_FIELDS, shapeProject } from "@/lib/server/projects";
+import { optionsSchema, PROJECT_FIELDS, shapeProject, withoutLocalEdits } from "@/lib/server/projects";
 
 const createSchema = z.strictObject({
   productSlug: z.string().regex(/^[a-z0-9-]{2,40}$/, "Выберите продукт из каталога."),
@@ -38,7 +38,7 @@ export async function POST(request) {
   const catalog = await loadCatalog();
   const product = findProduct(catalog, body.productSlug);
   if (!product) return jsonError(400, "invalid_input", "Такого продукта нет в каталоге.", { fields: { productSlug: "Выберите продукт из каталога." } });
-  const { options, error } = normalizeOptions(product, body.options || {});
+  const { options, error } = normalizeOptions(product, withoutLocalEdits(body.options || {}));
   if (error) return jsonError(400, "invalid_input", error, { fields: { options: error } });
 
   const { count } = await ctx.db.from("projects").select("id", { count: "exact", head: true }).eq("user_id", ctx.userId);

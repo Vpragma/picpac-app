@@ -4,7 +4,7 @@
 import { badId, limitWrite, notFound, parseBody, requireUser, serverError, z } from "@/lib/server/api";
 import { findProduct, loadCatalog, normalizeOptions } from "@/lib/server/catalog";
 import { json, jsonError, sameOrigin } from "@/lib/server/http";
-import { getOwnProject, listPhotos, optionsSchema, PROJECT_FIELDS, removeFiles, shapeProject } from "@/lib/server/projects";
+import { getOwnProject, listPhotos, optionsSchema, PROJECT_FIELDS, removeFiles, shapeProject, withoutLocalEdits } from "@/lib/server/projects";
 
 const patchSchema = z.strictObject({
   version: z.number({ error: "Нужна версия проекта: обновите страницу." }).int().min(1),
@@ -53,7 +53,7 @@ export async function PATCH(request, { params }) {
   if (body.status !== undefined) patch.status = body.status;
   if (body.options !== undefined) {
     const product = findProduct(await loadCatalog(), current.product_slug);
-    const { options, error } = normalizeOptions(product, { ...current.options, ...body.options });
+    const { options, error } = normalizeOptions(product, { ...current.options, ...withoutLocalEdits(body.options) });
     if (error) return jsonError(400, "invalid_input", error, { fields: { options: error } });
     patch.options = options;
   }
