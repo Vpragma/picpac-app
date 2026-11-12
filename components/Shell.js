@@ -8,6 +8,7 @@ import { SUPPORT } from "../lib/support";
 import { cartCount, useCart } from "../lib/cart";
 import { startSync } from "../lib/sync";
 import { syncLargeTextFromCookie } from "../lib/textSize";
+import { syncThemeFromCookie } from "../lib/theme";
 import Pwa from "./Pwa";
 import NotificationBell from "./NotificationBell";
 
@@ -64,6 +65,7 @@ export default function Shell({ children, logo, phoneQr = null }) {
   useEffect(() => {
     startSync();
     syncLargeTextFromCookie();
+    syncThemeFromCookie();
   }, []);
   // Старая версия хранила «вход» в localStorage — убираем остатки, вход теперь только на сервере
   useEffect(() => {
