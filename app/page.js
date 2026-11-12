@@ -7,6 +7,10 @@ import ProductPhoto from "@/components/ProductPhoto";
 import Onboarding from "@/components/Onboarding";
 import { AiBlock, HomeHero, HowItWorks, Trust } from "@/components/home/HomeSections";
 import { PRODUCT_PHOTOS } from "@/lib/productPhotos";
+import { seasonForRequest } from "@/lib/server/season";
+import SeasonBanner from "@/components/season/SeasonBanner";
+import SeasonPromo from "@/components/season/SeasonPromo";
+import { seasonPhotos } from "@/components/season/seasonPhotos";
 
 // Обложки карточек — фото продуктов, собранные на сервере (getImageProps + <picture>): JS главной не растёт.
 // Все лениво: приоритет на главной — у первого фото коллажа (LCP).
@@ -25,9 +29,13 @@ export default async function HomePage() {
   const covers = Object.fromEntries(
     Object.entries(PRODUCT_PHOTOS).map(([slug, photos]) => [slug, <ProductPhoto key={slug} photo={photos[0]} alt="" sizes={COVER_SIZES} />]),
   );
+  // Сезон (N2): промо-плашка над первым экраном, баннер — после него (LCP первого экрана не меняется)
+  const season = await seasonForRequest();
   return (
     <>
+      <SeasonPromo initial={season} />
       <HomeHero />
+      <SeasonBanner initial={season} photos={seasonPhotos()} />
       <HowItWorks />
       <CatalogView initial={catalog} covers={covers} />
       <AiBlock />

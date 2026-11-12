@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { copyProject, deleteProject, openProject, useDraft } from "../../lib/draft";
 import DraftError from "../../components/DraftError";
 import { EmptyState } from "../../components/LineArt";
+import { SkeletonList } from "../../components/Skeleton";
 import { useCatalog } from "../../lib/useCatalog";
 import { notify } from "../../lib/store";
 import { isClient, useMe } from "../../lib/me";
@@ -21,7 +22,7 @@ export default function BooksPage() {
   const me = useMe();
   const sync = useSyncState();
   if (error) return <DraftError />;
-  if (!ready) return <p className="muted">Загружаем…</p>;
+  if (!ready) return <SkeletonList rows={2} label="Загружаем…" />;
   const list = Object.values(projects).sort((a, b) => b.updatedAt - a.updatedAt);
   const active = list.filter((p) => p.status !== "ordered");
   const ordered = list.filter((p) => p.status === "ordered");

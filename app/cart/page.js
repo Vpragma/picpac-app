@@ -630,11 +630,27 @@ function PayLogos({ kind }) {
   );
 }
 
+// N2: отметка успеха — «впрыгивает», искры разлетаются (app/motion.css; при reduced-motion — без движения)
+function OrderDoneMark() {
+  return (
+    <span className="order-done-mark" aria-hidden="true">
+      <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="28" cy="34" r="20" />
+        <path d="M19 34.5l6.5 6.5L38 28" />
+        <path className="spark" d="M54 8 C54.6 11.4 55.6 12.4 59 13 C55.6 13.6 54.6 14.6 54 18 C53.4 14.6 52.4 13.6 49 13 C52.4 12.4 53.4 11.4 54 8 Z" strokeWidth="1.6" />
+        <path className="spark" d="M58 30 V36 M55 33 H61" strokeWidth="1.6" />
+        <path className="spark" d="M8 10 C8.4 12 9 12.6 11 13 C9 13.4 8.4 14 8 16 C7.6 14 7 13.4 5 13 C7 12.6 7.6 12 8 10 Z" strokeWidth="1.6" />
+      </svg>
+    </span>
+  );
+}
+
 function OrderDone({ order }) {
   const from = order.eta?.from ? minskDate(new Date(order.eta.from)) : null;
   const to = order.eta?.to ? minskDate(new Date(order.eta.to)) : null;
   return (
-    <div className="card stack" role="status">
+    <div className="card stack order-done" role="status">
+      <OrderDoneMark />
       <h1>Заказ оформлен</h1>
       <p style={{ fontSize: "1.375rem", fontWeight: 500, color: "var(--ds-color-text-strong)" }}>№ {order.number}</p>
       {from && to && <p>Доставим ориентировочно {formatEtaRange(from, to)}.</p>}

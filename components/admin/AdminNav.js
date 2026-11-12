@@ -11,6 +11,7 @@ const LINKS = [
   { href: "/admin/audit", label: "Журнал действий", admin: true },
   { href: "/admin/reminders", label: "Напоминания", admin: true },
   { href: "/admin/push", label: "Демо пушей", admin: true },
+  { href: "/admin/season", label: "Сезон", admin: true },
 ];
 
 export default function AdminNav({ isAdmin }) {
