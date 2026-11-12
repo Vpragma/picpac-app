@@ -1,6 +1,6 @@
 # PicPac App — мобильное приложение PicPac (хакатон, трек 2)
 
-PWA для заказа фотокниг и печати фото в стиле super.picpac.by и админка для сотрудников: клиент работает с телефона, модератор и администратор — с компьютера. Все данные тестовые и синтетические.
+PWA для заказа фотокниг и печати фото в фирменном стиле PicPac (брендбук 2025, super.picpac.by) и админка для сотрудников: клиент работает с телефона, модератор и администратор — с компьютера. Все данные тестовые и синтетические.
 
 ## 1. Задача и ценность
 
@@ -46,6 +46,8 @@ PWA для заказа фотокниг и печати фото в стиле 
 ## 6. Стек
 
 Next.js 16 и React 19 (JavaScript), Supabase (Postgres, RLS, Auth, Storage), `zod`, `@dnd-kit`, свой Service Worker (PWA, офлайн, пуши), `web-push`; ИИ в Web Worker — `@huggingface/transformers`, `@huggingface/tokenizers`, `onnxruntime-web`, `upscaler`, `@tensorflow/tfjs`, `nsfwjs`; pg_cron; тесты — Playwright, `node:test`, axe-core. Хостинг — Vercel. Шрифт Jost, стиль super.picpac.by.
+
+**Оформление (N1):** фирменный стиль PicPac — шрифт Jost с нашего домена, токены в `app/picpac.css`, компоненты в `app/brand.css` ([docs/design-system.md](docs/design-system.md)); светлая тема по умолчанию у всех, тёмная и «как в системе» — в профиле.
 
 ## 7. Запуск за 15 минут
 
@@ -98,6 +100,7 @@ REST `/api/v1/…`, JSON, ошибки в едином формате. Опис�
 ## 14. Документы
 
 - [docs/features.md](docs/features.md) — все функции по разделам
+- [docs/design-system.md](docs/design-system.md) — дизайн-система: токены, темы, классы компонентов
 - [docs/architecture.md](docs/architecture.md) — схемы, потоки данных, модель данных, роли
 - [docs/api/](docs/api/) — OpenAPI и готовые запросы
 - [docs/security.md](docs/security.md) — безопасность

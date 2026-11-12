@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { callApi } from "../lib/api";
 import { minskTime } from "./OrderBits";
+import { EmptyState } from "./LineArt";
 
 export default function NotificationCenter({ limit = 50, compact = false }) {
   const [res, setRes] = useState(null);
@@ -63,7 +64,11 @@ export default function NotificationCenter({ limit = 50, compact = false }) {
           </button>
         )}
       </div>
-      {!items.length && <p className="muted">Пока тихо. Здесь появятся новости о ваших заказах: принят, передан в доставку, завершён и ответы поддержки.</p>}
+      {!items.length && (
+        <EmptyState art="bell" title="Пока тихо" headingLevel={2}>
+          Здесь появятся новости о ваших заказах: принят, передан в доставку, завершён — и ответы поддержки.
+        </EmptyState>
+      )}
       {items.slice(0, compact ? 5 : items.length).map((n) => (
         <Link
           key={n.id}

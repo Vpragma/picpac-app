@@ -35,6 +35,7 @@ import { callApi } from "../../lib/api";
 import { useSyncState, whenInitialSync } from "../../lib/sync";
 import { useOnline } from "../../components/Pwa";
 import DraftError from "../../components/DraftError";
+import { EmptyState } from "../../components/LineArt";
 import { IconAlert, IconCheck, IconLeft, IconRight, IconTrash, IconUpload } from "../../components/icons";
 import { photoBadges } from "../../lib/photo/badges";
 import ModerationNotice, { flaggedCount } from "../../components/ModerationNotice";
@@ -158,18 +159,22 @@ export default function EditorPage() {
   if (!ready || (draft && loading)) return <p className="muted">Открываем черновик…</p>;
   if (!draft || !product)
     return (
-      <div className="card">
-        <h2>Черновика пока нет</h2>
-        <p className="muted">Выберите фотокнигу или печать фото в каталоге — и начнём. Все проекты — в «Мои книги».</p>
-        <div className="row wrap">
-          <Link href="/" className="btn btn-primary">
-            В каталог
-          </Link>
-          <Link href="/books" className="btn">
-            Мои книги
-          </Link>
-        </div>
-      </div>
+      <EmptyState
+        art="photos"
+        title="Черновика пока нет"
+        actions={
+          <>
+            <Link href="/" className="btn btn-primary">
+              В каталог
+            </Link>
+            <Link href="/books" className="btn">
+              Мои книги
+            </Link>
+          </>
+        }
+      >
+        Выберите фотокнигу или печать фото в каталоге — и начнём. Все проекты — в «Мои книги».
+      </EmptyState>
     );
 
   const isBook = product.kind === "book";
@@ -364,7 +369,7 @@ function DupUndoBar({ handle, onClose }) {
       className="card row"
       role="status"
       aria-live="polite"
-      style={{ position: "fixed", left: 16, right: 16, bottom: "calc(96px + env(safe-area-inset-bottom))", maxWidth: 480, margin: "0 auto", zIndex: 70, gap: 12, alignItems: "center", justifyContent: "space-between", boxShadow: "0 8px 24px rgba(0, 0, 0, 0.18)" }}
+      style={{ position: "fixed", left: 16, right: 16, bottom: "calc(96px + env(safe-area-inset-bottom))", maxWidth: 480, margin: "0 auto", zIndex: 70, gap: 12, alignItems: "center", justifyContent: "space-between", boxShadow: "var(--ds-shadow-popover)" }}
     >
       <span>Удалено дублей: {handle.count}</span>
       <button
@@ -510,7 +515,7 @@ function PhotosStep({ draft, thumbs, product, uploads, readOnly, lowDpi, dups, o
       )}
       {!readOnly && (
         <p className="muted small" style={{ marginTop: 8 }}>
-          Кнопки ‹ и › — раньше / позже в книге. На компьютере фото можно перетащить за значок ⠿ мышью или клавиатурой (Tab, пробел, стрелки). Черновик сохраняется на этом устройстве автоматически.
+          Кнопки ‹ и › — раньше / позже {product.kind === "book" ? "в книге" : "в заказе"}. На компьютере фото можно перетащить за значок ⠿ мышью или клавиатурой (Tab, пробел, стрелки). Черновик сохраняется на этом устройстве автоматически.
         </p>
       )}
     </div>
@@ -986,7 +991,7 @@ function CheckStep({ draft, thumbs, product, price, goPhotos, goSharpen, readOnl
             <IconCheck />
             <b>Всё хорошо — можно заказывать.</b>
           </div>
-          <p className="muted small">Пустых страниц нет, формат и резкость в порядке.</p>
+          <p className="muted small">{product.kind === "book" ? "Пустых страниц нет, формат и резкость в порядке." : "Формат и резкость в порядке."}</p>
         </div>
       ) : (
         <p className="muted">

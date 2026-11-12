@@ -9,6 +9,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { IconImage, IconTrash } from "../../components/icons";
+import { EmptyState } from "../../components/LineArt";
 import { clearAfterOrder, moveLocalToServer, removeLine, retryMove, setLineQuantity, useCart } from "../../lib/cart";
 import { FIELD_LABELS, PICKUP_POINTS, formatPhone, needsDate, validateCheckout } from "../../lib/checkout";
 import { kvDel, kvGet, kvSet, markOrdered, useDraft } from "../../lib/draft";
@@ -120,13 +121,18 @@ export default function CartPage() {
 
   if (!lines.length)
     return (
-      <div className="card">
-        <h1>Корзина пуста</h1>
-        <p className="muted">Соберите фотокнигу или закажите печать фото — это займёт пару минут.</p>
-        <Link href="/" className="btn btn-primary">
-          В каталог
-        </Link>
-      </div>
+      <EmptyState
+        art="cart"
+        title="Корзина пуста"
+        headingLevel={1}
+        actions={
+          <Link href="/" className="btn btn-primary">
+            В каталог
+          </Link>
+        }
+      >
+        Соберите фотокнигу из любимых кадров или закажите печать фото — это займёт пару минут.
+      </EmptyState>
     );
 
   // Расчёт: товары → скидка промокода → доставка (бесплатно от порога после скидки) → итого
@@ -636,7 +642,7 @@ function OrderDone({ order }) {
         Итого {byn(order.totalKop)} ·{" "}
         {order.paid ? `оплачено: ${order.paymentMethod === "erip_test" ? "ЕРИП (тест)" : "Карта (тест)"}` : "оплата не прошла — повторите в заказе"}. Деньги не списываются.
       </p>
-      <p className="muted small">Статус заказа — «{order.statusLabel || "Принят"}». Книга теперь в «Мои книги» → «Заказанные».</p>
+      <p className="muted small">Статус заказа — «{order.statusLabel || "Принят"}». Проект теперь в «Мои книги» → «Заказанные».</p>
       <Link href={"/orders/" + order.id} className="btn btn-primary btn-block">
         Открыть заказ
       </Link>

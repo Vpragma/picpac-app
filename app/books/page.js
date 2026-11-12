@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { copyProject, deleteProject, openProject, useDraft } from "../../lib/draft";
 import DraftError from "../../components/DraftError";
+import { EmptyState } from "../../components/LineArt";
 import { useCatalog } from "../../lib/useCatalog";
 import { notify } from "../../lib/store";
 import { isClient, useMe } from "../../lib/me";
@@ -40,13 +41,17 @@ export default function BooksPage() {
           Загружаем проекты из аккаунта…
         </p>
       ) : active.length === 0 ? (
-        <div className="card">
-          <p>Черновиков пока нет.</p>
-          <p className="muted">Соберите книгу — история семьи, путешествие или просто тёплые дни.</p>
-          <Link href="/" className="btn btn-primary">
-            В каталог
-          </Link>
-        </div>
+        <EmptyState
+          art="book"
+          title="Черновиков пока нет"
+          actions={
+            <Link href="/" className="btn btn-primary">
+              В каталог
+            </Link>
+          }
+        >
+          Соберите книгу — история семьи, путешествие или просто тёплые дни. Черновик сохранится сам.
+        </EmptyState>
       ) : (
         active.map((p) => <ProjectCard key={p.id} p={p} product={productOf(p)} thumbs={thumbs} />)
       )}
@@ -91,7 +96,9 @@ function ProjectCard({ p, product, thumbs }) {
     <div className="card">
       <div className="row between">
         <b style={{ color: "var(--ds-color-text-strong)" }}>{name}</b>
-        <span className={"chip" + st.chip}>{st.label}</span>
+        <span className="chip status-chip" data-status={STATUS[p.status] ? p.status : "draft"}>
+          {st.label}
+        </span>
       </div>
       <div className="muted small">
         {p.sizeId?.replace("x", "×")} см{p.pages ? ` · ${p.pages} стр.` : ""} · {p.photos.length} фото · {p.status === "ordered" && p.orderNumber ? `заказ ${p.orderNumber}` : `изменён ${when}`}

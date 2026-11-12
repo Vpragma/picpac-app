@@ -50,7 +50,7 @@ export default function SupportChat({ id }) {
     <div>
       <div className="row between wrap" style={{ marginTop: 8 }}>
         <h1 style={{ margin: 0, fontSize: "1.4rem" }}>{it.topic}</h1>
-        <span className="chip" data-testid="interaction-status">
+        <span className="chip status-chip" data-status={it.status} data-testid="interaction-status">
           {STATUS[it.status] || it.status}
         </span>
       </div>

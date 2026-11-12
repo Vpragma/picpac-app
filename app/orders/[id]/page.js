@@ -265,7 +265,7 @@ function Support({ order: o, onCreated }) {
         <div key={it.id} className="stack" style={{ borderTop: "1px solid var(--ds-color-border, #ddd)", paddingTop: 8, marginTop: 8 }} data-testid="interaction">
           <div className="row between">
             <b>{it.topic}</b>
-            <span className="chip">{it.status === "open" ? "Ждёт ответа" : it.status === "answered" ? "Есть ответ" : "Закрыто"}</span>
+            <span className="chip status-chip" data-status={it.status}>{it.status === "open" ? "Ждёт ответа" : it.status === "answered" ? "Есть ответ" : "Закрыто"}</span>
           </div>
           <div className="muted small">
             {minskTime(it.createdAt)} · ответим до {minskTime(it.slaDue)} (по Минску)

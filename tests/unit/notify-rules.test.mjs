@@ -72,3 +72,11 @@ test("N10: тестовый аккаунт — e2e-…, critic-…, night2-… (
   for (const e of ["client@example.com", "admin@example.com", "moderator@example.com", "synthetic-001@example.com", "anna.e2e-@mail.by", "", null, undefined])
     assert.equal(isTestEmail(e), false, String(e));
 });
+
+test("N7: напоминание о печати фото — не «книга»", () => {
+  const t = cartReminderText({ title: "", productName: "Печать фото", productSlug: "photo" });
+  assert.doesNotMatch(t.inbox.title + t.inbox.body + t.push.body, /[Кк]ниг/);
+  assert.match(t.inbox.title, /Фото ждут в корзине/);
+  const b = cartReminderText({ title: "Свадьба", productName: "Classic", productSlug: "layflat" });
+  assert.match(b.inbox.title, /Книга ждёт в корзине/);
+});

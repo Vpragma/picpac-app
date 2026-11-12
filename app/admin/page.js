@@ -21,40 +21,103 @@ export default async function AdminPage() {
     db.from("orders").select("id, number, status, total_kop, payment_status, is_demo, created_at").order("created_at", { ascending: false }).limit(30),
     db.from("interactions").select("id, topic, kind, status, sla_due, created_at, orders(number)").order("created_at", { ascending: false }).limit(30),
   ]);
+  const orderRows = orders.data || [];
+  const itRows = interactions.data || [];
+  const count = (list, f) => list.filter(f).length;
+  // Плитки — по тем же последним 30 заказам и обращениям (полная статистика — «Статистика»)
+  const tiles = [
+    { label: "Ждут модерации", value: count(orderRows, (o) => o.status === "moderation") },
+    { label: "В производстве", value: count(orderRows, (o) => o.status === "production") },
+    { label: "Обращения без ответа", value: count(itRows, (i) => i.status === "open"), warn: true },
+    { label: "Оплачено (тест)", value: count(orderRows, (o) => o.payment_status === "paid_test") },
+  ];
   return (
     <div>
       <h1>Обзор</h1>
       <p className="muted small">Последние 30 заказов и обращений из базы.{isAdmin ? " Откройте заказ, чтобы сменить статус, или обращение, чтобы ответить клиенту." : ""}</p>
-      <section className="card">
-        <h3>Обращения</h3>
-        {!interactions.data?.length && <p className="muted">Обращений пока нет.</p>}
-        {(interactions.data || []).map((i) => (
-          <div key={i.id} className="sum-line" style={{ gap: 12 }}>
-            <span>
-              <b>{i.orders?.number}</b> · {isAdmin ? <Link href={`/admin/support/${i.id}`}>{i.topic}</Link> : i.topic}
-              {i.kind === "reprint" ? " · перепечатка" : ""}
-              <span className="muted small"> · {time(i.created_at)}, ответить до {time(i.sla_due)}</span>
-            </span>
-            <span className="chip">{IT_STATUS[i.status] || i.status}</span>
+      <div className="stat-tiles" data-testid="overview-tiles">
+        {tiles.map((t) => (
+          <div key={t.label} className={"stat-tile" + (t.warn && t.value > 0 ? " warn" : "")}>
+            <span className="muted small">{t.label}</span>
+            <b>{t.value}</b>
           </div>
         ))}
+      </div>
+      <section className="card" aria-labelledby="it-title">
+        <h2 id="it-title" className="admin-h">Обращения</h2>
+        {!itRows.length ? (
+          <p className="muted">Обращений пока нет.</p>
+        ) : (
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th scope="col">Заказ</th>
+                  <th scope="col">Тема</th>
+                  <th scope="col">Создано</th>
+                  <th scope="col">Ответить до</th>
+                  <th scope="col">Статус</th>
+                </tr>
+              </thead>
+              <tbody>
+                {itRows.map((i) => (
+                  <tr key={i.id}>
+                    <td>
+                      <b>{i.orders?.number}</b>
+                    </td>
+                    <td>
+                      {isAdmin ? <Link href={`/admin/support/${i.id}`}>{i.topic}</Link> : i.topic}
+                      {i.kind === "reprint" ? " · перепечатка" : ""}
+                    </td>
+                    <td className="num">{time(i.created_at)}</td>
+                    <td className="num">{time(i.sla_due)}</td>
+                    <td>
+                      <span className="chip status-chip" data-status={i.status}>
+                        {IT_STATUS[i.status] || i.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
-      <section className="card">
-        <h3>Заказы</h3>
-        {!orders.data?.length && <p className="muted">Заказов пока нет.</p>}
-        {(orders.data || []).map((o) => (
-          <div key={o.id} className="sum-line" style={{ gap: 12 }}>
-            <span>
-              <b>{isAdmin ? <Link href={`/admin/orders/${o.id}`}>{o.number}</Link> : o.number}</b> · {byn(o.total_kop)}
-              <span className="muted small">
-                {" "}
-                · {time(o.created_at)} · {o.payment_status === "paid_test" ? "оплачен (тест)" : "не оплачен"}
-                {o.is_demo ? " · демо" : ""}
-              </span>
-            </span>
-            <StatusChip status={o.status} />
+      <section className="card" aria-labelledby="orders-title">
+        <h2 id="orders-title" className="admin-h">Заказы</h2>
+        {!orderRows.length ? (
+          <p className="muted">Заказов пока нет.</p>
+        ) : (
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th scope="col">№</th>
+                  <th scope="col" className="num">Сумма</th>
+                  <th scope="col">Создан</th>
+                  <th scope="col">Оплата</th>
+                  <th scope="col">Статус</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orderRows.map((o) => (
+                  <tr key={o.id}>
+                    <td>
+                      <b>{isAdmin ? <Link href={`/admin/orders/${o.id}`}>{o.number}</Link> : o.number}</b>
+                      {o.is_demo ? <span className="muted small"> · демо</span> : null}
+                    </td>
+                    <td className="num">{byn(o.total_kop)}</td>
+                    <td className="num">{time(o.created_at)}</td>
+                    <td>{o.payment_status === "paid_test" ? "оплачен (тест)" : "не оплачен"}</td>
+                    <td>
+                      <StatusChip status={o.status} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        ))}
+        )}
       </section>
     </div>
   );

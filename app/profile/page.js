@@ -5,6 +5,8 @@ import Notifications from "@/components/Notifications";
 import PushToggle from "@/components/PushToggle";
 import AutoEnhanceSetting from "@/components/AutoEnhanceSetting";
 import TextSizeSetting from "@/components/TextSizeSetting";
+import ThemeSetting from "@/components/ThemeSetting";
+import { THEME_COOKIE, parseTheme } from "@/lib/themeShared";
 import { cookies } from "next/headers";
 import { SUPPORT } from "@/lib/support";
 import { InstallCard } from "@/components/Pwa";
@@ -16,7 +18,9 @@ export const metadata = { title: "Профиль — PicPac" };
 
 export default async function ProfilePage() {
   const auth = await getAuth();
-  const largeText = (await cookies()).get("pp_text")?.value === "lg";
+  const jar = await cookies();
+  const largeText = jar.get("pp_text")?.value === "lg";
+  const theme = parseTheme(jar.get(THEME_COOKIE)?.value);
   let profile = null;
   let mfa = null;
   if (auth.user) {
@@ -32,7 +36,7 @@ export default async function ProfilePage() {
   }
 
   return (
-    <div>
+    <div className="narrow">
       <h1>Профиль</h1>
       {auth.user ? (
         <AccountPanel
@@ -61,6 +65,7 @@ export default async function ProfilePage() {
         </div>
       )}
       {auth.user && <Notifications />}
+      <ThemeSetting initial={theme} />
       <TextSizeSetting initial={largeText} />
       {auth.user && <PushToggle />}
       <AutoEnhanceSetting />

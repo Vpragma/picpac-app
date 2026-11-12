@@ -11,14 +11,6 @@ export const STATUS_LABELS = {
 };
 export const STATUSES = Object.keys(STATUS_LABELS);
 
-const CHIP = {
-  accepted: "#CFDDE7",
-  moderation: "#E0DCE8",
-  production: "#EDE1D5",
-  shipped: "#C4DAD6",
-  done: "#DEDFDC",
-};
-
 // Суммы заказа — как в корзине: «96,35 BYN»
 export const byn = (kop) => ((kop || 0) / 100).toFixed(2).replace(".", ",") + " BYN";
 
@@ -51,10 +43,10 @@ export function minskDayRange(fromIso, toIso) {
   return m1 === m2 ? `${d1}–${d2} ${m2}` : `${from} – ${to}`;
 }
 
-// Плашка статуса — пастельные заливки из брендбука
+// Плашка статуса — пастельные заливки брендбука (токены --ds-color-status-*, класс .status-chip в app/brand.css)
 export function StatusChip({ status }) {
   return (
-    <span className="chip" style={{ background: CHIP[status], color: "#364C49" }} data-status={status}>
+    <span className="chip status-chip" data-status={status}>
       {STATUS_LABELS[status] || status}
     </span>
   );
