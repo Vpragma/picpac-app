@@ -3,7 +3,7 @@ import { plural } from "../../lib/plural";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { DndContext, KeyboardSensor, MouseSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, rectSortingStrategy, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable";
 import {
@@ -17,6 +17,7 @@ import {
   loadGallery,
   movePhoto,
   removePhoto,
+  removePhotosUndoable,
   reorderPhoto,
   replacePhoto,
   retryUpload,
@@ -123,6 +124,19 @@ export default function EditorPage() {
   useAnalysis(draft);
   const lowDpi = useLowDpi(draft, product);
   const dups = useMemo(() => findDuplicates(draft?.photos || []), [draft?.photos]);
+  // Дубли: «Удалить дубли» на плашке и «Удалить дубль» на «Проверке» → тост «Удалено дублей: N» с «Вернуть»
+  const [dupUndo, setDupUndo] = useState(null);
+  const dupUndoRef = useRef(null);
+  const closeDupUndo = useCallback(() => {
+    dupUndoRef.current = null;
+    setDupUndo(null);
+  }, []);
+  const removeDups = useCallback((ids) => {
+    dupUndoRef.current?.commit(); // прошлое удаление дублей — окончательно
+    const h = removePhotosUndoable(ids);
+    dupUndoRef.current = h;
+    setDupUndo(h);
+  }, []);
   const link = useProjectLink();
 
   if (error) return <DraftError />;
@@ -212,7 +226,9 @@ export default function EditorPage() {
           </button>
         ))}
       </nav>
-      {step === "photos" && <PhotosStep draft={draft} thumbs={thumbs} product={product} uploads={uploads} readOnly={ordered} lowDpi={lowDpi} dups={dups} />}
+      {step === "photos" && (
+        <PhotosStep draft={draft} thumbs={thumbs} product={product} uploads={uploads} readOnly={ordered} lowDpi={lowDpi} dups={dups} onRemoveDups={ordered ? null : removeDups} />
+      )}
       {step === "layout" && <LayoutStep draft={draft} thumbs={thumbs} product={product} />}
       {step === "edits" && (
         <PhotoEditor key={editPhoto || "edits"} draft={draft} thumbs={thumbs} readOnly={ordered} lowDpiIds={lowDpi} dupIds={dups} initialPhotoId={editPhoto} extra={(photo) => <PlacementCard photo={photo} thumb={thumbs[photo.id]} readOnly={ordered} />} />
@@ -229,8 +245,11 @@ export default function EditorPage() {
             setStep("edits");
           }}
           readOnly={ordered}
+          dups={dups}
+          onRemoveDups={ordered ? null : removeDups}
         />
       )}
+      <DupUndoBar handle={dupUndo} onClose={closeDupUndo} />
 
       <div className="sticky-bar">
         <div>
@@ -302,7 +321,67 @@ function useAdder() {
 
 const UPLOAD_TEXT = { wait: "ждёт очереди", work: "готовим…", error: "не получилось" };
 
-function PhotosStep({ draft, thumbs, product, uploads, readOnly, lowDpi, dups }) {
+// Дубли: как только найдены — плашка «Найдено дублей: N. Удалить?». Удаляются только повторные копии, первое фото
+// остаётся. «Оставить» прячет плашку (значок «Дубль» остаётся) до появления новых дублей.
+function DupBanner({ dups, onRemove }) {
+  const key = [...(dups || [])].sort().join();
+  const [kept, setKept] = useState("");
+  if (!onRemove || !dups?.size || kept === key) return null;
+  return (
+    <div className="card issue warn" role="status" aria-live="polite" style={{ marginBottom: 12 }}>
+      <b>Найдено дублей: {dups.size}. Удалить?</b>
+      <p className="muted small" style={{ margin: "4px 0 10px" }}>
+        Удалим только повторные копии — первое фото останется.
+      </p>
+      <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+        <button type="button" className="btn btn-primary" onClick={() => onRemove([...dups])}>
+          Удалить дубли
+        </button>
+        <button type="button" className="btn" onClick={() => setKept(key)}>
+          Оставить
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Тост после удаления дублей: «Вернуть» — отмена; через 8 с (или при уходе из редактора) файлы стираются окончательно
+function DupUndoBar({ handle, onClose }) {
+  useEffect(() => {
+    if (!handle) return;
+    const t = setTimeout(() => {
+      handle.commit();
+      onClose();
+    }, 8000);
+    return () => {
+      clearTimeout(t);
+      handle.commit();
+    };
+  }, [handle, onClose]);
+  if (!handle) return null;
+  return (
+    <div
+      className="card row"
+      role="status"
+      aria-live="polite"
+      style={{ position: "fixed", left: 16, right: 16, bottom: "calc(96px + env(safe-area-inset-bottom))", maxWidth: 480, margin: "0 auto", zIndex: 70, gap: 12, alignItems: "center", justifyContent: "space-between", boxShadow: "0 8px 24px rgba(0, 0, 0, 0.18)" }}
+    >
+      <span>Удалено дублей: {handle.count}</span>
+      <button
+        type="button"
+        className="btn"
+        onClick={() => {
+          handle.undo();
+          onClose();
+        }}
+      >
+        Вернуть
+      </button>
+    </div>
+  );
+}
+
+function PhotosStep({ draft, thumbs, product, uploads, readOnly, lowDpi, dups, onRemoveDups }) {
   const inputRef = useRef(null);
   const [busy, add, progress, missing] = useAdder();
   const [over, setOver] = useState(false);
@@ -348,6 +427,7 @@ function PhotosStep({ draft, thumbs, product, uploads, readOnly, lowDpi, dups })
   const n = draft.photos.length;
   return (
     <div>
+      <DupBanner dups={dups} onRemove={readOnly ? null : onRemoveDups} />
       {!readOnly && (
         <div className={"dropzone" + (over ? " over" : "")}>
           <IconUpload size={32} />
@@ -790,8 +870,9 @@ function PlacementCard({ photo, thumb, readOnly }) {
 }
 
 /* ---------- Шаг 3: проверка ---------- */
-function CheckStep({ draft, thumbs, product, price, goPhotos, goSharpen, readOnly }) {
+function CheckStep({ draft, thumbs, product, price, goPhotos, goSharpen, readOnly, dups, onRemoveDups }) {
   const router = useRouter();
+  const dupPhotos = (draft.photos || []).filter((p) => dups?.has(p.id));
   const { issues } = useMemo(() => runChecks(draft, product), [draft, product]);
   const replaceRef = useRef(null);
   const [replaceId, setReplaceId] = useState(null);
@@ -886,6 +967,19 @@ function CheckStep({ draft, thumbs, product, price, goPhotos, goSharpen, readOnl
     <div>
       <ModerationNotice count={flaggedCount(draft.photos)} />
       <ModerationDemoButton draft={draft} />
+      {!readOnly &&
+        onRemoveDups &&
+        dupPhotos.map((p) => (
+          <div key={"dup:" + p.id} className="card issue warn">
+            <b>Похоже на дубль</b>
+            <p className="muted small" style={{ margin: "4px 0 10px" }}>
+              «{p.name}» повторяет фото, которое уже есть в проекте. Удалим только эту копию.
+            </p>
+            <button type="button" className="btn" onClick={() => onRemoveDups([p.id])} aria-label={`Удалить дубль «${p.name}»`}>
+              Удалить дубль
+            </button>
+          </div>
+        ))}
       {issues.length === 0 ? (
         <div className="card issue ok">
           <div className="row">
