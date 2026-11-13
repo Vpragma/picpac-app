@@ -6,6 +6,7 @@ import { json } from "@/lib/server/http";
 import { findDelivery, findProduct, loadCatalog } from "@/lib/server/catalog";
 import { advanceDemoOrders } from "@/lib/server/orderFlow";
 import { getOwnOrder, loadOrderFull } from "@/lib/server/orders";
+import { cardsByOrder } from "@/lib/server/promo";
 import { RETURN_REASONS } from "@/lib/moderation";
 
 const THUMBS_PER_ITEM = 8;
@@ -24,6 +25,8 @@ export async function GET(request, { params }) {
       if (await advanceDemoOrders(ctx, [order])) order = await getOwnOrder(ctx, order.id);
     }
     const full = await loadOrderFull(ctx, order);
+    // Открытка с личным кодом на следующий заказ (N8)
+    full.card = (await cardsByOrder(ctx.userId, [full.id], ctx.admin).catch(() => ({})))[full.id] || null;
     if (full.status === "moderation") full.moderation = await moderationState(ctx, full.id);
     await addThumbs(ctx, full);
     await addLabels(full);

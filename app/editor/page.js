@@ -3,9 +3,8 @@ import { plural } from "../../lib/plural";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { DndContext, KeyboardSensor, MouseSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
-import { SortableContext, rectSortingStrategy, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import PhotoCell, { cellProps } from "../../components/editor/PhotoCell";
 import {
   addFiles,
   addGalleryFiles,
@@ -15,10 +14,7 @@ import {
   openProject,
   whenDraftReady,
   loadGallery,
-  movePhoto,
-  removePhoto,
   removePhotosUndoable,
-  reorderPhoto,
   replacePhoto,
   retryUpload,
   setPhotoPlacement,
@@ -35,12 +31,26 @@ import { callApi } from "../../lib/api";
 import { useSyncState, whenInitialSync } from "../../lib/sync";
 import { useOnline } from "../../components/Pwa";
 import DraftError from "../../components/DraftError";
-import { IconAlert, IconCheck, IconLeft, IconRight, IconTrash, IconUpload } from "../../components/icons";
+import { EmptyState } from "../../components/LineArt";
+import { IconAlert, IconCheck, IconLeft, IconRight, IconUpload } from "../../components/icons";
 import { photoBadges } from "../../lib/photo/badges";
 import ModerationNotice, { flaggedCount } from "../../components/ModerationNotice";
 import ModerationDemoButton from "../../components/ModerationDemoButton";
 import { ANALYSIS_VERSION, findDuplicates } from "../../lib/photo/analyze";
 import { useStepTimer } from "@/lib/analytics";
+import ChunkBoundary from "../../components/editor/ChunkBoundary";
+import { warmEditorChunks } from "../../lib/editorWarm";
+
+// N5: перетаскивание фото (@dnd-kit, ≈ 27 КБ сжатого JS) — отдельный кусок, грузится, только когда в черновике есть фото.
+// Пока он грузится, та же сетка без перетаскивания (кнопки «раньше / позже» работают) — подмена без сдвига вёрстки.
+const SortablePhotos = lazy(() => import("../../components/editor/SortablePhotos"));
+
+// N11: превью книги и выбор оформления (шаг «Автомакет») — отдельный кусок кода, грузится только при открытии шага
+const BookView = dynamic(() => import("../../components/editor/BookView"), {
+  ssr: false,
+  loading: () => <p className="muted">Открываем книгу…</p>,
+});
+const BookDesign = dynamic(() => import("../../components/editor/BookView").then((m) => m.BookDesign), { ssr: false });
 
 // ИИ-редактор (шаг «Правки») — отдельный кусок кода, грузится только при открытии шага
 const PhotoEditor = dynamic(() => import("../../components/editor/PhotoEditor"), {
@@ -122,6 +132,7 @@ export default function EditorPage() {
   const step = chosenStep || (STEPS.some((s) => s.id === urlStep && s.id !== "status") ? urlStep : "photos");
   useStepTimer(step);
   useAnalysis(draft);
+  useEffect(() => warmEditorChunks(), []); // N7: куски «Правок» и перетаскивания — на устройство, пока есть сеть
   const lowDpi = useLowDpi(draft, product);
   const dups = useMemo(() => findDuplicates(draft?.photos || []), [draft?.photos]);
   // Дубли: «Удалить дубли» на плашке и «Удалить дубль» на «Проверке» → тост «Удалено дублей: N» с «Вернуть»
@@ -158,18 +169,22 @@ export default function EditorPage() {
   if (!ready || (draft && loading)) return <p className="muted">Открываем черновик…</p>;
   if (!draft || !product)
     return (
-      <div className="card">
-        <h2>Черновика пока нет</h2>
-        <p className="muted">Выберите фотокнигу или печать фото в каталоге — и начнём. Все проекты — в «Мои книги».</p>
-        <div className="row wrap">
-          <Link href="/" className="btn btn-primary">
-            В каталог
-          </Link>
-          <Link href="/books" className="btn">
-            Мои книги
-          </Link>
-        </div>
-      </div>
+      <EmptyState
+        art="photos"
+        title="Черновика пока нет"
+        actions={
+          <>
+            <Link href="/" className="btn btn-primary">
+              В каталог
+            </Link>
+            <Link href="/books" className="btn">
+              Мои книги
+            </Link>
+          </>
+        }
+      >
+        Выберите фотокнигу или печать фото в каталоге — и начнём. Все проекты — в «Мои книги».
+      </EmptyState>
     );
 
   const isBook = product.kind === "book";
@@ -231,7 +246,9 @@ export default function EditorPage() {
       )}
       {step === "layout" && <LayoutStep draft={draft} thumbs={thumbs} product={product} />}
       {step === "edits" && (
-        <PhotoEditor key={editPhoto || "edits"} draft={draft} thumbs={thumbs} readOnly={ordered} lowDpiIds={lowDpi} dupIds={dups} initialPhotoId={editPhoto} extra={(photo) => <PlacementCard photo={photo} thumb={thumbs[photo.id]} readOnly={ordered} />} />
+        <ChunkBoundary key={editPhoto || "edits"}>
+          <PhotoEditor draft={draft} thumbs={thumbs} readOnly={ordered} lowDpiIds={lowDpi} dupIds={dups} initialPhotoId={editPhoto} extra={(photo) => <PlacementCard photo={photo} thumb={thumbs[photo.id]} readOnly={ordered} />} />
+        </ChunkBoundary>
       )}
       {step === "check" && (
         <CheckStep
@@ -301,8 +318,12 @@ function useAdder() {
     setBusy(true);
     if (fromGallery) setMissing([]);
     try {
-      const { added, rejected, failed, missing: miss = [] } = fromGallery ? await addGalleryFiles(files, setProgress) : await addFiles(files);
+      const { added, unsupported = 0, tooLarge = 0, rejected, failed, missing: miss = [] } = fromGallery ? await addGalleryFiles(files, setProgress) : await addFiles(files);
       if (added) notify(`Добавлено фото: ${added}`, "success");
+      // N7: файлы не того типа (GIF, SVG, текст под именем .jpg) и слишком большие — отдельной строкой, а не «Добавлено фото»
+      const files_ = (n) => `${n} ${plural(n, "файл", "файла", "файлов")}`;
+      if (unsupported) notify(`Не подошёл формат: ${files_(unsupported)}. Подходят JPEG и PNG.`, "error");
+      if (tooLarge) notify(`Слишком большой: ${files_(tooLarge)}. Подробности — в ячейке фото.`, "error");
       if (rejected.length) notify(`Это не фото, пропустили: ${rejected.join(", ")}`, "error");
       if (failed) notify(`Не получилось добавить фото: ${failed}. Нажмите «Повторить» в списке.`, "error");
       if (miss.length) setMissing(miss);
@@ -364,7 +385,7 @@ function DupUndoBar({ handle, onClose }) {
       className="card row"
       role="status"
       aria-live="polite"
-      style={{ position: "fixed", left: 16, right: 16, bottom: "calc(96px + env(safe-area-inset-bottom))", maxWidth: 480, margin: "0 auto", zIndex: 70, gap: 12, alignItems: "center", justifyContent: "space-between", boxShadow: "0 8px 24px rgba(0, 0, 0, 0.18)" }}
+      style={{ position: "fixed", left: 16, right: 16, bottom: "calc(96px + env(safe-area-inset-bottom))", maxWidth: 480, margin: "0 auto", zIndex: 70, gap: 12, alignItems: "center", justifyContent: "space-between", boxShadow: "var(--ds-shadow-popover)" }}
     >
       <span>Удалено дублей: {handle.count}</span>
       <button
@@ -506,11 +527,11 @@ function PhotosStep({ draft, thumbs, product, uploads, readOnly, lowDpi, dups, o
       {n === 0 ? (
         <p className="muted">Пока пусто. Добавьте фото — черновик сохранится сам, даже если закрыть страницу.</p>
       ) : (
-        <SortablePhotos draft={draft} thumbs={thumbs} readOnly={readOnly} lowDpi={lowDpi} dups={dups} />
+        <PhotoGrid draft={draft} thumbs={thumbs} readOnly={readOnly} lowDpi={lowDpi} dups={dups} />
       )}
       {!readOnly && (
         <p className="muted small" style={{ marginTop: 8 }}>
-          Кнопки ‹ и › — раньше / позже в книге. На компьютере фото можно перетащить за значок ⠿ мышью или клавиатурой (Tab, пробел, стрелки). Черновик сохраняется на этом устройстве автоматически.
+          Кнопки ‹ и › — раньше / позже {product.kind === "book" ? "в книге" : "в заказе"}. На компьютере фото можно перетащить за значок ⠿ мышью или клавиатурой (Tab, пробел, стрелки). Черновик сохраняется на этом устройстве автоматически.
         </p>
       )}
     </div>
@@ -522,6 +543,22 @@ const PROBLEM = {
   beach: "пляж", sun: "солнце в кадре", backlight: "контровой свет", dark: "тёмное", stranger: "посторонний",
   overexposed: "пересвет", "color-cast": "оттенок", blurry: "размыто", "low-resolution": "маленькое", tilted: "завален горизонт", duplicate: "дубль",
 };
+
+// Фото, выбранные в галерее по умолчанию: первые 12. N7: среди них должно быть хотя бы одно маленькое (≤ 1500 точек
+// по длинной стороне — предел «Резкости для печати ×2», UPSCALE_MAX_SIDE в lib/photo/upscale.js), чтобы функцию было
+// видно сразу: маленькая версия кадра заменяет большую того же кадра (nesvizh-small.jpg вместо nesvizh.jpg)
+const GALLERY_DEFAULT = 12;
+const SHARPEN_MAX_SIDE = 1500;
+function defaultGalleryPicks(list) {
+  const first = list.slice(0, GALLERY_DEFAULT);
+  const small = (x) => Math.max(x.width || 0, x.height || 0) <= SHARPEN_MAX_SIDE;
+  if (first.some(small)) return first;
+  const extra = list.find(small);
+  if (!extra) return first;
+  const i = first.findIndex((x) => x.original && x.original === extra.original);
+  first[i >= 0 ? i : first.length - 1] = extra;
+  return first;
+}
 
 function GalleryPanel({ busy, progress, onAdd }) {
   const [items, setItems] = useState(null);
@@ -535,7 +572,7 @@ function GalleryPanel({ busy, progress, onAdd }) {
         if (!alive) return;
         setItems(list);
         setFailed(false);
-        setPicked(Object.fromEntries(list.slice(0, 12).map((x) => [x.file, true])));
+        setPicked(Object.fromEntries(defaultGalleryPicks(list).map((x) => [x.file, true])));
       })
       .catch(() => alive && setFailed(true));
     return () => {
@@ -618,181 +655,55 @@ function GalleryThumb({ it }) {
 }
 
 // Сетка фото: на компьютере — перетаскивание (мышь и клавиатура), на телефоне — кнопки «раньше / позже»
-function SortablePhotos({ draft, thumbs, readOnly, lowDpi, dups }) {
+function PhotoGrid({ draft, thumbs, readOnly, lowDpi, dups }) {
   const sync = useSyncState();
   const online = useOnline();
-  const sensors = useSensors(useSensor(MouseSensor, { activationConstraint: { distance: 4 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
-  const ids = draft.photos.map((p) => p.id);
-  const pos = (id) => ids.indexOf(id) + 1;
-  const accessibility = {
-    screenReaderInstructions: { draggable: "Чтобы переставить фото, нажмите пробел, двигайте стрелками и нажмите пробел ещё раз. Escape — отмена." },
-    announcements: {
-      onDragStart: ({ active }) => `Взяли фото ${pos(active.id)}.`,
-      onDragOver: ({ active, over }) => (over ? `Фото ${pos(active.id)} над местом ${pos(over.id)}.` : `Фото ${pos(active.id)} вне сетки.`),
-      onDragEnd: ({ active, over }) => (over ? `Фото поставлено на место ${pos(over.id)}.` : `Фото ${pos(active.id)} осталось на месте.`),
-      onDragCancel: ({ active }) => `Отмена. Фото ${pos(active.id)} осталось на месте.`,
-    },
-  };
-  function onDragEnd({ active, over }) {
-    if (!over || active.id === over.id) return;
-    reorderPhoto(ids.indexOf(active.id), ids.indexOf(over.id));
-  }
-  return (
-    <DndContext id="photos-dnd" sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd} accessibility={accessibility}>
-      <SortableContext items={ids} strategy={rectSortingStrategy} disabled={readOnly}>
-        <div className="photo-grid">
-          {draft.photos.map((p, i) => (
-            <SortablePhoto
-              key={p.id}
-              p={p}
-              i={i}
-              n={draft.photos.length}
-              thumb={thumbs[p.id]}
-              readOnly={readOnly}
-              badges={photoBadges(p, { lowDpi: lowDpi?.has(p.id), duplicate: dups?.has(p.id) })}
-              upload={sync.enabled && p.supported && draft.status !== "ordered" ? (p.serverId ? "done" : online ? "sending" : "waiting") : null}
-            />
-          ))}
-        </div>
-      </SortableContext>
-    </DndContext>
-  );
-}
-
-// Загрузка фото в аккаунт (X-5, только у вошедшего клиента): «Загружено», «Загружается», «Ждёт сети»
-const UPLOAD_LABELS = { done: "Загружено", sending: "Загружается", waiting: "Ждёт сети" };
-
-function SortablePhoto({ p, i, n, thumb, readOnly, badges, upload }) {
-  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: p.id, disabled: readOnly });
-  const style = { transform: transform ? `translate3d(${Math.round(transform.x)}px, ${Math.round(transform.y)}px, 0)` : undefined, transition };
-  return (
-    <div ref={setNodeRef} style={style} className={"photo-cell" + (isDragging ? " dragging" : "")} data-photo={p.name}>
-      {/* eslint-disable-next-line @next/next/no-img-element -- фото клиента с устройства (blob:/data:): next/image их не оптимизирует, оптимизатор Vercel для фото клиентов не используем */}
-      {thumb ? <img src={thumb} alt={p.name} /> : <div className="bad">{p.supported ? "…" : p.tooBig ? "Больше 25 МБ" : p.tooManyPixels ? "Больше 100 Мп" : "Формат не подходит"}</div>}
-      <span className="num">{i + 1}</span>
-      {upload && (
-        <span className={"photo-upload photo-upload-" + upload} data-upload={upload}>
-          {UPLOAD_LABELS[upload]}
-        </span>
-      )}
-      {badges?.length > 0 && (
-        <span className="pe-badges compact" aria-label={"Фото " + (i + 1) + ": " + badges.map((b) => b.label).join(", ")}>
-          {badges.map((b) => (
-            <span key={b.id} className={"pe-badge " + b.tone} data-badge={b.id} title={b.label}>
-              {b.short || b.label}
-            </span>
-          ))}
-        </span>
-      )}
-      {!readOnly && (
-        <>
-          <button ref={setActivatorNodeRef} className="drag-handle" {...attributes} {...listeners} aria-label={`Переставить фото ${i + 1} «${p.name}»`} title="Перетащите, чтобы переставить">
-            ⠿
-          </button>
-          <div className="photo-tools">
-            <button onClick={() => movePhoto(p.id, -1)} disabled={i === 0} aria-label={`Раньше: фото ${i + 1} «${p.name}»`} title="Раньше">
-              <IconLeft size={18} />
-            </button>
-            <button onClick={() => removePhoto(p.id)} aria-label={`Удалить фото ${i + 1} «${p.name}»`} title="Удалить">
-              <IconTrash size={16} />
-            </button>
-            <button onClick={() => movePhoto(p.id, 1)} disabled={i === n - 1} aria-label={`Позже: фото ${i + 1} «${p.name}»`} title="Позже">
-              <IconRight size={18} />
-            </button>
-          </div>
-        </>
-      )}
+  const cells = cellProps({ draft, thumbs, readOnly, lowDpi, dups, syncEnabled: sync.enabled, online, photoBadges });
+  const plain = (
+    <div className="photo-grid">
+      {cells.map((c) => (
+        <PhotoCell key={c.p.id} {...c} />
+      ))}
     </div>
+  );
+  // N7: кусок перетаскивания не скачался (нет сети) — та же сетка без перетаскивания, а не ошибка страницы
+  return (
+    <ChunkBoundary fallback={plain}>
+      <Suspense fallback={plain}>
+        <SortablePhotos cells={cells} readOnly={readOnly} />
+      </Suspense>
+    </ChunkBoundary>
   );
 }
 
 /* ---------- Шаг 2: автомакет ---------- */
+// N11: книга «как настоящая» (обложка, развороты, перелистывание) и оформление — components/editor/BookView.js
 function LayoutStep({ draft, thumbs, product }) {
   const { layout, issues } = useMemo(() => runChecks(draft, product), [draft, product]);
   const size = product.sizes.find((s) => s.id === draft.sizeId) || product.sizes[0];
   if (product.kind !== "book") return <PrintPreview draft={draft} thumbs={thumbs} size={size} issues={issues} />;
   const byId = Object.fromEntries(draft.photos.map((p) => [p.id, p]));
-  return <BookPreview layout={layout} thumbs={thumbs} size={size} issues={issues} byId={byId} />;
+  const coverPhotoId = layout.pages.find((pg) => pg.slots.length)?.slots[0].photoId || null;
+  return (
+    <div>
+      <p className="muted">Автомакет разложил фото по страницам: 1–3 на страницу, вертикальные и горизонтальные — по своим местам. Листайте книгу пальцем, стрелками или кнопками.</p>
+      <ChunkBoundary>
+        <BookView layout={layout} thumbs={thumbs} size={size} issues={issues} byId={byId} book={draft.book} coverPhotoId={coverPhotoId} slotClass={slotClass} placeStyle={placeStyle} />
+      </ChunkBoundary>
+      {layout.overflow.length > 0 && <p className="err-text" style={{ marginTop: 12 }}>Не поместились фото: {layout.overflow.length}. Добавьте страницы — подробности в «Проверке».</p>}
+      <p className="muted small" style={{ marginTop: 12 }}>
+        Оранжевая рамка — фото может быть нечётким, красная — будет размыто.
+      </p>
+      <ChunkBoundary fallback={null}>
+        <BookDesign book={draft.book} readOnly={draft.status === "ordered"} />
+      </ChunkBoundary>
+    </div>
+  );
 }
 
 function slotClass(issues, photoId) {
   const i = issues.find((x) => x.photoId === photoId && x.key.startsWith("dpi:"));
   return i ? (i.level === "err" ? " err" : " warn") : "";
-}
-
-function BookPreview({ layout, thumbs, size, issues, byId }) {
-  const spreads = [];
-  for (let i = 0; i < layout.pages.length; i += 2) spreads.push([i, i + 1]);
-  const [s, setS] = useState(0);
-  const cur = Math.min(s, spreads.length - 1);
-  const touch = useRef(null);
-  const pw = Math.min(170, Math.floor((Math.min(typeof window !== "undefined" ? window.innerWidth : 375, 520) - 40) / 2));
-  const ph = Math.round((pw * size.h) / size.w);
-
-  const page = (idx) => {
-    const pg = layout.pages[idx];
-    if (!pg) return <div className="page blank" style={{ width: pw, height: ph }} />;
-    if (!pg.slots.length)
-      return (
-        <div className="page empty" style={{ width: pw, height: ph }}>
-          Пустая страница
-        </div>
-      );
-    return (
-      <div className="page" style={{ width: pw, height: ph }}>
-        {pg.slots.map((sl) => (
-          <div key={sl.photoId} className={"slot" + slotClass(issues, sl.photoId)} style={{ left: sl.x * 100 + "%", top: sl.y * 100 + "%", width: sl.w * 100 + "%", height: sl.h * 100 + "%" }}>
-            {/* eslint-disable-next-line @next/next/no-img-element -- фото клиента с устройства (blob:/data:): next/image их не оптимизирует, оптимизатор Vercel для фото клиентов не используем */}
-            {thumbs[sl.photoId] && <img src={thumbs[sl.photoId]} alt="" style={placeStyle(byId[sl.photoId])} />}
-          </div>
-        ))}
-      </div>
-    );
-  };
-
-  return (
-    <div>
-      <p className="muted">Автомакет разложил фото по страницам: 1–3 на страницу, вертикальные и горизонтальные — по своим местам. Листайте пальцем или кнопками.</p>
-      <div
-        onTouchStart={(e) => (touch.current = e.touches[0].clientX)}
-        onTouchEnd={(e) => {
-          if (touch.current == null) return;
-          const dx = e.changedTouches[0].clientX - touch.current;
-          if (dx < -40) setS(Math.min(spreads.length - 1, cur + 1));
-          if (dx > 40) setS(Math.max(0, cur - 1));
-          touch.current = null;
-        }}
-      >
-        <div className="spread">
-          {page(spreads[cur][0])}
-          {page(spreads[cur][1])}
-        </div>
-        <div className="row between">
-          <span className="page-num muted" style={{ width: pw }}>
-            стр. {spreads[cur][0] + 1}
-          </span>
-          <span className="page-num muted" style={{ width: pw }}>
-            {layout.pages[spreads[cur][1]] ? "стр. " + (spreads[cur][1] + 1) : ""}
-          </span>
-        </div>
-      </div>
-      <div className="row between" style={{ marginTop: 8 }}>
-        <button className="btn btn-small" onClick={() => setS(Math.max(0, cur - 1))} disabled={cur === 0}>
-          <IconLeft size={18} /> Назад
-        </button>
-        <span className="muted small">
-          разворот {cur + 1} из {spreads.length}
-        </span>
-        <button className="btn btn-small" onClick={() => setS(Math.min(spreads.length - 1, cur + 1))} disabled={cur >= spreads.length - 1}>
-          Вперёд <IconRight size={18} />
-        </button>
-      </div>
-      {layout.overflow.length > 0 && <p className="err-text" style={{ marginTop: 12 }}>Не поместились фото: {layout.overflow.length}. Добавьте страницы — подробности в «Проверке».</p>}
-      <p className="muted small" style={{ marginTop: 12 }}>
-        Оранжевая рамка — фото может быть нечётким, красная — будет размыто.
-      </p>
-    </div>
-  );
 }
 
 function PrintPreview({ draft, thumbs, size, issues }) {
@@ -876,6 +787,8 @@ function CheckStep({ draft, thumbs, product, price, goPhotos, goSharpen, readOnl
   const { issues } = useMemo(() => runChecks(draft, product), [draft, product]);
   const replaceRef = useRef(null);
   const [replaceId, setReplaceId] = useState(null);
+  const adding = useRef(false); // N7: двойное нажатие «В корзину» — одна позиция и одно уведомление
+  const [addingNow, setAddingNow] = useState(false);
   const acks = draft.acks || {};
   const open = issues.filter((i) => !acks[i.key]);
   const blocking = issues.some((i) => i.blocking);
@@ -918,7 +831,9 @@ function CheckStep({ draft, thumbs, product, price, goPhotos, goSharpen, readOnl
   }
 
   function addToCart() {
-    if (readOnly) return;
+    if (readOnly || adding.current) return;
+    adding.current = true;
+    setAddingNow(true);
     const usable = draft.photos.filter((p) => p.supported);
     const firstThumb = usable[0] && thumbs[usable[0].id];
     const finish = (cover) => {
@@ -947,6 +862,8 @@ function CheckStep({ draft, thumbs, product, price, goPhotos, goSharpen, readOnl
         })
         .catch((e) => {
           console.error(e);
+          adding.current = false;
+          setAddingNow(false);
           notify("Не получилось добавить в корзину. Попробуйте ещё раз.", "error");
         });
     };
@@ -986,7 +903,7 @@ function CheckStep({ draft, thumbs, product, price, goPhotos, goSharpen, readOnl
             <IconCheck />
             <b>Всё хорошо — можно заказывать.</b>
           </div>
-          <p className="muted small">Пустых страниц нет, формат и резкость в порядке.</p>
+          <p className="muted small">{product.kind === "book" ? "Пустых страниц нет, формат и резкость в порядке." : "Формат и резкость в порядке."}</p>
         </div>
       ) : (
         <p className="muted">
@@ -1063,7 +980,7 @@ function CheckStep({ draft, thumbs, product, price, goPhotos, goSharpen, readOnl
           <span className="price">{money(price)}</span>
         </div>
         <EtaLine product={product} />
-        <button className="btn btn-primary btn-block" style={{ marginTop: 8 }} disabled={readOnly || blocking || open.length > 0} onClick={addToCart}>
+        <button className="btn btn-primary btn-block" style={{ marginTop: 8 }} disabled={readOnly || blocking || open.length > 0} aria-busy={addingNow || undefined} onClick={addToCart}>
           {draft.status === "in_cart" ? "Обновить в корзине" : "В корзину"}
         </button>
         {open.length > 0 && !blocking && <p className="muted small" style={{ marginTop: 6 }}>Осталось решить: {open.length}</p>}

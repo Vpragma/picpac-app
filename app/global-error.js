@@ -4,7 +4,7 @@ import { SUPPORT } from "@/lib/support";
 
 const btn = {
   minHeight: 48, padding: "0 22px", borderRadius: 999, border: 0, font: "inherit", fontWeight: 500, cursor: "pointer",
-  background: "linear-gradient(90deg, #e0283a, #d61f69)", color: "#fff",
+  background: "#bd3434", color: "#fff", // главная кнопка бренда — сплошной #bd3434 (N1), как --ds-color-primary
 };
 
 export default function GlobalError({ retry, reset }) {

@@ -1,18 +1,24 @@
 // POST /api/v1/projects/{id}/photos { path, edits?, quality?, nsfw? } — зафиксировать загруженное фото.
 // Сервер сам читает первые байты файла из хранилища: это должен быть JPEG или PNG, до 25 МБ.
 // Размеры кадра берём из файла, а не со слов клиента. Чужой путь или подделка — отказ и удаление файла.
+// nsfw — оценки проверки на устройстве (N4: v 2, или старые nsfwjs): флаг «проверит модератор» сразу;
+// после ответа сервер сам проверяет файл своими моделями (after → lib/server/moderationCheck.js).
+import { after } from "next/server";
 import { sniffImage, tooManyPixels } from "@/lib/imageMeta";
 import { badId, BUCKET, limitWrite, MAX_PHOTO_BYTES, notFound, parseBody, requireUser, serverError, z } from "@/lib/server/api";
 import { json, jsonError } from "@/lib/server/http";
-import { getOwnProject, needsModeration, PHOTO_FIELDS, shapePhoto } from "@/lib/server/projects";
+import { deviceScoresSchema, getOwnProject, needsModeration, PHOTO_FIELDS, photoEditsForServer, shapePhoto } from "@/lib/server/projects";
+import { checkPhotoById } from "@/lib/server/moderationCheck";
 
-const score = z.number().min(0).max(1);
+// Фоновая проверка фото на сервере (модели загружаются один раз на экземпляр) — после ответа клиенту
+export const maxDuration = 120;
+
 const schema = z.strictObject({
   path: z.string().max(300),
   edits: z.record(z.string(), z.unknown()).optional(),
   quality: z.record(z.string(), z.unknown()).optional(),
-  // Результат проверки цензуры на устройстве (nsfwjs): вероятности классов
-  nsfw: z.strictObject({ porn: score, hentai: score, sexy: score, neutral: score.optional(), drawing: score.optional() }).optional(),
+  // Оценки проверки на устройстве (N4: классификатор обнажённости и CLIP; старые клиенты — nsfwjs)
+  nsfw: deviceScoresSchema.optional(),
 });
 
 export async function POST(request, { params }) {
@@ -101,7 +107,7 @@ export async function POST(request, { params }) {
       width: meta.width,
       height: meta.height,
       position: (last?.position ?? -1) + 1,
-      edits: body.edits || {},
+      edits: photoEditsForServer(body.edits),
       quality: body.quality || {},
       nsfw: body.nsfw || null,
       moderation_flag: flag,
@@ -121,5 +127,6 @@ export async function POST(request, { params }) {
   }
   await ctx.admin.from("projects").update({ updated_at: new Date().toISOString() }).eq("id", id).eq("user_id", ctx.userId);
   await ctx.audit("photo.add", "photo", data.id, "success", { project: id, mime: meta.mime, bytes: total, width: meta.width, height: meta.height, moderation_flag: flag });
+  after(() => checkPhotoById(ctx, data.id).catch((e) => console.error("Фоновая проверка фото:", e?.message)));
   return json({ ok: true, photo: shapePhoto(data) }, 201);
 }

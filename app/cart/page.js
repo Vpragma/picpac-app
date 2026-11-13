@@ -7,9 +7,10 @@
 // и двойное нажатие не создают второй заказ.
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { IconImage, IconTrash } from "../../components/icons";
-import { clearAfterOrder, moveLocalToServer, removeLine, retryMove, setLineQuantity, useCart } from "../../lib/cart";
+import { EmptyState } from "../../components/LineArt";
+import { cartMoveError, clearAfterOrder, moveLocalToServer, removeLine, retryMove, setLineQuantity, useCart } from "../../lib/cart";
 import { FIELD_LABELS, PICKUP_POINTS, formatPhone, needsDate, validateCheckout } from "../../lib/checkout";
 import { kvDel, kvGet, kvSet, markOrdered, useDraft } from "../../lib/draft";
 import ModerationNotice, { flaggedCount } from "../../components/ModerationNotice";
@@ -17,7 +18,10 @@ import { isClient, refreshMe, useMe } from "../../lib/me";
 // Печатные версии: обычный import (не import()) — без сети на «Подтвердить» кусок кода не догрузится,
 // а нужна понятная ошибка «нет связи». Тяжёлая часть (воркер) грузится только при сборке.
 import { preparePrintVersions } from "../../lib/photo/print";
-import { applyPromo, calcTotals, daysWord, etaFromDay, formatEtaRange, linePrice, minskDate } from "../../lib/pricing";
+import { calcTotals, daysWord, etaFromDay, formatEtaRange, linePrice, minskDate } from "../../lib/pricing";
+import { benefitText, checkPromo, promoDate } from "../../lib/promo";
+import Postcard from "../../components/promo/Postcard";
+import SeasonPromo from "../../components/promo/SeasonPromo";
 import { notify, readKey, useLocalValue } from "../../lib/store";
 import { syncProject, useSyncState } from "../../lib/sync";
 import { useCatalog } from "../../lib/useCatalog";
@@ -46,6 +50,8 @@ export default function CartPage() {
   const [failure, setFailure] = useState(null); // текст ошибки оформления + «Повторить»
   const [done, setDone] = useState(null); // оформленный заказ
   const lock = useRef(false);
+  const promoLock = useRef(false);
+  const [promoBusy, setPromoBusy] = useState(false);
 
   const client = isClient(me);
   const update = (patch) => setForm({ ...form, ...patch });
@@ -85,6 +91,7 @@ export default function CartPage() {
         unitKop: i.unitPriceKop,
         lineKop: i.lineTotalKop,
         valid: i.valid,
+        slug: i.product?.slug || null,
         printDays: i.product?.printDays || 3,
         thumb: local?.photos[0] ? thumbs[local.photos[0].id] : null,
       };
@@ -111,6 +118,7 @@ export default function CartPage() {
           unitKop: price?.unitKop ?? null,
           lineKop: price?.lineKop ?? null,
           valid: !!price,
+          slug: product?.slug || null,
           printDays: product?.printDays || 3,
           thumb: p?.photos[0] ? thumbs[p.photos[0].id] : c.cover || null,
           pending: cart.mode === "server",
@@ -120,20 +128,27 @@ export default function CartPage() {
 
   if (!lines.length)
     return (
-      <div className="card">
-        <h1>Корзина пуста</h1>
-        <p className="muted">Соберите фотокнигу или закажите печать фото — это займёт пару минут.</p>
-        <Link href="/" className="btn btn-primary">
-          В каталог
-        </Link>
-      </div>
+      <EmptyState
+        art="cart"
+        title="Корзина пуста"
+        headingLevel={1}
+        actions={
+          <Link href="/" className="btn btn-primary">
+            В каталог
+          </Link>
+        }
+      >
+        Соберите фотокнигу из любимых кадров или закажите печать фото — это займёт пару минут.
+      </EmptyState>
     );
 
   // Расчёт: товары → скидка промокода → доставка (бесплатно от порога после скидки) → итого
   const method = catalog.delivery.find((d) => d.code === form.delivery) || null;
-  const goodsLines = lines.filter((l) => l.valid).map((l) => ({ lineKop: l.lineKop }));
-  const totals = calcTotals({ lines: goodsLines, method, promo: form.promo });
-  const promoNow = form.promo ? applyPromo(form.promo, totals.goodsKop) : null;
+  // Позиции с продуктом: код может действовать только на часть продуктов (N8) — экран считает так же, как сервер
+  const goodsLines = lines.filter((l) => l.valid).map((l) => ({ lineKop: l.lineKop, slug: l.slug }));
+  const promoCheck = { products: catalog.products };
+  const totals = calcTotals({ lines: goodsLines, method, promo: form.promo, check: promoCheck });
+  const promoNow = form.promo ? checkPromo(form.promo, { lines: goodsLines, ...promoCheck }) : null;
   const printDays = Math.max(...lines.map((l) => l.printDays));
   const today = minskDate();
   const eta = method ? etaFromDay(today, printDays, method.minDays, method.maxDays) : null;
@@ -143,20 +158,35 @@ export default function CartPage() {
     .filter((s) => s?.state === "syncing" && s.total)
     .reduce((a, s) => ({ done: a.done + s.done, total: a.total + s.total }), { done: 0, total: 0 });
 
-  async function applyPromoCode() {
-    const code = promoInput.trim();
+  async function applyPromoCode(value) {
+    // N7: пока сервер проверяет код (1–2 с), кнопка занята; повторное нажатие ничего не делает
+    if (promoLock.current) return;
+    const code = String(value ?? promoInput).trim();
     if (!code) return setPromoMsg({ ok: false, text: "Введите промокод." });
+    promoLock.current = true;
+    setPromoBusy(true);
+    try {
+      await checkPromoCode(code);
+    } finally {
+      promoLock.current = false;
+      setPromoBusy(false);
+    }
+  }
+
+  async function checkPromoCode(code) {
+    // Для гостя сервер считает по этим позициям только предпросмотр; у вошедшего — по своей корзине
+    const previewLines = goodsLines.filter((l) => l.slug).map((l) => ({ slug: l.slug, kop: l.lineKop }));
     const r = await fetch("/api/v1/promo/validate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code, subtotal: totals.goodsKop / 100 }),
+      body: JSON.stringify({ code, subtotal: totals.goodsKop / 100, ...(previewLines.length ? { lines: previewLines } : {}) }),
     })
       .then(async (res) => ({ status: res.status, ...(await res.json().catch(() => ({}))) }))
       .catch(() => ({ status: 0 }));
     if (r.ok && r.valid !== false) {
       update({ promo: r.promo });
       setPromoInput("");
-      setPromoMsg({ ok: true, text: `${r.message}: ${r.promo.code}${r.promo.label ? " — " + r.promo.label : ""}` });
+      setPromoMsg({ ok: true, text: `${r.message}: ${r.promo.code} — ${r.promo.label || benefitText(r.promo)}${r.promo.validTo ? `, до ${promoDate(r.promo.validTo)}` : ""}.` });
     } else {
       setPromoMsg({ ok: false, text: r.status === 0 ? "Нет связи с сервером. Попробуйте ещё раз." : r.message || r.error?.message || "Не подходит." });
     }
@@ -206,7 +236,12 @@ export default function CartPage() {
     try {
       // 1. Позиции с устройства — в серверную корзину (проект и фото уходят на сервер)
       await moveLocalToServer();
-      if (readKey("cart", []).some((c) => c?.projectId)) throw new Error(navigator.onLine === false ? "offline" : "Ещё не все фото загрузились. Подождите немного и нажмите «Повторить».");
+      if (readKey("cart", []).some((c) => c?.projectId)) {
+        if (navigator.onLine === false) throw new Error("offline");
+        // N7: о незагруженных фото уже говорит строка над корзиной со своей «Повторить» — второе сообщение не показываем
+        if (cartMoveError()) throw Object.assign(new Error("moving"), { silent: true });
+        throw new Error("Ещё не все фото загрузились. Подождите немного и нажмите «Повторить».");
+      }
       // 2. Свежие настройки проектов корзины — на сервер (цену посчитает сервер)
       for (const l of lines) if (l.localProjectId) await syncProject(l.localProjectId);
       // 2а. Печатные версии изменённых фото: файл полного размера со всеми правками (оригинал не меняется)
@@ -244,6 +279,14 @@ export default function CartPage() {
         for (const [k, v] of Object.entries(fields)) mapped[k.replace("delivery.address.", "").replace("recipient.", "").replace("delivery.code", "delivery")] = v;
         setErrors(mapped);
         if (data?.error?.code === "cart_changed" || data?.error?.code === "cart_empty") await kvDel("checkoutKey").catch(() => {});
+        if (String(data?.error?.code || "").startsWith("promo_")) {
+          // Код перестал подходить, пока оформляли (лимит, срок, выключен): убираем его, итог пересчитается
+          setForm({ ...form, promo: null });
+          setPromoMsg({ ok: false, text: data.error.message });
+          const e = new Error(`${data.error.message} Мы убрали код из заказа — проверьте итог и нажмите «Подтвердить заказ».`);
+          e.final = true;
+          throw e;
+        }
         throw new Error(data?.error?.message || "Сервер не ответил. Попробуйте ещё раз.");
       }
       const order = data.order;
@@ -266,10 +309,15 @@ export default function CartPage() {
         setAddresses([{ delivery: method.code, label, address: Object.fromEntries(method.addressFields.map((f) => [f, address[f]])) }, ...rest].slice(0, 5));
       }
       setForm({ ...form, promo: null, date: "" });
-      setDone({ ...order, paid, paymentMethod: form.payment });
+      // N7: в заказе только печать фото — на «Заказ оформлен» и открытке без «книги»
+      setDone({ ...order, paid, paymentMethod: form.payment, hasBook: lines.some((l) => l.pages != null) });
       notify(`Заказ ${order.number} оформлен`, "success");
     } catch (e) {
       lock.current = false;
+      if (e?.silent) {
+        setFailure(null);
+        return;
+      }
       // Отказ по существу (например, слишком много правок по выделению на фото): честный текст и ссылка на правки,
       // кнопка остаётся «Подтвердить заказ» — повтор без исправления ничего не даст
       if (e?.final) {
@@ -326,7 +374,8 @@ export default function CartPage() {
           )}
         </p>
       )}
-      {pending.length > 0 && (
+      {/* N7: при ошибке переноса — одно сообщение (строка выше), без второй строки о ходе переноса */}
+      {pending.length > 0 && !cart.error && (
         <p className="muted small" role="status">
           Переносим в аккаунт: {uploading.total ? `загружено фото ${uploading.done} из ${uploading.total}` : "сохраняем проект"}…
         </p>
@@ -497,10 +546,11 @@ export default function CartPage() {
 
       <section className="card" aria-labelledby="h-promo">
         <h2 id="h-promo">Промокод</h2>
+        <SeasonPromo place="cart" applied={form.promo?.code} onApply={(code) => applyPromoCode(code)} slugs={lines.map((l) => l.slug).filter(Boolean)} />
         {form.promo ? (
-          <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+          <div className="promo-applied" data-testid="promo-applied">
             <span className="chip chip-ok">{form.promo.code}</span>
-            <span className="small">{form.promo.label}</span>
+            <span className="small">{form.promo.label || benefitText(form.promo)}</span>
             <button
               className="btn btn-small"
               onClick={() => {
@@ -512,27 +562,40 @@ export default function CartPage() {
             </button>
           </div>
         ) : (
-          <div className="row" style={{ gap: 8 }}>
+          // N7: форма — Enter на компьютере и «Go»/«Применить» на клавиатуре телефона применяют код
+          <form
+            className="promo-row"
+            onSubmit={(e) => {
+              e.preventDefault();
+              applyPromoCode();
+            }}
+          >
             <input
               className="input"
-              placeholder="Например, TEST10"
+              id="f-promo"
+              placeholder="Например, OSEN2026"
               value={promoInput}
               onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
               aria-label="Промокод"
-              onKeyDown={(e) => e.key === "Enter" && applyPromoCode()}
+              aria-describedby={promoMsg ? "promo-msg" : undefined}
+              autoComplete="off"
+              autoCapitalize="characters"
+              spellCheck={false}
+              maxLength={30}
+              enterKeyHint="go"
             />
-            <button className="btn btn-small" onClick={applyPromoCode}>
-              Применить
+            <button className="btn btn-small" type="submit" disabled={promoBusy} aria-busy={promoBusy} data-testid="promo-apply">
+              {promoBusy ? "Проверяем…" : "Применить"}
             </button>
-          </div>
+          </form>
         )}
-        {promoMsg && (
-          <p className={(promoMsg.ok ? "ok-text" : "err-text") + " small"} role="status" style={{ marginTop: 6 }}>
+        {promoMsg && !(form.promo && promoNow && !promoNow.ok) && (
+          <p id="promo-msg" className={"note small promo-msg " + (promoMsg.ok ? "note-ok" : "note-error")} role="status" data-testid="promo-msg">
             {promoMsg.text}
           </p>
         )}
         {form.promo && promoNow && !promoNow.ok && (
-          <p className="err-text small" role="status" style={{ marginTop: 6 }}>
+          <p className="note note-error small promo-msg" role="status" data-testid="promo-msg">
             {promoNow.message}
           </p>
         )}
@@ -567,9 +630,9 @@ export default function CartPage() {
           <span>Товары</span>
           <span>{byn(totals.goodsKop)}</span>
         </div>
-        <div className={"sum-line" + (totals.discountKop ? " ok-text" : "")}>
-          <span>Скидка{totals.promo?.ok ? " " + totals.promo.code : ""}</span>
-          <span>{totals.discountKop ? "−" + byn(totals.discountKop) : byn(0)}</span>
+        <div className={"sum-line" + (totals.discountKop ? " ok-text" : "")} data-testid="sum-discount">
+          <span>Скидка{totals.promo?.ok ? ` по коду ${totals.promo.code}` : ""}</span>
+          <span>{totals.discountKop ? "−" + byn(totals.discountKop) : totals.promo?.ok && totals.promo.freeDelivery ? "доставка бесплатно" : byn(0)}</span>
         </div>
         <div className="sum-line">
           <span>Доставка</span>
@@ -624,19 +687,52 @@ function PayLogos({ kind }) {
   );
 }
 
+// N2: отметка успеха — «впрыгивает», искры разлетаются (app/motion.css; при reduced-motion — без движения)
+function OrderDoneMark() {
+  return (
+    <span className="order-done-mark" aria-hidden="true">
+      <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="28" cy="34" r="20" />
+        <path d="M19 34.5l6.5 6.5L38 28" />
+        <path className="spark" d="M54 8 C54.6 11.4 55.6 12.4 59 13 C55.6 13.6 54.6 14.6 54 18 C53.4 14.6 52.4 13.6 49 13 C52.4 12.4 53.4 11.4 54 8 Z" strokeWidth="1.6" />
+        <path className="spark" d="M58 30 V36 M55 33 H61" strokeWidth="1.6" />
+        <path className="spark" d="M8 10 C8.4 12 9 12.6 11 13 C9 13.4 8.4 14 8 16 C7.6 14 7 13.4 5 13 C7 12.6 7.6 12 8 10 Z" strokeWidth="1.6" />
+      </svg>
+    </span>
+  );
+}
+
 function OrderDone({ order }) {
   const from = order.eta?.from ? minskDate(new Date(order.eta.from)) : null;
   const to = order.eta?.to ? minskDate(new Date(order.eta.to)) : null;
+  // N7: после длинной корзины экран оставался прокрученным вниз — заголовок и номер были не видны.
+  // Наверх и фокус на заголовок (его же прочитает экранный диктор).
+  const head = useRef(null);
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "instant" });
+    head.current?.focus({ preventScroll: true });
+  }, []);
   return (
-    <div className="card stack" role="status">
-      <h1>Заказ оформлен</h1>
+    <div className="card stack order-done" role="status">
+      <OrderDoneMark />
+      <h1 ref={head} tabIndex={-1} style={{ outline: "none" }}>
+        Заказ оформлен
+      </h1>
       <p style={{ fontSize: "1.375rem", fontWeight: 500, color: "var(--ds-color-text-strong)" }}>№ {order.number}</p>
       {from && to && <p>Доставим ориентировочно {formatEtaRange(from, to)}.</p>}
       <p>
         Итого {byn(order.totalKop)} ·{" "}
         {order.paid ? `оплачено: ${order.paymentMethod === "erip_test" ? "ЕРИП (тест)" : "Карта (тест)"}` : "оплата не прошла — повторите в заказе"}. Деньги не списываются.
       </p>
-      <p className="muted small">Статус заказа — «{order.statusLabel || "Принят"}». Книга теперь в «Мои книги» → «Заказанные».</p>
+      <p className="muted small">Статус заказа — «{order.statusLabel || "Принят"}». Проект теперь в «Мои книги» → «Заказанные».</p>
+      {order.card && (
+        <>
+          <p style={{ fontWeight: 500, color: "var(--ds-color-text-strong)", margin: 0 }}>
+            А это открытка от нас — с личным кодом {order.hasBook ? "на следующую книгу воспоминаний" : "на следующий заказ"}.
+          </p>
+          <Postcard card={order.card} orderNumber={order.number} art={order.hasBook ? "book" : "prints"} />
+        </>
+      )}
       <Link href={"/orders/" + order.id} className="btn btn-primary btn-block">
         Открыть заказ
       </Link>

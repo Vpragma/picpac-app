@@ -73,6 +73,61 @@ test("синхронизация: два устройства меняют на�
   assert.equal(b2.json.project.options.pages, 22);
 });
 
+// N7 (требование жюри N3): местные правки — маски выделения (rle), ластик, «убери солнце» с координатами — живут только
+// на устройстве. Приложение их не отправляет (lib/sync.js, lib/photo/print.js); старая версия из кэша телефона может —
+// сервер их не сохраняет ни в проекте, ни в фото: только общие параметры и число местных правок.
+const LOCAL = {
+  v: 1,
+  auto: null,
+  autoOff: false,
+  manual: { exposure: 20 },
+  look: { mono: 100 },
+  by: "command",
+  ops: [
+    { kind: "mask", act: "blur", id: "x1", m: "k1" },
+    { kind: "heal", cx: 0.71, cy: 0.18, r: 0.06 },
+  ],
+  masks: { k1: { w: 320, h: 213, rle: "QUJDREVGR0hJSktMTU5PUA==" } },
+};
+const leaked = (x) => /rle|masks|"ops"|"cx"|"cy"|QUJDREVG/.test(JSON.stringify(x));
+
+test("N7: маски и координаты местных правок сервер не хранит — ни в настройках проекта, ни в правках фото", async () => {
+  const photoId = s.photos[0];
+  const g0 = await C.client.req(`/api/v1/projects/${s.project.id}`);
+  const r = await C.client.req(`/api/v1/projects/${s.project.id}`, {
+    method: "PATCH",
+    body: { version: g0.json.project.version, options: { settings: { quantity: 1, edits: { [photoId]: LOCAL } } } },
+  });
+  assert.equal(r.status, 200, r.text);
+  const saved = r.json.project.options.settings.edits[photoId];
+  assert.ok(!leaked(r.json.project.options), JSON.stringify(r.json.project.options));
+  assert.deepEqual(saved, { v: 1, auto: null, autoOff: false, manual: { exposure: 20 }, by: "command", look: { mono: 100 }, local: 2 });
+  // С «другого устройства» — то же самое; в базе тоже чисто
+  const g = await C2.client.req(`/api/v1/projects/${s.project.id}`);
+  assert.ok(!leaked(g.json.project.options));
+  const { data: row } = await admin.from("projects").select("options").eq("id", s.project.id).single();
+  assert.ok(!leaked(row.options), "в базе остались маски или координаты");
+  // Печатная версия «без файла» (правки параметрами): тоже только общие параметры
+  const pr = await C.client.req(`/api/v1/projects/${s.project.id}/photos/${photoId}/print`, { method: "PUT", body: { path: null, edits: LOCAL } });
+  assert.equal(pr.status, 200, pr.text);
+  const { data: ph } = await admin.from("project_photos").select("edits").eq("id", photoId).single();
+  assert.ok(!leaked(ph.edits), JSON.stringify(ph.edits));
+  assert.equal(ph.edits.manual.exposure, 20);
+  assert.equal(ph.edits.local, 2);
+  // Вернуть фото без правок (дальше тесты оформляют заказ с этим проектом)
+  assert.equal((await C.client.req(`/api/v1/projects/${s.project.id}/photos/${photoId}/print`, { method: "PUT", body: { path: null } })).status, 200);
+});
+
+test("N7: «не найдено» — с правильным родом: «Фото не найдено», «Проект не найден»", async () => {
+  const NIL = "00000000-0000-4000-8000-000000000000";
+  const ph = await C.client.req(`/api/v1/photos/${NIL}/url`);
+  assert.equal(ph.status, 404);
+  assert.match(ph.json.error.message, /^Фото не найдено\. Возможно, его удалили/);
+  const pr = await C.client.req(`/api/v1/projects/${NIL}`);
+  assert.equal(pr.status, 404);
+  assert.match(pr.json.error.message, /^Проект не найден\./);
+});
+
 test("серверная корзина видна с другого устройства, количество меняется, сумма пересчитывается сервером", async () => {
   const put = await C.client.req("/api/v1/cart", { method: "PUT", body: { items: [{ projectId: s.project.id, quantity: 2 }] } });
   assert.equal(put.status, 200, put.text);

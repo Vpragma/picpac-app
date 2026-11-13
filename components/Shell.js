@@ -4,10 +4,12 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { IconBell, IconBook, IconCart, IconCheck, IconGrid, IconHelp, IconImage, IconPackage, IconUser } from "./icons";
 import { useMe } from "../lib/me";
+import { adminSectionOf } from "../lib/adminNav";
 import { SUPPORT } from "../lib/support";
 import { cartCount, useCart } from "../lib/cart";
 import { startSync } from "../lib/sync";
 import { syncLargeTextFromCookie } from "../lib/textSize";
+import { syncThemeFromCookie } from "../lib/theme";
 import Pwa from "./Pwa";
 import NotificationBell from "./NotificationBell";
 
@@ -44,12 +46,15 @@ function Toasts({ hidden = false }) {
   );
 }
 
-// В роли сотрудника внизу — разделы админки, а не клиентское меню (каталог, книги, заказы клиента)
+// В роли сотрудника внизу — разделы админки, а не клиентское меню (каталог, книги, заказы клиента).
+// N7: пункт подсвечен только в своём разделе (lib/adminNav.js); на «Заказах», «Журнале» и других разделах без
+// своего пункта здесь не горит ничего — текущий раздел показывают вкладки вверху страницы.
+const staffMatch = (href) => (p) => adminSectionOf(p) === href;
 const STAFF_TABS = [
-  { href: "/admin", label: "Обзор", icon: IconPackage, match: (p) => p === "/admin" || p.startsWith("/admin/orders") || p.startsWith("/admin/support") },
-  { href: "/admin/moderation", label: "Модерация", icon: IconImage, match: (p) => p.startsWith("/admin/moderation") },
-  { href: "/admin/notifications", label: "Уведомления", icon: IconBell, match: (p) => p.startsWith("/admin/notifications") },
-  { href: "/admin/stats", label: "Статистика", icon: IconCheck, match: (p) => p.startsWith("/admin/stats") || p.startsWith("/admin/audit") || p.startsWith("/admin/reminders"), adminOnly: true },
+  { href: "/admin", label: "Обзор", icon: IconPackage, match: staffMatch("/admin") },
+  { href: "/admin/moderation", label: "Модерация", icon: IconImage, match: staffMatch("/admin/moderation") },
+  { href: "/admin/notifications", label: "Уведомления", icon: IconBell, match: staffMatch("/admin/notifications") },
+  { href: "/admin/stats", label: "Статистика", icon: IconCheck, match: staffMatch("/admin/stats"), adminOnly: true },
   { href: "/profile", label: "Профиль", icon: IconUser, match: (p) => p.startsWith("/profile") || p.startsWith("/login") },
 ];
 
@@ -58,12 +63,17 @@ export default function Shell({ children, logo, phoneQr = null }) {
   const path = usePathname() || "/";
   const count = cartCount(useCart());
   const me = useMe();
-  const staffRole = me?.authenticated && (me.activeRole === "admin" || me.activeRole === "moderator") ? me.activeRole : null;
+  // N7: пока не ответил сервер «кто вошёл» (me ещё нет или неизвестно), в админке сразу меню сотрудника (набор модератора,
+  // «Статистика» добавится для админа) — без мигания клиентского меню с подсвеченным «Профилем». Доступ к /admin
+  // всё равно проверяет сервер.
+  const pending = (!me || me.unknown || me.fromDevice) && adminSectionOf(path) !== null;
+  const staffRole = me?.authenticated && (me.activeRole === "admin" || me.activeRole === "moderator") ? me.activeRole : pending ? "moderator" : null;
   const tabs = staffRole ? STAFF_TABS.filter((t) => !t.adminOnly || staffRole === "admin") : TABS;
   // Проекты вошедшего клиента синхронизируются с аккаунтом (гость работает только на устройстве)
   useEffect(() => {
     startSync();
     syncLargeTextFromCookie();
+    syncThemeFromCookie();
   }, []);
   // Старая версия хранила «вход» в localStorage — убираем остатки, вход теперь только на сервере
   useEffect(() => {

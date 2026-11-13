@@ -2,31 +2,14 @@
    Подключается после globals.css и переопределяет его (picpac.css сгенерирован — не правим).
    Отдельный файл — чтобы правки D2 не пересекались с правками globals.css в других этапах. */
 
-/* ── 1. Контраст AA (N-05, ОТ-06): токены ───────────────────────────── */
-[data-theme='picpac'] {
-  --ds-color-text-secondary: #4f5553; /* на «свечении» фона 4,7:1 (было 3,7), на белом 7,6:1 */
-  --ds-color-text-muted: #6b706e; /* было 2,25:1 */
-  --ds-color-placeholder: #6b706e; /* подсказки в полях, 4,96:1 */
-  --pp-warning-text: #a84721; /* текст предупреждения, 5,4:1 (оранжевый #d9661f — только рамки) */
-  --ds-text-amount: 1.75rem;
-}
-@media (prefers-color-scheme: dark) {
-  [data-theme='picpac']:not([data-color-scheme='light']) {
-    --pp-warning-text: #ffa552;
-    --ds-color-border-input: #7a6a63; /* рамка поля 3,5:1 (была 1,4) */
-  }
-}
-[data-theme='picpac'][data-color-scheme='dark'] {
-  --pp-warning-text: #ffa552;
-  --ds-color-border-input: #7a6a63;
-}
+/* ── 1. Контраст AA (N-05, ОТ-06): токены контраста теперь в app/picpac.css (N1) ── */
 
 /* текст на цветных заливках: в тёмной теме заливки светлые — текст тёмный */
 .badge { color: var(--ds-color-on-accent); }
 .chip-ok, .pe-badge.ok { color: var(--ds-color-text-inverse); }
 .timeline .dot { color: var(--ds-color-text-inverse); }
 .photo-upload-waiting { color: var(--ds-color-text-strong); }
-.warn-text { color: var(--pp-warning-text); }
+.warn-text { color: var(--ds-color-warning-text); }
 .drop-overlay { background: rgb(0 0 0 / 0.6); }
 ::placeholder { color: var(--ds-color-placeholder); opacity: 1; }
 
@@ -118,6 +101,9 @@ label.row > input[type='checkbox']:not([role='switch']) { width: 22px; height: 2
 
 /* ── 6. Подвал с помощью (N-10) ─────────────────────────────────────── */
 .content { padding-bottom: 16px; }
+/* N5: подвал всегда ниже первого экрана — содержимое, которое дорисовывается после загрузки (черновик в редакторе,
+   корзина, заказы), не сдвигает его на виду (CLS было 0,08 у редактора). */
+.content { min-height: calc(100vh - 48px); min-height: calc(100svh - 48px); }
 .site-footer {
   padding: 16px 16px calc(var(--tabbar-h) + 24px + env(safe-area-inset-bottom));
   color: var(--ds-color-text-secondary); font-size: 0.875rem; text-align: center;
@@ -168,7 +154,7 @@ body:has(.sticky-bar) .site-footer { padding-bottom: calc(var(--tabbar-h) + var(
     font-size: 1rem; text-align: left; border-radius: var(--ds-radius-pill); color: var(--ds-color-text);
   }
   .tab:hover { background: var(--ds-color-bg-hover); }
-  .tab.active { background: var(--ds-gradient-selected); color: var(--ds-color-accent); }
+  .tab.active { background: var(--ds-color-bg-selected); color: var(--ds-color-accent); }
   .tab-desktop { display: flex; }
   .content, .site-footer { margin-left: var(--sidebar-w); }
   .content { max-width: calc(80rem + 4rem); padding: 1.5rem 2rem 1rem; }
@@ -227,3 +213,6 @@ body:has(.sticky-bar) .site-footer { padding-bottom: calc(var(--tabbar-h) + var(
 /* A8: миниатюры фото в карточке заказа (админка) */
 .admin-thumbs { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 6px 0 0; padding: 0; align-items: center; }
 .admin-thumbs img, .admin-thumb-empty { display: block; width: 72px; height: 72px; border-radius: 8px; object-fit: cover; background: var(--ds-color-bg-muted); }
+/* N7: миниатюра с флагом модерации — размытие не выходит за рамку */
+.admin-thumb-frame { display: block; overflow: hidden; border-radius: 8px; }
+.admin-flagged { list-style: none; padding: 0; margin: var(--space-2) 0 0; }

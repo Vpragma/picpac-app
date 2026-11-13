@@ -2,9 +2,11 @@
 // Права проверяются дважды: в proxy.js и здесь. Без входа — 401, без роли admin — 403.
 // GET ?action=auth.*|order.create&result=&user=&objectType=&objectId=&from=ГГГГ-ММ-ДД&to=&before=&limit=
 //   — фильтры (SEC-15). Без параметров — как раньше: последние 100 записей.
+//   N9: quick=logins|denied|status|moderation|admin, days=1|7|30|all, hideTests=1, hideSystem=1, hideErp=1,
+//   group=1 — одинаковые события подряд одной группой («×12»). Журнал только читается — ничего не меняется.
 // POST { email, ...те же фильтры } — поиск по почте: почту передаём только телом запроса, не в адресе.
 import { parseBody } from "@/lib/server/api";
-import { auditEmailSearch, auditFilters, filtersFromParams, queryAudit } from "@/lib/server/auditRead";
+import { auditEmailSearch, auditFilters, filtersFromParams, queryAudit, queryAuditGroups } from "@/lib/server/auditRead";
 import { json, jsonError } from "@/lib/server/http";
 import { requireApiRole } from "@/lib/server/session";
 
@@ -16,6 +18,11 @@ function badFilters(error) {
 
 async function answer(auth, f) {
   try {
+    // N9: group=1 — одинаковые события подряд одной строкой: { groups: [{ count, items }], rows, next }
+    if (f.group === "1") {
+      const { groups, rows, next } = await queryAuditGroups(auth.supabase, f, { pageSize: f.limit || 50 });
+      return json({ ok: true, timezone: "Europe/Minsk", groups, rows, next });
+    }
     const { items, next } = await queryAudit(auth.supabase, f);
     return json({ ok: true, timezone: "Europe/Minsk", items, next });
   } catch (e) {

@@ -1,0 +1,110 @@
+/*
+ * PicPac · микровзаимодействия (N2, ночь 2). Подключается последним.
+ * Правила: только transform и opacity (без сдвигов макета и без перерисовки), короткие длительности, --ds-ease;
+ * появление — с fill-mode backwards, чтобы после анимации работали обычные стили (подъём карточки при наведении).
+ * При prefers-reduced-motion всё выключено (раздел 7).
+ */
+
+/* ── 1. Нажатие: кнопки чуть «утапливаются», значки и вкладки — сжимаются ───────── */
+.btn:active:not(:disabled) { transform: translateY(1px) scale(0.98); }
+.icon-btn, .cart-btn, .help-btn, .bell-btn, .tab, .filter-chip, .season-promo-link {
+  transition: transform 140ms var(--ds-ease), color var(--ds-duration) var(--ds-ease), background-color var(--ds-duration) var(--ds-ease);
+}
+.icon-btn:active, .cart-btn:active, .help-btn:active, .bell-btn:active, .tab:active, .filter-chip:active { transform: scale(0.94); }
+
+/* ── 2. Появление карточек: каталог, заказы, книги, пустые экраны, плитки админки ─── */
+@keyframes pp-rise {
+  from { opacity: 0; transform: translate3d(0, 10px, 0); }
+  to { opacity: 1; transform: none; }
+}
+.catalog-grid > *, a.card, .empty-state, .stat-tile, .season-option {
+  animation: pp-rise 360ms var(--ds-ease) backwards;
+}
+.catalog-grid > :nth-child(2), .stat-tile:nth-child(2) { animation-delay: 50ms; }
+.catalog-grid > :nth-child(3), .stat-tile:nth-child(3) { animation-delay: 100ms; }
+.catalog-grid > :nth-child(4), .stat-tile:nth-child(4) { animation-delay: 150ms; }
+.catalog-grid > :nth-child(5) { animation-delay: 200ms; }
+.catalog-grid > :nth-child(n + 6) { animation-delay: 240ms; }
+
+/* ── 3. Переходы между шагами редактора: новый шаг мягко въезжает (без правок логики редактора) ── */
+@keyframes pp-step-in {
+  from { opacity: 0; transform: translate3d(14px, 0, 0); }
+  to { opacity: 1; transform: none; }
+}
+nav.steps + * { animation: pp-step-in 260ms var(--ds-ease) backwards; }
+.steps button { transition: transform 140ms var(--ds-ease), background-color var(--ds-duration) var(--ds-ease), color var(--ds-duration) var(--ds-ease); }
+.steps button:active:not(:disabled) { transform: scale(0.96); }
+
+/* ── 4. Скелетоны с мерцанием (components/Skeleton.js) ───────────────────────── */
+.skeleton-list { display: grid; gap: var(--space-3); }
+.skeleton-card { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--ds-color-border); border-radius: var(--ds-radius-lg); background: var(--ds-color-bg-surface); }
+.skeleton { position: relative; display: block; overflow: hidden; background: var(--ds-color-bg-muted); border-radius: var(--ds-radius-sm); }
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translate3d(-100%, 0, 0);
+  background: linear-gradient(90deg, transparent, var(--pp-skeleton-shine, rgb(255 255 255 / 0.6)), transparent);
+  animation: pp-shimmer 1.4s ease-in-out infinite;
+}
+:root[data-color-scheme='dark'] { --pp-skeleton-shine: rgb(255 255 255 / 0.08); }
+@media (prefers-color-scheme: dark) { :root[data-color-scheme='system'] { --pp-skeleton-shine: rgb(255 255 255 / 0.08); } }
+.skeleton-thumb { width: 56px; height: 56px; flex: none; border-radius: var(--ds-radius-md); }
+.skeleton-lines { display: grid; flex: 1; gap: var(--space-2); }
+.skeleton-line { height: 14px; }
+.skeleton-line.short { width: 55%; }
+@keyframes pp-shimmer { to { transform: translate3d(100%, 0, 0); } }
+
+/* ── 5. «Полёт» миниатюры в корзину (lib/flyToCart.js) и счётчик ─────────────── */
+.fly-thumb {
+  position: fixed;
+  z-index: 1000;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--ds-radius-md);
+  object-fit: cover;
+  background: var(--pp-sand);
+  border: 2px solid var(--pp-white);
+  box-shadow: var(--ds-shadow-popover);
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+.badge-bump { animation: pp-badge 520ms var(--ds-ease); }
+@keyframes pp-badge {
+  0% { transform: scale(0.5); opacity: 0.4; }
+  45% { transform: scale(1.35); opacity: 1; }
+  70% { transform: scale(0.92); }
+  100% { transform: scale(1); }
+}
+
+/* ── 6. Успех заказа: отметка «впрыгивает», искры разлетаются ─────────────────── */
+.order-done-mark { position: relative; display: inline-flex; width: 64px; height: 64px; color: var(--ds-color-success); animation: pp-pop 520ms var(--ds-ease) backwards; }
+.order-done-mark svg { width: 100%; height: 100%; }
+.order-done-mark .spark { color: var(--ds-color-line-art); transform-box: fill-box; transform-origin: center; animation: pp-spark 700ms var(--ds-ease) 180ms backwards; }
+.order-done-mark .spark:nth-of-type(2) { animation-delay: 240ms; }
+.order-done-mark .spark:nth-of-type(3) { animation-delay: 300ms; }
+@keyframes pp-pop {
+  0% { opacity: 0; transform: scale(0.4); }
+  60% { opacity: 1; transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+@keyframes pp-spark {
+  0% { opacity: 0; transform: scale(0.2); }
+  60% { opacity: 1; }
+  100% { opacity: 1; transform: scale(1); }
+}
+.order-done > h1 { animation: pp-rise 360ms var(--ds-ease) 120ms backwards; }
+
+/* ── 7. prefers-reduced-motion: без движения (листопад баннера — app/season.css) ── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .btn:active:not(:disabled), .icon-btn:active, .cart-btn:active, .help-btn:active, .bell-btn:active, .tab:active, .filter-chip:active, .steps button:active:not(:disabled) { transform: none; }
+  .skeleton::after { animation: none; opacity: 0; }
+  .sb-leaf { animation: none !important; }
+}

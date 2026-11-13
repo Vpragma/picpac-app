@@ -30,6 +30,8 @@ export default defineConfig({
     navigationTimeout: 60_000,
     screenshot: "only-on-failure",
     extraHTTPHeaders: bypass ? { "x-vercel-protection-bypass": bypass } : undefined,
+    // N1: онбординг первого входа уже пройден — тесты сразу видят экраны (сам онбординг проверяет e2e/brand.spec.mjs)
+    storageState: { cookies: [], origins: [{ origin: new URL(BASE_URL).origin, localStorage: [{ name: "pp:onboarding", value: "done" }] }] },
   },
   projects: [
     { name: "телефон 390×844", use: { viewport: { width: 390, height: 844 }, hasTouch: true } },

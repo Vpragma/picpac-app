@@ -26,13 +26,19 @@ function subscribeInstall(cb) {
   installListeners.add(cb);
   return () => installListeners.delete(cb);
 }
-// "prompt" — можно показать системное окно; "ios" — iPhone/iPad без установки; "installed" — уже открыто как приложение; null — не поддерживается
+// "prompt" — можно показать системное окно; "ios" — iPhone/iPad без установки; "android" — Android, браузер окно
+// не предложил (ещё не готов сервис-воркер или другой браузер); "installed" — уже открыто как приложение; null — не поддерживается.
+// N7: инструкция выбирается по устройству из строки браузера. Android проверяем первым: эмуляция Android на Mac
+// (встроенный браузер, DevTools) сообщает платформу MacIntel с сенсорным экраном — раньше это принималось за iPad.
 function installState() {
   if (installed) return "installed";
   if (typeof window === "undefined") return null;
   if (window.matchMedia?.("(display-mode: standalone)").matches || navigator.standalone) return "installed";
   if (installEvent) return "prompt";
-  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const ua = navigator.userAgent || "";
+  if (/Android/i.test(ua)) return "android";
+  // iPad в режиме «как на компьютере» пишет в строке браузера Macintosh, но у него сенсорный экран
+  const ios = /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
   return ios ? "ios" : null;
 }
 export function useInstall() {
@@ -65,8 +71,16 @@ export function InstallCard() {
             Установить приложение
           </button>
         </>
+      ) : state === "android" ? (
+        <ol className="pwa-ios-steps" data-install="android">
+          <li>
+            Откройте меню браузера <span aria-hidden="true">(три точки справа вверху)</span>.
+          </li>
+          <li>Выберите «Установить приложение» или «Добавить на главный экран».</li>
+          <li>Подтвердите — значок PicPac появится на экране.</li>
+        </ol>
       ) : (
-        <ol className="pwa-ios-steps">
+        <ol className="pwa-ios-steps" data-install="ios">
           <li>
             Нажмите «Поделиться» <span aria-hidden="true">(квадрат со стрелкой вверх)</span> внизу Safari.
           </li>
@@ -128,8 +142,20 @@ export default function Pwa() {
       if ("cancelIdleCallback" in window) window.cancelIdleCallback(idleId);
       else window.clearTimeout(idleId);
     };
-    function register() {
-    sw.register("/sw.js?v=" + encodeURIComponent(version), { scope: "/", updateViaCache: "none" })
+    // N5: страница могла прийти из кэша воркера (оболочка мгновенно), а на сервере уже новая версия — воркер
+    // записал её номер в кэш picpac-meta (public/sw.js). Тогда регистрируем воркер новой версии → тост «Обновить».
+    async function latestVersion() {
+      try {
+        const hit = await caches.match("/__picpac/latest-version", { cacheName: "picpac-meta" });
+        const v = hit ? (await hit.text()).trim() : "";
+        return /^[\w.-]{1,40}$/.test(v) ? v : version;
+      } catch {
+        return version;
+      }
+    }
+    async function register() {
+    const v = await latestVersion();
+    sw.register("/sw.js?v=" + encodeURIComponent(v), { scope: "/", updateViaCache: "none" })
       .then((reg) => {
         const track = (w) =>
           w?.addEventListener("statechange", () => {

@@ -217,9 +217,13 @@ test("выделение касанием: размыть фон, убрать �
 
   await test.step("печатная версия: полный размер, фон размыт, мяча нет, собака как в оригинале", async () => {
     const photos = order.order_items.flatMap((it) => it.snapshot?.photos || []);
-    const dog = photos.find((p) => p.edits?.ops?.length);
+    // N7: местные правки (маски «Размыть фон» и «Убрать») на сервер не уходят — в заказе только их число,
+    // а сами правки уже «впечатаны» в печатную версию, собранную на устройстве (проверка пикселей ниже)
+    const dog = photos.find((p) => p.edits?.local);
     expect(dog?.edits?.print?.path).toBeTruthy();
-    expect(dog.edits.ops.map((o) => o.act)).toEqual(["blurBg", "erase"]);
+    expect(dog.edits.local).toBe(2);
+    expect(dog.edits.ops).toBeUndefined();
+    expect(dog.edits.masks).toBeUndefined();
     expect([dog.edits.print.width, dog.edits.print.height]).toEqual([dog.width, dog.height]);
     const sign = async (path) => (await admin.storage.from("photos").createSignedUrl(path, 300)).data.signedUrl;
     const [printUrl, origUrl] = [await sign(dog.edits.print.path), await sign(dog.path || dog.storagePath)];
@@ -339,8 +343,10 @@ test("fix1: 8 правок по выделению на одном фото — 
     await expect(page.getByRole("heading", { name: "Заказ оформлен" })).toBeVisible({ timeout: 300_000 });
     const { data } = await admin.from("orders").select("id, order_items(snapshot)").eq("user_id", user.id);
     const ph = data[0].order_items.flatMap((it) => it.snapshot?.photos || [])[0];
-    expect(ph.edits.ops.filter((o) => o.kind === "mask")).toHaveLength(8);
-    expect(Object.keys(ph.edits.masks || {})).toHaveLength(1);
+    // N7: 8 правок по выделению остались на устройстве — в заказе только их число, масок нет
+    expect(ph.edits.local).toBe(8);
+    expect(ph.edits.ops).toBeUndefined();
+    expect(ph.edits.masks).toBeUndefined();
     const { print, ...rest } = ph.edits;
     expect(JSON.stringify(rest).length).toBeLessThan(20_000);
     expect(print?.path).toBeTruthy();

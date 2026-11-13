@@ -10,24 +10,27 @@
 //   считают её одинаково (lib/photo/mask.js); ластик — до света и цвета (результат кэшируется), остальное — после;
 //   правки фото всегда помещаются в предел сервера (PHOTO_EDITS_MAX) — проверяем до сохранения;
 // - D1: «Резкость для печати» ×2 (UpscalerJS, lib/photo/upscale.js) для фото, которым не хватает точек;
+// - N3: всё на устройстве, облака нет: стили-пресеты (edits.look), поиск предмета словом («убери машину», «размой собаку»):
+//   YOLOX-Nano в воркере выделения → рамка → SlimSAM по рамке → маска → та же правка, что после касания;
 // - история шагов — в памяти редактора (кнопка «Отменить»), каждый шаг сразу сохраняется в черновике.
 import { useEffect, useRef, useState } from "react";
-import { getPhotoBlob, kvSet, mapDraftPhotos, setPhotoEdits } from "../../lib/draft";
-import { ADJUST_KEYS, ADJUST_LABELS, addManual, applyEdits, compactEdits, emptyEdits, hasAuto, hasManual, normEdits, setManual } from "../../lib/photo/adjust";
+import { getDraftState, getPhotoBlob, kvSet, mapDraftPhotos, setPhotoEdits } from "../../lib/draft";
+import { ADJUST_KEYS, ADJUST_LABELS, addManual, applyEdits, compactEdits, emptyEdits, hasAuto, hasManual, normEdits, setLook, setManual } from "../../lib/photo/adjust";
 import { autoParams } from "../../lib/photo/analyze";
 import { SUGGESTIONS, parseCommand } from "../../lib/photo/commands";
 import { photoBadges } from "../../lib/photo/badges";
 import { applyOps, findSun } from "../../lib/photo/local";
 import { MAX_MASK_OPS, addMaskOp, editsFit, eraseKey, hydrateOps, maskArea, splitOps } from "../../lib/photo/mask";
-import { aiSupport, aiWhy, embedImage, embeddedFor, eraseImage, isCancelled, segmentPoints, stopAi, stopEraser } from "../../lib/photo/ai";
+import { aiSupport, aiWhy, detectObjects, embedImage, embeddedFor, eraseImage, isCancelled, meaningOf, segmentBox, segmentPoints, stopAi, stopEraser, stopMeaning } from "../../lib/photo/ai";
+import { OBJECT_EXAMPLES, boxMask, clipMaskToBox, pickObjects, unionMasks } from "../../lib/photo/objects";
 import { MIGAN_FILE, ORT_WASM, SAM_FILES, mb } from "../../lib/photo/modelFiles";
 import { UPSCALE_MAX_SIDE, stopUpscale, upscaleBlob, upscaleKey } from "../../lib/photo/upscale";
 import { setAutoEnhance, useAutoEnhance } from "../../lib/photo/settings";
-import AiPrefetch from "./AiPrefetch";
+import AiPrefetch, { useAiOffline } from "./AiPrefetch";
 import { notify } from "../../lib/store";
+import { useSyncState } from "../../lib/sync";
+import { isClient, useMe } from "../../lib/me";
 import { track } from "@/lib/analytics";
-import CloudConsent from "./CloudConsent";
-import { cloudAsk, cloudFind, cloudRetry } from "./cloudEditor";
 
 const PREVIEW_SIDE = 1280;
 const MIN_PREVIEW_SIDE = 640; // очень маленькие фото (48×32) показываем крупно — по ним можно попасть пальцем
@@ -87,6 +90,67 @@ async function loadSource(id, thumbUrl) {
   return img;
 }
 
+// N3: дождаться, пока выделение (SlimSAM) будет готово для фото pid. null — не получилось, отменили или фото сменили
+async function waitReady(aiRef, cur, pid, ms = 180_000) {
+  for (let waited = 0; waited < ms; waited += 200) {
+    if (cur.current !== pid) return null;
+    const a = aiRef.current;
+    if (a.photoId === pid && a.status === "ready") return a;
+    if (a.status === "error" || a.status === "unsupported" || a.status === "off" || a.photoId !== pid) return null;
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  return null;
+}
+
+// N3: правка по маске найденного предмета — поверх свежих правок фото из черновика (поиск долгий, замыкание
+// рендера могло устареть). Те же пределы, что у правки после касания. → { edits, before } или { say }
+function applyFoundMask(pid, act, m) {
+  const proj = getDraftState().draft;
+  const ph = proj?.photos.find((p) => p.id === pid);
+  if (!ph) return { say: "Этого фото уже нет в проекте." };
+  const base = normEdits(ph.edits);
+  if ((base.ops || []).filter((o) => o.kind === "mask").length >= MAX_MASK_OPS)
+    return { say: `Для одного фото — не больше ${MAX_MASK_OPS} правок по выделению. «Отменить» или «Вернуть оригинал» освободят место.` };
+  const { edits: packed } = addMaskOp(base, act, m.bits, m.w, m.h);
+  const next = { ...packed, by: "command" };
+  if (!editsFit(compactEdits(next))) return { say: "На этом фото уже много правок по выделению — новая не поместится в заказ. «Отменить» уберёт последнюю, «Вернуть оригинал» — все." };
+  let n = 0;
+  for (const p of proj.photos) n += JSON.stringify(compactEdits(p.id === pid ? next : p.edits) || "").length;
+  if (n > 45_000) return { say: "В проекте уже очень много правок по выделению. Отмените часть — и можно продолжить." };
+  return { edits: next, before: base };
+}
+
+// N3: команда, подобранная по смыслу, — свет, цвет, стиль или автоулучшение — поверх свежих правок фото из черновика
+// (модель думала, замыкание рендера могло устареть). Остальное (по выделению) — null: тогда предлагаем кнопку.
+function applyCommandFresh(pid, label) {
+  const ph = getDraftState().draft?.photos.find((p) => p.id === pid);
+  const r = parseCommand(label);
+  if (!ph || !r.ok || !r.steps.every((x) => x.kind === "adjust" || x.kind === "look" || x.kind === "auto")) return null;
+  const before = normEdits(ph.edits);
+  let next = before;
+  const said = [];
+  for (const step of r.steps) {
+    if (step.kind === "adjust") {
+      next = addManual(next, step.deltas, "command");
+      if (step.look) next = setLook(next, step.look);
+    } else if (step.kind === "look") {
+      next = setLook(next, null);
+      if ((next.manual.saturation || 0) < 0) next = setManual(next, "saturation", 0, "command");
+    } else {
+      const m = ph.quality?.metrics;
+      if (!m) return null;
+      next = { ...next, auto: autoParams(m, { force: true }), autoOff: false };
+    }
+    said.push(step.say);
+  }
+  return { before, next, say: said.join(". "), last: r.steps.find((x) => x.kind === "adjust") || null };
+}
+
+const loadedSize = (id) => {
+  const img = cache.get(id);
+  return img ? { w: img.width, h: img.height } : null;
+};
+
 // Ластик (D1): результат «Убрать» для превью считается в воркере ластика один раз и кэшируется по набору правок.
 // Ход (загрузка модели в первый раз с процентом, затем расчёт) — общий: его видят превью и строка ответа.
 const erasedCache = new Map();
@@ -144,9 +208,11 @@ function toSide(img, side) {
   return ctx.getImageData(0, 0, w, h);
 }
 
-const MASK_SAY = { blurBg: "Размыли фон — главное осталось чётким", lighten: "Осветлили выделенное", darken: "Затемнили выделенное", erase: "Убираем выделенное…" };
+const MASK_SAY = { blurBg: "Размыли фон — главное осталось чётким", blur: "Размыли выделенное", lighten: "Осветлили выделенное", darken: "Затемнили выделенное", erase: "Убираем выделенное…" };
 const ERASED_SAY = "Убрали выделенное. «Отменить» вернёт как было.";
-const MASK_VERB = { blurBg: "Размыть фон", lighten: "Осветлить выделенное", darken: "Затемнить выделенное", erase: "Убрать" };
+const MASK_VERB = { blurBg: "Размыть фон", blur: "Размыть выделенное", lighten: "Осветлить выделенное", darken: "Затемнить выделенное", erase: "Убрать" };
+// Что сделали с найденным словом предметом (N3)
+const FOUND_SAY = { blurBg: "размыл фон вокруг", blur: "размыл", lighten: "осветлил", darken: "затемнил" };
 const AI_OFF = { status: "off" };
 
 export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds, extra, initialPhotoId }) {
@@ -164,9 +230,13 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
   const aiRef = useRef(AI_OFF);
   const segN = useRef(0);
   const [up, setUp] = useState(null); // «Резкость для печати»: { photoId, status: run|error, p, say }
-  const [consentAsk, setConsentAsk] = useState(null); // D6: карточка согласия на облачный ИИ
   const [pendingErase, setPendingErase] = useState(null); // { photoId, opId } — «Убрать», нажатое в этом сеансе
   const aiOk = aiSupport().ok; // выделение касанием на этом устройстве возможно (иначе — честные ответы)
+  const offline = useAiOffline(ai.status + ":" + (answer?.say || "")); // модели ИИ уже на устройстве — работает без интернета
+  const who = useMe();
+  const account = useSyncState().enabled || isClient(who); // вошедший клиент: проект и фото — в аккаунте (lib/sync.js)
+  const signedIn = !!who?.authenticated; // сотрудник в редакторе: синхронизации нет, фото на устройстве
+  const fresh = useRef(null); // id открытого фото — для долгих операций (поиск предмета словом)
 
   // Память воркеров ИИ освобождаем, когда редактор закрыт
   useEffect(
@@ -174,9 +244,15 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
       stopAi();
       stopEraser();
       stopUpscale();
+      stopMeaning();
     },
     [],
   );
+
+  // Какое фото открыто сейчас (N3: поиск предмета словом долгий — пока искали, могли выбрать другое фото)
+  useEffect(() => {
+    fresh.current = photo?.id || null;
+  });
 
   if (!photo) return <p className="muted">Добавьте фото — здесь можно будет улучшить их командой или ползунками.</p>;
 
@@ -196,7 +272,6 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
   }
 
   function choose(id) {
-    setConsentAsk(null);
     if (live && live.id === photo.id) commit(live.edits); // ползунок двигали, но не отпустили — не теряем
     // Другое фото — результат кодировщика больше не нужен: освобождаем память воркера выделения
     if (id !== photo.id) stopAi();
@@ -279,20 +354,21 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
   }
 
   // Правка по выделению поверх base (правки фото) → { edits, say } или { say } без правки
-  function maskStep(act, base) {
+  function maskStep(act, base, m = mask) {
     const sup = aiSupport();
-    if (!sup.ok) return { say: `«${MASK_VERB[act]}» на этом устройстве не получится: нужно выделение касанием, а ${aiWhy(sup)}. Работают свет и цвет: «ярче», «теплее», «убери пересвет».` };
-    if (!hasMask) {
+    const has = !!(m && maskArea(m.bits));
+    if (!sup.ok && !has) return { say: `«${MASK_VERB[act]}» на этом устройстве не получится: нужно выделение касанием, а ${aiWhy(sup)}. Работают свет и цвет: «ярче», «теплее», «убери пересвет».` };
+    if (!has) {
       startSelect(act);
       const what = act === "blurBg" ? "главного на фото — того, что должно остаться чётким" : act === "erase" ? "того, что убрать" : "того, что изменить";
-      const btn = { blurBg: "Размыть фон", lighten: "Осветлить", darken: "Затемнить", erase: "Убрать" }[act];
+      const btn = { blurBg: "Размыть фон", blur: "Размыть", lighten: "Осветлить", darken: "Затемнить", erase: "Убрать" }[act];
       return { say: `Коснитесь ${what}, затем нажмите «${btn}».` };
     }
     const ops = base.ops || [];
     if (ops.filter((o) => o.kind === "mask").length >= MAX_MASK_OPS)
       return { say: `Для одного фото — не больше ${MAX_MASK_OPS} правок по выделению. «Отменить» или «Вернуть оригинал» освободят место.` };
     // Маска сжимается и хранится один раз (одинаковое выделение не дублируется)
-    const { edits: packed, op } = addMaskOp(base, act, mask.bits, mask.w, mask.h);
+    const { edits: packed, op } = addMaskOp(base, act, m.bits, m.w, m.h);
     const next = { ...packed, by: "command" };
     // Правки фото должны поместиться на сервер печатной версии (тот же счёт, что у сервера) — проверяем заранее
     if (!editsFit(compactEdits(next)))
@@ -396,22 +472,124 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
     setAnswer({ ok: true, say: on ? "Улучшение вернули" : "Улучшение отменили — фото как было" });
   }
 
-  // D6: облачный ИИ (components/editor/cloudEditor.js) берёт отсюда свежие функции редактора
-  function cloudCtx() {
-    if (!photo) return null;
-    const getFrame = async () => toSide(await ensureErased(photo.id, await loadSource(photo.id, thumbs[photo.id]), splitOps(saved.ops).erase), 768);
-    return { photoId: photo.id, readOnly, run, setAnswer, setConsentAsk, startSelect, aiRef, setAi, getFrame };
+  // N3: поиск предмета словом — целиком на устройстве. YOLOX-Nano (воркер выделения) находит рамки, SlimSAM выделяет
+  // предмет по рамке (без SlimSAM — овал по рамке), дальше та же правка, что после касания. act: blur | lighten | darken |
+  // blurBg — сразу; erase — выделяем и ждём «Убрать» (ластик тяжёлый, выделение лучше проверить); null — только выделить.
+  async function findObject(step, act) {
+    const pid = photo.id;
+    const what = step.objSay || step.target;
+    const touch = act === "erase" ? "Коснитесь того, что убрать, — я выделю, затем нажмите «Убрать»." : "Коснитесь нужного на фото — я выделю.";
+    const alive = () => fresh.current === pid;
+    const say = (a) => alive() && setAnswer(a);
+    const sam = aiSupport().ok;
+    let dets;
+    try {
+      const src = await ensureErased(pid, await loadSource(pid, thumbs[pid]), splitOps(hydrateOps(saved)).erase);
+      if (!alive()) return;
+      const found = detectObjects(toSide(src, 416), (m) => m.stage === "load" && say({ ok: true, say: `Ищу ${what} на фото: загружаем поиск предметов на устройство, ${Math.round((m.p || 0) * 100)}%` }));
+      if (sam) startSelect(act); // выделение готовится сразу после поиска (в том же воркере, по очереди)
+      dets = await found;
+    } catch (e) {
+      if (isCancelled(e)) return;
+      console.error(e, e?.workerStack || "");
+      return say({ ok: false, say: `Не получилось поискать ${what}. ${sam ? touch : "Работают свет и цвет: «ярче», «теплее»."}` });
+    }
+    if (!alive()) return;
+    const picked = pickObjects(dets, step);
+    if (!picked.length) return say({ ok: false, say: `Не нашёл ${what} на этом фото. ${sam ? touch : "Работают свет и цвет: «ярче», «теплее»."}` });
+    say({ ok: true, say: `Нашёл ${what}${picked.length > 1 ? ` (${picked.length})` : ""}, выделяю…` });
+    let m = null;
+    if (sam) {
+      const a = await waitReady(aiRef, fresh, pid);
+      if (!a) return aiRef.current.status === "off" ? undefined : say({ ok: false, say: `Нашёл ${what}, но выделить не получилось. ${touch}` });
+      let bits = null;
+      let w = 0;
+      let h = 0;
+      try {
+        for (const b of picked) {
+          const r = await segmentBox(a.key, b);
+          w = r.w;
+          h = r.h;
+          bits = unionMasks(bits, clipMaskToBox(r.mask, r.w, r.h, b));
+        }
+      } catch (e) {
+        if (isCancelled(e)) return;
+        console.error(e, e?.workerStack || "");
+        bits = null;
+      }
+      if (!alive() || aiRef.current.key !== a.key) return;
+      if (!bits || maskArea(bits) < w * h * 0.0005) return say({ ok: false, say: `Не получилось выделить ${what}. ${touch}` });
+      m = { bits, w, h };
+      setAi((st) => ({ ...st, points: [], mask: m, busy: false, pending: act, shown: true }));
+    } else {
+      // Мало памяти для SlimSAM: овал по рамке (в размере хранимой маски)
+      const size = loadedSize(pid) || { w: 4, h: 3 };
+      const w = 320;
+      const h = Math.max(1, Math.round((320 * size.h) / size.w));
+      let bits = null;
+      for (const b of picked) bits = unionMasks(bits, boxMask(b, w, h));
+      m = { bits, w, h };
+    }
+    if (!act || act === "erase") {
+      if (!sam) return say({ ok: false, say: `Нашёл ${what}, но ${act === "erase" ? "убрать" : "выделить"} на этом устройстве не получится: для этого ${aiWhy(aiSupport())}.` });
+      return say({
+        ok: true,
+        say:
+          act === "erase"
+            ? `Нашёл и выделил ${what}. Проверьте выделение и нажмите «Убрать» — или коснитесь, чтобы поправить.`
+            : `Нашёл и выделил ${what}. Дальше: «Размыть», «Размыть фон», «Осветлить», «Затемнить» или «Убрать».`,
+      });
+    }
+    // Правка сразу — по свежим правкам фото из черновика (замыкание этого рендера уже могло устареть)
+    const r = applyFoundMask(pid, act, m);
+    if (!r.edits) return say({ ok: false, say: r.say });
+    const before = r.before;
+    setHistory((hst) => ({ ...hst, [pid]: [...(hst[pid] || []), before].slice(-30) }));
+    setPhotoEdits(pid, r.edits);
+    track("ai_edit", { props: { kind: "local" } });
+    setAi((b) => ({ ...b, pending: null, shown: false }));
+    say({ ok: true, say: `Нашёл ${what} и ${FOUND_SAY[act]}. «Отменить» вернёт как было.` });
   }
-  // Контекст на момент команды; после ответа облака cloudEditor.js сверяет фото и состояние выделения (aiRef)
-  const getCloud = () => cloudCtx();
 
-  // pre — уже разобранная команда (ответ облачного ИИ в тех же шагах, что у словаря)
-  function run(text, pre) {
+  // N3 (SHOULD): словарь не понял — маленькая модель на устройстве ищет ближайшую команду по смыслу.
+  // Уверена — выполняем («По смыслу — «Тёплый вечер»…»), нет — до 3 кнопок с похожими командами, совсем мимо — подсказка
+  async function askMeaning(text, fallback) {
+    const pid = photo.id;
+    setAnswer({ ok: false, say: `Не знаю команды «${text}» — подбираю похожую по смыслу…`, thinking: true });
+    let res = null;
+    try {
+      res = await meaningOf(text, (m) => fresh.current === pid && setAnswer({ ok: false, say: `Не знаю команды «${text}» — загружаем подсказчик на устройство: ${Math.round((m.p || 0) * 100)}%`, thinking: true }));
+    } catch (e) {
+      if (!isCancelled(e)) console.error(e);
+    }
+    if (fresh.current !== pid) return;
+    // Кнопки, которые уже есть среди подсказок под полем, не повторяем
+    if (res) res = { ...res, options: res.options.filter((o) => !SUGGESTIONS.includes(o.label)) };
+    if (res?.pick) {
+      const others = res.options.filter((o) => o.id !== res.pick.id).slice(0, 2);
+      const done = applyCommandFresh(pid, res.pick.label);
+      if (!done) {
+        // Правка по выделению («Размыть фон») — только по нажатию: ей нужно касание
+        if (SUGGESTIONS.includes(res.pick.label)) return setAnswer({ ok: true, say: `Понял по смыслу как «${res.pick.label}» — нажмите эту кнопку под полем.`, options: others });
+        return setAnswer({ ok: true, say: `Понял по смыслу как «${res.pick.label}». Нажмите, чтобы применить:`, options: [res.pick, ...others], meant: true });
+      }
+      setHistory((h) => ({ ...h, [pid]: [...(h[pid] || []), done.before].slice(-30) }));
+      setPhotoEdits(pid, done.next);
+      if (done.last) setLast(done.last);
+      track("ai_edit", { props: { kind: "command" } });
+      return setAnswer({ ok: true, say: `По смыслу — «${res.pick.label}»: ${done.say}. «Отменить» вернёт как было.${others.length ? " Или:" : ""}`, options: others });
+    }
+    // Не уверена (в том числе на бессмыслице) — ничего не меняем: подсказка словаря и 3 похожие команды кнопками
+    if (res?.options?.length) return setAnswer({ ok: false, say: `${fallback} Или похожее по смыслу:`, options: res.options });
+    setAnswer({ ok: false, say: fallback });
+  }
+
+  function run(text) {
     if (readOnly) return;
-    const r = pre || parseCommand(text, { last });
+    const r = parseCommand(text, { last });
     if (!r.ok) {
       setAnswer({ ok: false, say: r.say });
-      if (!pre && String(text || "").trim()) cloudAsk(text, r, getCloud); // D6: словарь не понял — облачный ИИ или подсказка
+      if (String(text || "").trim()) askMeaning(String(text).trim(), r.say);
       return;
     }
     track("ai_edit", { props: { kind: "command" } });
@@ -420,7 +598,13 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
     for (const step of r.steps) {
       if (step.kind === "adjust") {
         next = addManual(next, step.deltas, "command");
+        if (step.look) next = setLook(next, step.look); // стиль-пресет: ч/б, сепия, винтаж…
         setLast(step);
+        said.push(step.say);
+      } else if (step.kind === "look") {
+        // «Верни цвет», «убери фильтр»: стиль долой, а «бесцветность» ч/б — тоже
+        next = setLook(next, null);
+        if ((next.manual.saturation || 0) < 0) next = setManual(next, "saturation", 0, "command");
         said.push(step.say);
       } else if (step.kind === "auto") {
         const m = photo.quality?.metrics;
@@ -434,19 +618,22 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
         return undo();
       } else if (step.kind === "reset") {
         return resetOriginal();
-      } else if (step.kind === "blurBackground" || step.kind === "maskTone" || (step.kind === "remove" && step.target !== "sun" && step.target !== "glare")) {
-        // D1: правки по выделению касанием. «Убери машину»: детектора на устройстве нет — если предмет уже
-        // выделен касанием, убираем выделенное, иначе просим коснуться его (облачный поиск — этап D6)
-        const act = step.kind === "blurBackground" ? "blurBg" : step.kind === "maskTone" ? (step.dir > 0 ? "lighten" : "darken") : "erase";
+      } else if (step.classes?.length) {
+        // N3: предмет назван словом — ищем его на устройстве (даже если что-то уже выделено касанием)
+        const act = step.kind === "remove" ? "erase" : step.kind === "maskBlur" ? "blur" : step.kind === "blurBackground" ? "blurBg" : step.kind === "maskTone" ? (step.dir > 0 ? "lighten" : "darken") : null;
+        findObject(step, act);
+        said.push(`Ищу ${step.objSay || step.target} на фото…`);
+      } else if (step.kind === "blurBackground" || step.kind === "maskTone" || step.kind === "maskBlur" || (step.kind === "remove" && step.target !== "sun" && step.target !== "glare")) {
+        // Правки по выделению касанием. «Убери X», где X — не из словаря предметов: выделенное или просьба коснуться
+        const act = step.kind === "blurBackground" ? "blurBg" : step.kind === "maskBlur" ? "blur" : step.kind === "maskTone" ? (step.dir > 0 ? "lighten" : "darken") : "erase";
         const sup = aiSupport();
         if (act === "erase" && !sup.ok && step.target !== "selection") {
           said.push(`Убрать «${step.target}» на этом устройстве не получится: нужно выделение касанием, а ${aiWhy(sup)}. Работают свет и цвет и «убери солнце»`);
           continue;
         }
         if (act === "erase" && !hasMask && step.target !== "selection") {
-          // D6: найти предмет по слову в облаке (рамка → SlimSAM по рамке → маска); без облака — просьба коснуться
-          cloudFind(step.en || step.target, "erase", getCloud);
-          said.push(`Ищу «${step.target}» на фото…`);
+          startSelect("erase");
+          said.push(`Не знаю, как выглядит «${step.target}», — коснитесь этого на фото, я выделю, затем нажмите «Убрать». Сам нахожу: ${OBJECT_EXAMPLES}`);
           continue;
         }
         const res = maskStep(act, next);
@@ -460,7 +647,7 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
       }
     }
     if (next !== saved) commit(next);
-    setAnswer({ ok: next !== saved || r.steps.every((s) => s.kind === "keep"), say: said.join(". ") });
+    setAnswer({ ok: next !== saved || r.steps.every((s) => s.kind === "keep" || s.classes?.length), say: said.join(". ") });
     setCmd("");
   }
 
@@ -484,9 +671,28 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
 
   const badges = photoBadges({ ...photo, edits }, { lowDpi: lowDpiIds?.has(photo.id), duplicate: dupIds?.has(photo.id) });
   const enhanced = hasAuto(edits);
+  // N7: правки по выделению сделаны на другом устройстве — сюда они не приходят (маски не покидают телефон)
+  const localElsewhere = photo.localElsewhere > 0 && !(saved.ops || []).length;
 
   return (
     <div className="pe">
+      {/* N3: ИИ только на устройстве. N7: честно, где хранятся сами фото — у вошедшего клиента в аккаунте (сразу после
+          добавления: проект на всех устройствах и готов к печати), у гостя — на устройстве до заказа */}
+      <div className="pe-note small" role="note" data-local-ai data-storage={account ? "account" : "device"} style={{ marginBottom: 8 }}>
+        <b>ИИ работает на вашем телефоне — фото и команды для правок никуда не отправляются.</b>{" "}
+        {offline && (
+          <span className="ok-text" data-offline-ready>
+            Работает без интернета.
+          </span>
+        )}
+        <span className="muted" style={{ display: "block" }}>
+          {account
+            ? "Сами фото хранятся в вашем аккаунте PicPac, в нашем защищённом хранилище, — так проект есть на всех ваших устройствах и его можно напечатать. Правки по выделению остаются на этом телефоне."
+            : signedIn
+              ? "Фото остаются на этом устройстве — к нам они попадут только с заказом, для печати."
+              : "Пока вы не вошли, фото остаются на этом устройстве — к нам они попадут только с заказом, для печати."}
+        </span>
+      </div>
       <p className="muted">Скажите, что изменить, или подвигайте ползунки — оригинал не меняется, всё можно вернуть.</p>
       <div className="pe-strip" role="list" aria-label="Фото проекта">
         {usable.map((p, i) => {
@@ -536,6 +742,12 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
           onDone={() => setAi(AI_OFF)}
         />
 
+        {localElsewhere && (
+          <p className="small pe-note" role="note" data-local-elsewhere>
+            Правки по выделению к этому фото остались на устройстве, где их сделали, — они его не покидают. Чтобы напечатать фото с ними, оформите заказ оттуда.
+          </p>
+        )}
+
         {(lowDpiIds?.has(photo.id) || saved.upscale === 2) && (
           <UpscaleCard photo={photo} edits={saved} up={up?.photoId === photo.id ? up : null} readOnly={readOnly} onRun={runUpscale} onCancel={() => stopUpscale()} onRemove={removeUpscale} />
         )}
@@ -571,11 +783,15 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
             Что изменить?
           </label>
           <div className="row" style={{ gap: 8 }}>
-            <input id="pe-cmd" className="input" value={cmd} onChange={(e) => setCmd(e.target.value)} placeholder="Например: сделай ярче и чуть теплее" disabled={readOnly} autoComplete="off" enterKeyHint="done" />
+            <input id="pe-cmd" className="input" value={cmd} onChange={(e) => setCmd(e.target.value)} placeholder="Своими словами" aria-describedby="pe-cmd-hint" disabled={readOnly} autoComplete="off" enterKeyHint="done" />
             <button type="submit" className="btn btn-primary" disabled={readOnly}>
               Сделать
             </button>
           </div>
+          {/* N7: примеры — отдельной строкой: в поле на телефоне длинная подсказка обрезалась */}
+          <p id="pe-cmd-hint" className="small muted pe-hint">
+            Например: тёплый вечер, ч/б, убери машину
+          </p>
           <div className="pe-chips" aria-label="Подсказки">
             {/* «Размыть фон» без выделения касанием на этом устройстве — тупик (S12): не показываем */}
             {SUGGESTIONS.filter((s) => aiOk || s !== "Размыть фон").map((s) => (
@@ -584,11 +800,20 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
               </button>
             ))}
           </div>
-          <p className="small pe-answer" data-ok={answer ? String(answer.ok) : undefined} role="status" aria-live="polite">
+          <p className="small pe-answer" data-ok={answer ? String(answer.ok) : undefined} role="status" aria-live="polite" aria-busy={answer?.thinking ? "true" : undefined}>
             {answer?.say || ""}
           </p>
+          {/* N3: похожие команды по смыслу (модель на устройстве) — одно нажатие выполняет команду словаря */}
+          {answer?.options?.length > 0 && (
+            <div className="pe-chips" aria-label="Похожие команды" data-meaning>
+              {answer.options.map((o, i) => (
+                <button type="button" key={o.id} className={"btn btn-small" + (answer.meant && i === 0 ? " btn-primary" : "")} onClick={() => run(o.label)} disabled={readOnly}>
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          )}
         </form>
-        <CloudConsent ask={consentAsk} onAllow={() => cloudRetry(consentAsk, getCloud)} onClose={() => setConsentAsk(null)} />
 
         <div className="pe-sliders">
           {ADJUST_KEYS.map((k) => {
@@ -753,6 +978,9 @@ function SelectPanel({ ai, hasMask, readOnly, onStart, onCancel, onMode, onUndoP
       <div className="row wrap pe-select-row" role="group" aria-label="Что сделать с выделенным">
         <button type="button" className={"btn btn-small" + pend("blurBg")} onClick={() => onAction("blurBg")} disabled={readOnly || !hasMask}>
           Размыть фон
+        </button>
+        <button type="button" className={"btn btn-small" + pend("blur")} onClick={() => onAction("blur")} disabled={readOnly || !hasMask}>
+          Размыть
         </button>
         <button type="button" className={"btn btn-small" + pend("lighten")} onClick={() => onAction("lighten")} disabled={readOnly || !hasMask}>
           Осветлить

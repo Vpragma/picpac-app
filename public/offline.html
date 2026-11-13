@@ -7,9 +7,12 @@
 <title>Нет сети — PicPac</title>
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <style>
-  :root { --bg: #faf5ed; --surface: #ffffff; --text: #38524f; --strong: #2b403d; --muted: #5f6563; --accent: #bd3434; --border: #ebe3d8; color-scheme: light; }
+  :root { --bg: #faf5ed; --surface: #ffffff; --text: #38524f; --strong: #2b403d; --muted: #5c615f; --accent: #bd3434; --focus: #bd3434; --border: #e9e1d5; color-scheme: light; }
+  /* N1: светлая тема бренда по умолчанию. N7: тёмная — по выбору в приложении (атрибут ставит сервис-воркер по cookie
+     pp_theme) или, если выбор неизвестен, по настройке телефона. Цвета — токены тёмной темы N1 (app/picpac.css). */
+  :root[data-color-scheme="dark"] { --bg: #172321; --surface: #20302d; --text: #ebe5da; --strong: #faf5ed; --muted: #a2aca8; --focus: #f0968c; --border: #334a46; color-scheme: dark; }
   @media (prefers-color-scheme: dark) {
-    :root { --bg: #15100e; --surface: #211a17; --text: #f4ece6; --strong: #fff8f2; --muted: #c4b8b0; --accent: #ff8585; --border: #3a2e2a; color-scheme: dark; }
+    :root:not([data-color-scheme]), :root[data-color-scheme="system"] { --bg: #172321; --surface: #20302d; --text: #ebe5da; --strong: #faf5ed; --muted: #a2aca8; --focus: #f0968c; --border: #334a46; color-scheme: dark; }
   }
   * { box-sizing: border-box; }
   body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); font: 16px/1.5 Jost, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; display: flex; align-items: center; justify-content: center; padding: 24px 16px; }
@@ -20,15 +23,14 @@
   .row { display: grid; gap: 10px; }
   a { display: block; padding: 13px 16px; border-radius: 12px; text-decoration: none; font-weight: 500; border: 1px solid var(--border); color: var(--strong); }
   a.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  @media (prefers-color-scheme: dark) { a.primary { color: #15100e; } }
-  a:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  a:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 </style>
 </head>
 <body>
 <main>
   <img src="/icons/icon-192.png" alt="" width="72" height="72">
   <h1>Нет сети</h1>
-  <p>Черновики сохранены на устройстве — продолжите, когда связь вернётся. Фото из черновиков загрузятся в аккаунт сами.</p>
+  <p>Черновики и фото сохранены на этом устройстве — продолжите, когда появится связь.</p>
   <div class="row">
     <a class="primary" href="">Попробовать снова</a>
     <a href="/books">Мои книги — открыть черновики</a>

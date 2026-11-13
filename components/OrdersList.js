@@ -6,6 +6,9 @@ import { useEffect, useState } from "react";
 import { callApi } from "../lib/api";
 import { getMe } from "../lib/me";
 import { StatusChip, byn, minskDay } from "./OrderBits";
+import { EmptyState } from "./LineArt";
+import { CardLine } from "./promo/Postcard";
+import { SkeletonList } from "./Skeleton";
 
 const POLL_MS = 15000;
 
@@ -29,20 +32,27 @@ export default function OrdersList() {
     };
   }, []);
 
-  if (!res) return <p className="muted">Загружаем заказы…</p>;
+  if (!res) return <SkeletonList rows={3} label="Загружаем заказы…" />;
   if (res.status === 401)
     return (
       <div>
         <h1>Мои заказы</h1>
-        <div className="card stack">
-          <p>Заказы хранятся в аккаунте. Войдите, чтобы увидеть историю и статусы.</p>
-          <Link href="/login?next=/orders" className="btn btn-primary btn-block">
-            Войти
-          </Link>
-          <Link href="/" className="btn btn-block">
-            В каталог
-          </Link>
-        </div>
+        <EmptyState
+          art="orders"
+          title="Заказы — в вашем аккаунте"
+          actions={
+            <>
+              <Link href="/login?next=/orders" className="btn btn-primary">
+                Войти
+              </Link>
+              <Link href="/" className="btn">
+                В каталог
+              </Link>
+            </>
+          }
+        >
+          Войдите, чтобы увидеть историю заказов и следить за каждым шагом — от печати до доставки.
+        </EmptyState>
       </div>
     );
   if (res.status === 403)
@@ -77,13 +87,17 @@ export default function OrdersList() {
     <div>
       <h1>Мои заказы</h1>
       {!orders.length && (
-        <div className="card">
-          <p>Заказов пока нет.</p>
-          <p className="muted">Ваши фотокниги и фото появятся здесь сразу после оформления.</p>
-          <Link href="/" className="btn btn-primary">
-            В каталог
-          </Link>
-        </div>
+        <EmptyState
+          art="orders"
+          title="Заказов пока нет"
+          actions={
+            <Link href="/" className="btn btn-primary">
+              В каталог
+            </Link>
+          }
+        >
+          Здесь появятся ваши фотокниги и фото — сразу после оформления. Будем следить за каждым шагом вместе.
+        </EmptyState>
       )}
       {orders.map((o) => (
         <Link key={o.id} href={"/orders/" + o.id} className="card order-row" style={{ display: "block", textDecoration: "none", color: "inherit" }} data-number={o.number}>
@@ -94,6 +108,7 @@ export default function OrdersList() {
           <div className="muted small">
             {(o.titles || []).join(", ") || `Позиций: ${o.itemsCount}`} · от {minskDay(o.createdAt)}
           </div>
+          {o.card && <CardLine card={o.card} />}
           <div className="row between">
             <b>{byn(o.totalKop)}</b>
             <span className="small" style={{ color: "var(--ds-color-link, inherit)" }}>

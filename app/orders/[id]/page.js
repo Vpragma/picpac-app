@@ -11,6 +11,8 @@ import { getMe } from "../../../lib/me";
 import { notify } from "../../../lib/store";
 import { StatusChip, Timeline, byn, minskDay, minskDayRange, minskTime } from "../../../components/OrderBits";
 import { IconChat } from "../../../components/icons";
+import Postcard from "../../../components/promo/Postcard";
+import { bookSummary } from "@/lib/book";
 
 const POLL_MS = 10000;
 const PAY = { card_test: "Карта (тест)", erip_test: "ЕРИП (тест)" };
@@ -148,14 +150,17 @@ export default function OrderPage() {
               {i.snapshot?.productName ? `${i.snapshot.productName} · ` : ""}
               {(i.optionsText || []).join(" · ")} · {i.photoCount} фото
             </div>
+            {i.snapshot?.book && <div className="muted small">{bookSummary(i.snapshot.book)}</div>}
             {!!i.thumbs?.length && (
               <div className="row wrap" style={{ gap: 6 }} aria-label="Миниатюры фото">
                 {i.thumbs.map((t) =>
                   t.url ? (
+                    // N7: уменьшенной копии в хранилище нет — лениво, декодирование вне основного потока, рамка с подложкой,
+                    // чтобы пока фото грузится, квадрат не выглядел пустым и сломанным
                     // eslint-disable-next-line @next/next/no-img-element -- подписанная ссылка на 10 минут, оптимизатор не нужен
-                    <img key={t.id} src={t.url} alt="" width="56" height="56" loading="lazy" style={{ objectFit: "cover", borderRadius: 8, width: 56, height: 56 }} />
+                    <img key={t.id} src={t.url} alt="" width="56" height="56" loading="lazy" decoding="async" className="order-thumb" />
                   ) : (
-                    <span key={t.id} style={{ width: 56, height: 56, borderRadius: 8, background: "var(--ds-color-bg-muted)" }} />
+                    <span key={t.id} className="order-thumb" />
                   ),
                 )}
                 {i.photoCount > i.thumbs.length && <span className="muted small">и ещё {i.photoCount - i.thumbs.length}</span>}
@@ -185,6 +190,16 @@ export default function OrderPage() {
           Оплата: {PAY[o.payment?.method] || "тестовая"} — {o.payment?.status === "paid_test" ? "оплачено (тест)" : "ждёт оплаты"}. Деньги не списываются.
         </p>
       </section>
+
+      {o.card && (
+        <section className="card" aria-labelledby="card-h">
+          <h3 id="card-h">Открытка к заказу</h3>
+          <p className="muted small" style={{ marginTop: 0 }}>
+            Личный код на следующий заказ: один раз и только для вас. Введите его в корзине.
+          </p>
+          <Postcard card={o.card} orderNumber={o.number} compact hideHeading art={(o.items || []).some((i) => i.options?.pages) ? "book" : "prints"} />
+        </section>
+      )}
 
       <section className="card">
         <h3>Получатель и доставка</h3>
@@ -265,7 +280,7 @@ function Support({ order: o, onCreated }) {
         <div key={it.id} className="stack" style={{ borderTop: "1px solid var(--ds-color-border, #ddd)", paddingTop: 8, marginTop: 8 }} data-testid="interaction">
           <div className="row between">
             <b>{it.topic}</b>
-            <span className="chip">{it.status === "open" ? "Ждёт ответа" : it.status === "answered" ? "Есть ответ" : "Закрыто"}</span>
+            <span className="chip status-chip" data-status={it.status}>{it.status === "open" ? "Ждёт ответа" : it.status === "answered" ? "Есть ответ" : "Закрыто"}</span>
           </div>
           <div className="muted small">
             {minskTime(it.createdAt)} · ответим до {minskTime(it.slaDue)} (по Минску)

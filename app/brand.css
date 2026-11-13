@@ -1,0 +1,380 @@
+/*
+ * PicPac · компоненты дизайн-системы N1 (ночь 2). Подключается последним (после globals.css, ux.css, qr.css).
+ * Только var(--…) из app/picpac.css — своих цветов здесь нет. Список классов — docs/night/track2-n1.md.
+ */
+
+/* ── 0. База ─────────────────────────────────────────────────────────── */
+body { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+::selection { background: var(--pp-rose); color: var(--pp-green-900); }
+h1, h2, h3 { letter-spacing: -0.005em; }
+:focus-visible { outline-color: var(--ds-color-focus); }
+hr { border: 0; border-top: 1px solid var(--ds-color-border); margin: var(--space-4) 0; }
+
+/* ── 1. Кнопки: главная (сплошная #bd3434), вторичная (контур), текстовая ─────────────── */
+.btn {
+  transition: background-color var(--ds-duration) var(--ds-ease), border-color var(--ds-duration) var(--ds-ease),
+    color var(--ds-duration) var(--ds-ease), transform var(--ds-duration) var(--ds-ease);
+  letter-spacing: 0.01em;
+}
+.btn:hover:not(:disabled) { border-color: var(--ds-color-text-strong); }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn-primary:hover:not(:disabled) { background: var(--ds-color-primary-hover); border-color: var(--ds-color-primary-hover); }
+.btn-primary:active:not(:disabled) { background: var(--ds-color-primary-active); border-color: var(--ds-color-primary-active); }
+.btn-primary:focus-visible { outline-color: var(--ds-color-focus); }
+/* вторичная — контурная тёмно-зелёная (как «Печать фото →» на super.picpac.by) */
+.btn-secondary { background: transparent; border: 1.5px solid var(--ds-color-text-strong); color: var(--ds-color-text-strong); }
+.btn-secondary:hover:not(:disabled) { background: var(--ds-color-bg-hover); }
+/* текстовая — без рамки, цвет акцента, зона нажатия 44 px */
+.btn-text {
+  display: inline-flex; align-items: center; gap: var(--space-2); min-height: var(--tap); padding: 0 var(--space-2);
+  border: 0; background: transparent; color: var(--ds-color-accent); font: inherit; font-weight: 500;
+  text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 0.2em; cursor: pointer;
+}
+.btn-text:hover { text-decoration-color: currentColor; }
+.btn-lg { min-height: 56px; padding: 0 var(--space-8); font-size: var(--ds-text-lg); }
+@media (prefers-reduced-motion: reduce) { .btn { transition: none; } .btn:active:not(:disabled) { transform: none; } }
+
+/* ── 2. Поля ──────────────────────────────────────────────────────────── */
+.input { color: var(--ds-color-text-strong); transition: border-color var(--ds-duration) var(--ds-ease), box-shadow var(--ds-duration) var(--ds-ease); }
+.input:hover { border-color: var(--ds-color-text-secondary); }
+.input:focus-visible { outline: none; border-color: var(--ds-color-accent); box-shadow: 0 0 0 3px var(--ds-color-bg-selected), 0 0 0 1px var(--ds-color-accent); }
+textarea.input { min-height: 96px; padding: var(--space-3) 14px; resize: vertical; }
+.field-hint { display: block; margin-top: var(--space-1); color: var(--ds-color-text-secondary); font-size: var(--ds-text-sm); }
+.field-error { display: block; margin-top: var(--space-1); color: var(--ds-color-error); font-size: var(--ds-text-sm); }
+
+/* ── 3. Карточки ──────────────────────────────────────────────────────── */
+.card-flat { box-shadow: none; border-color: var(--ds-color-border); }
+.card-muted { background: var(--ds-color-bg-muted); box-shadow: none; border-color: transparent; }
+a.card { transition: box-shadow var(--ds-duration) var(--ds-ease), transform var(--ds-duration) var(--ds-ease); }
+@media (hover: hover) {
+  a.card:hover { box-shadow: var(--ds-shadow-card-hover); transform: translateY(-2px); }
+}
+@media (prefers-reduced-motion: reduce) { a.card, a.card:hover { transition: none; transform: none; } }
+
+/* ── 4. Плашки: нейтральная .chip, продуктовые .tag-*, статусы .status-chip[data-status] ── */
+/* заливка плашек — всегда пастель, значит текст всегда тёмный (и в тёмной теме); ux.css красил .chip-ok белым */
+.chip, .chip-hl, .chip-ok { font-weight: 500; line-height: 1.6; color: var(--ds-color-on-chip); }
+.tag {
+  display: inline-flex; align-items: center; gap: var(--space-1); padding: 2px 10px; border-radius: var(--ds-radius-pill);
+  font-size: var(--ds-text-sm); font-weight: 500; line-height: 1.6; white-space: nowrap;
+  background: var(--ds-color-chip); color: var(--ds-color-on-chip);
+}
+.tag-new { background: var(--ds-color-tag-new); }
+.tag-sale { background: var(--ds-color-tag-sale); }
+.tag-choice { background: var(--ds-color-tag-choice); }
+.tag-180 { background: var(--pp-snow); box-shadow: inset 0 0 0 1px var(--pp-frame); } /* светлая плашка в обеих темах — текст тёмный */
+.tags { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+/* плашки поверх фото обложки */
+.tags-over { position: absolute; left: var(--space-3); top: var(--space-3); z-index: 1; }
+.status-chip { display: inline-block; padding: 2px 10px; border-radius: var(--ds-radius-pill); font-size: var(--ds-text-sm); font-weight: 500; line-height: 1.6; background: var(--ds-color-chip); color: var(--ds-color-on-chip); white-space: nowrap; }
+.status-chip[data-status='accepted'], .status-chip[data-status='new'], .status-chip[data-status='open'] { background: var(--ds-color-status-accepted); }
+.status-chip[data-status='moderation'], .status-chip[data-status='pending'], .status-chip[data-status='review'] { background: var(--ds-color-status-moderation); }
+.status-chip[data-status='production'], .status-chip[data-status='in_cart'], .status-chip[data-status='answered'] { background: var(--ds-color-status-production); }
+.status-chip[data-status='shipped'], .status-chip[data-status='approved'], .status-chip[data-status='ok'], .status-chip[data-status='ordered'] { background: var(--ds-color-status-shipped); }
+.status-chip[data-status='done'], .status-chip[data-status='closed'], .status-chip[data-status='draft'] { background: var(--ds-color-status-done); }
+.status-chip[data-status='returned'], .status-chip[data-status='rejected'], .status-chip[data-status='flagged'] { background: var(--ds-color-status-returned); }
+
+/* ── 5. Цены: новая и старая (зачёркнута) ─────────────────────────────── */
+.price-row { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 var(--space-2); }
+.price-now { font-weight: 500; color: var(--ds-color-text-strong); white-space: nowrap; }
+.price-old { color: var(--ds-color-text-secondary); text-decoration: line-through; text-decoration-thickness: 1px; white-space: nowrap; font-size: 0.9em; }
+.price-unit { color: var(--ds-color-text-secondary); font-size: var(--ds-text-sm); }
+
+/* ── 6. Шапка и нижняя панель ─────────────────────────────────────────── */
+.topbar { box-shadow: none; }
+.tabbar { box-shadow: var(--ds-shadow-bar); }
+.tab { transition: color var(--ds-duration) var(--ds-ease); font-weight: 500; }
+.tab svg { stroke-width: 1.75; }
+.tab.active svg { stroke-width: 2.1; }
+@media (max-width: 1023px) {
+  /* активный пункт — короткая черта сверху, без заливки */
+  .tab { position: relative; }
+  .tab.active::before {
+    content: ""; position: absolute; top: 0; left: 50%; width: 28px; height: 3px; margin-left: -14px;
+    border-radius: 0 0 3px 3px; background: var(--ds-color-primary);
+  }
+}
+
+/* ── 7. Заголовки секций, «надзаголовок», вводный текст ───────────────── */
+.eyebrow { margin: 0 0 var(--space-2); font-size: var(--ds-text-sm); font-weight: 500; letter-spacing: var(--ds-tracking-caps); text-transform: uppercase; color: var(--ds-color-accent); }
+.lead { font-size: var(--ds-text-lg); line-height: 1.55; color: var(--ds-color-text); }
+.section { margin: var(--space-10) 0 0; }
+.section-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-4); margin-bottom: var(--space-4); }
+.section-head h2 { margin: 0; }
+
+/* ── 8. Главная: первый экран — коллаж фото в линейных рамках ─────────── */
+.hero { display: grid; gap: var(--space-6); padding: var(--space-4) 0 var(--space-2); }
+.hero-title { font-size: var(--ds-text-display); line-height: var(--ds-leading-tight); font-weight: 500; margin: 0 0 var(--space-3); letter-spacing: -0.01em; text-wrap: balance; }
+.hero-title em { font-style: normal; color: var(--ds-color-accent); }
+.hero .lead { margin: 0 0 var(--space-6); max-width: 36rem; }
+.hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3) var(--space-4); }
+.hero-note { margin: var(--space-3) 0 0; color: var(--ds-color-text-secondary); font-size: var(--ds-text-sm); }
+.collage { position: relative; aspect-ratio: 5 / 4; width: 100%; max-width: 30rem; margin: 0 auto; }
+/* линейные рамки-«кальки» и линейная графика — один SVG под фото (viewBox 500×400 = пропорции коллажа) */
+.collage-art { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; color: var(--ds-color-line-art); pointer-events: none; overflow: visible; }
+.collage-art .ink2 { color: var(--ds-color-line-art-2); }
+.collage-art .only-wide { display: none; }
+.print {
+  position: absolute; margin: 0; padding: 6px; background: var(--pp-white); border-radius: 4px; box-shadow: var(--ds-shadow-photo);
+}
+.print picture, .print img { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: 2px; }
+/* N5: пока фото грузится — подложка цвета поверхности (токен), а не белый прямоугольник «бумаги» */
+.print picture { background: var(--ds-color-bg-muted); }
+.print-a { left: 4%; top: 6%; width: 58%; aspect-ratio: 4 / 3; z-index: 2; }
+.print-b { right: 2%; top: 0; width: 38%; aspect-ratio: 3 / 4; z-index: 1; }
+.print-c { right: 6%; bottom: 2%; width: 46%; aspect-ratio: 3 / 2; z-index: 3; }
+.print-d { left: 10%; bottom: 0; width: 30%; aspect-ratio: 1; z-index: 1; display: none; }
+.print figcaption { position: absolute; left: 10px; bottom: -26px; font-size: var(--ds-text-sm); color: var(--ds-color-text-secondary); white-space: nowrap; }
+/* на телефоне коллаж — первым: сначала воспоминания, потом слоган и кнопка (порядок в разметке — заголовок первый).
+   N7: главная кнопка — на первом экране над нижним меню, даже в Safari с панелями (390×664) и на 360×640:
+   кнопка сразу под заголовком, вводный текст — после неё, а коллаж ужимается по малой высоте экрана
+   (svh не меняется при прокрутке и скрытии панелей — без сдвигов макета; 5:4 → ширина = высота × 1,25). */
+@media (max-width: 1023px) {
+  .hero { gap: var(--space-4); padding-top: var(--space-4); }
+  .hero-media { order: -1; }
+  .collage { max-width: 21rem; max-width: min(21rem, max(12rem, calc((100svh - 470px) * 1.25))); } /* первое — для браузеров без svh */
+  .hero-text { display: flex; flex-direction: column; }
+  .hero-title { margin-bottom: var(--space-4); }
+  .hero .lead { order: 1; margin: var(--space-4) 0 0; }
+  .hero-note { order: 2; }
+}
+.collage-credit { text-align: center; margin: var(--space-2) 0 0; font-size: var(--ds-text-sm); color: var(--ds-color-text-secondary); }
+.collage-credit a { color: inherit; }
+@media (min-width: 1024px) {
+  .hero { grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); align-items: center; gap: var(--space-12); padding: var(--space-8) 0 var(--space-4); }
+  .collage { max-width: 34rem; }
+  .print-d { display: block; }
+  .collage-art .only-wide { display: inline; }
+  .collage-art .only-narrow { display: none; }
+}
+
+/* ── 9. Главная: «как это работает», ИИ, доверие ──────────────────────── */
+.how { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); counter-reset: how; }
+.how li {
+  position: relative; display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: var(--space-4); align-items: start;
+  padding: var(--space-4); background: var(--ds-color-bg-surface); border: 1px solid var(--ds-color-card-border);
+  border-radius: var(--ds-radius-lg); box-shadow: var(--ds-shadow-card);
+}
+.how-icon { width: 56px; height: 56px; color: var(--ds-color-line-art); }
+.how h3 { margin: 2px 0 var(--space-1); font-size: var(--ds-text-lg); }
+.how p { margin: 0; color: var(--ds-color-text-secondary); }
+.how-num { font-size: var(--ds-text-sm); font-weight: 500; color: var(--ds-color-accent); letter-spacing: var(--ds-tracking-caps); text-transform: uppercase; }
+@media (min-width: 768px) { .how { grid-template-columns: repeat(3, minmax(0, 1fr)); } .how li { grid-template-columns: 1fr; padding: var(--space-5); } .how-icon { width: 104px; height: 78px; margin-left: -6px; } }
+
+.band {
+  margin: var(--space-10) calc(-1 * var(--space-4)) 0; padding: var(--space-8) var(--space-4);
+  background: var(--ds-color-bg-band); border-block: 1px solid var(--ds-color-border);
+}
+.band > :first-child { margin-top: 0; }
+.ai-block { display: grid; gap: var(--space-6); align-items: center; }
+.ai-art { width: 100%; max-width: 11rem; margin: 0 auto; color: var(--ds-color-line-art); }
+@media (min-width: 1024px) { .ai-art { max-width: 20rem; } }
+.ai-art .ink2 { color: var(--ds-color-line-art-2); }
+.ai-points { list-style: none; margin: var(--space-4) 0 0; padding: 0; display: grid; gap: var(--space-2); }
+.ai-points li { display: flex; gap: var(--space-3); align-items: flex-start; }
+.ai-points svg { flex: none; margin-top: 2px; color: var(--ds-color-success); }
+.privacy-note {
+  display: flex; gap: var(--space-3); align-items: flex-start; margin-top: var(--space-4); padding: var(--space-3) var(--space-4);
+  border-radius: var(--ds-radius-md); background: var(--ds-color-bg-surface); border: 1px solid var(--ds-color-border);
+}
+.privacy-note svg { flex: none; color: var(--ds-color-success); margin-top: 2px; }
+@media (min-width: 1024px) {
+  .band { margin-inline: 0; padding: var(--space-10) var(--space-10); border: 1px solid var(--ds-color-border); border-radius: var(--ds-radius-xl); }
+  .ai-block { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: var(--space-12); }
+}
+
+.trust { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.trust li { padding: var(--space-4); border-radius: var(--ds-radius-lg); background: var(--ds-color-bg-surface); border: 1px solid var(--ds-color-card-border); }
+.trust b { display: block; font-size: var(--ds-text-2xl); line-height: 1.1; font-weight: 500; color: var(--ds-color-text-strong); margin-bottom: var(--space-1); }
+.trust span { color: var(--ds-color-text-secondary); font-size: var(--ds-text-sm); display: block; }
+.trust svg { color: var(--ds-color-line-art); margin-bottom: var(--space-2); }
+@media (min-width: 1024px) { .trust { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+/* ── 10. Каталог: карточка продукта ───────────────────────────────────── */
+.product-card { display: flex; flex-direction: column; padding: var(--space-3); }
+.product-card .product-cover { position: relative; margin-bottom: var(--space-3); border-radius: var(--ds-radius-md); }
+.product-card .card-title { font-size: var(--ds-text-xl); }
+.product-card .product-body { padding: 0 var(--space-1) var(--space-1); display: flex; flex-direction: column; gap: var(--space-1); flex: 1; }
+.product-card .product-meta { color: var(--ds-color-text-secondary); font-size: var(--ds-text-sm); }
+.product-card .product-foot { margin-top: auto; padding-top: var(--space-2); display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.product-card .price-row { font-size: var(--ds-text-lg); }
+.go-arrow { display: inline-flex; align-items: center; justify-content: center; width: var(--tap); height: var(--tap); flex: none; border-radius: 999px; border: 1px solid var(--ds-color-border-strong); color: var(--ds-color-text-strong); transition: background-color var(--ds-duration) var(--ds-ease), color var(--ds-duration) var(--ds-ease), border-color var(--ds-duration) var(--ds-ease); }
+a.card:hover .go-arrow { background: var(--ds-color-primary); border-color: var(--ds-color-primary); color: var(--ds-color-on-accent); }
+.print-cta { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
+@media (min-width: 768px) { .catalog-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1024px) { .catalog-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* ── 11. Страница продукта: выбор параметров ──────────────────────────── */
+.option { transition: border-color var(--ds-duration) var(--ds-ease), background-color var(--ds-duration) var(--ds-ease); position: relative; padding-right: 36px; }
+.option:hover:not(.selected) { border-color: var(--ds-color-border-strong); }
+.option.selected:not([role='tab'])::after {
+  content: ""; position: absolute; top: 10px; right: 10px; width: 18px; height: 18px; border-radius: 999px;
+  background: var(--ds-color-primary) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / 12px no-repeat;
+}
+.product-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+.product-head h1 { margin: 0; }
+.product-page .card h3 { font-size: var(--ds-text-lg); margin-bottom: var(--space-3); }
+.product-gallery li { box-shadow: var(--ds-shadow-sm); }
+
+/* ── 12. Пустые экраны: линейная иллюстрация + тёплый текст ───────────── */
+.empty-state { display: flex; flex-direction: column; align-items: center; text-align: center; gap: var(--space-2); padding: var(--space-8) var(--space-4); }
+.empty-state .empty-art { width: 168px; height: auto; color: var(--ds-color-line-art); margin-bottom: var(--space-2); }
+.empty-state .empty-art .ink2 { color: var(--ds-color-line-art-2); }
+.empty-state h2, .empty-state h3 { margin: 0; }
+.empty-state p { margin: 0; max-width: 28rem; color: var(--ds-color-text-secondary); }
+.empty-state .actions { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--space-2); margin-top: var(--space-3); }
+
+/* ── 13. Переключатель-сегменты (тема и подобное) ─────────────────────── */
+.segmented { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; padding: 4px; border-radius: var(--ds-radius-pill); background: var(--ds-color-bg-muted); border: 1px solid var(--ds-color-border); }
+.segmented label { position: relative; display: flex; align-items: center; justify-content: center; min-height: var(--tap); padding: 0 var(--space-3); border-radius: var(--ds-radius-pill); cursor: pointer; font-weight: 500; color: var(--ds-color-text); text-align: center; line-height: 1.2; }
+.segmented input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+.segmented label:has(input:checked) { background: var(--ds-color-bg-inverse); color: var(--ds-color-text-inverse); box-shadow: var(--ds-shadow-sm); }
+.segmented label:has(input:focus-visible) { outline: 3px solid var(--ds-color-focus); outline-offset: 1px; }
+
+/* ── 14. Админка и модератор: плотнее — таблицы, фильтры, плитки ──────── */
+.admin { --space-card: var(--space-3); }
+.admin .card { padding: var(--space-3) var(--space-4); margin-bottom: var(--space-3); }
+.admin h1 { font-size: var(--ds-text-2xl); }
+.filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: var(--space-3) 0; }
+.filters .input { min-height: var(--tap); width: auto; }
+.filter-chip {
+  display: inline-flex; align-items: center; min-height: var(--tap); padding: 0 var(--space-4); border-radius: var(--ds-radius-pill);
+  border: 1px solid var(--ds-color-border-strong); background: var(--ds-color-bg-surface); color: var(--ds-color-text); font: inherit; font-size: var(--ds-text-sm); font-weight: 500; cursor: pointer; text-decoration: none;
+}
+.filter-chip[aria-pressed='true'], .filter-chip[aria-current='page'], .filter-chip.active { background: var(--ds-color-bg-inverse); color: var(--ds-color-text-inverse); border-color: var(--ds-color-bg-inverse); }
+.data-table { width: 100%; border-collapse: collapse; font-size: var(--ds-text-sm); }
+.data-table th, .data-table td { text-align: left; padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--ds-color-border); vertical-align: middle; }
+.data-table thead th { font-weight: 500; color: var(--ds-color-text-secondary); background: var(--ds-color-bg-muted); position: sticky; top: 0; }
+.data-table tbody tr:hover { background: var(--ds-color-bg-hover); }
+.data-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.table-wrap { overflow-x: auto; border: 1px solid var(--ds-color-border); border-radius: var(--ds-radius-md); background: var(--ds-color-bg-surface); }
+.stat-tile { border-color: var(--ds-color-card-border); }
+.stat-tile b { font-variant-numeric: tabular-nums; }
+/* N7 E3: подпись и ссылка в плитке — отдельными строками (раньше «очередь пустаОткрыть очередь») */
+.stat-tile > span.small, .stat-tile > a { display: block; }
+.stat-tile > a { width: fit-content; margin-top: var(--space-1); }
+
+/* ── 15. Онбординг (первый вход): 3 экрана, можно пропустить ──────────── */
+.onboarding { position: fixed; inset: 0; z-index: 90; display: flex; align-items: flex-end; justify-content: center; background: var(--ds-color-scrim); padding: var(--space-4); padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom)); }
+.onboarding-card {
+  width: 100%; max-width: 26rem; background: var(--ds-color-bg-surface); border-radius: var(--ds-radius-xl); box-shadow: var(--ds-shadow-popover);
+  padding: var(--space-6) var(--space-6) var(--space-5); text-align: center; animation: ob-in 0.28s var(--ds-ease);
+}
+.onboarding-art { width: 148px; height: 112px; margin: 0 auto var(--space-3); color: var(--ds-color-line-art); display: block; }
+.onboarding-art .ink2 { color: var(--ds-color-line-art-2); }
+.onboarding h2 { font-size: var(--ds-text-xl); margin: 0 0 var(--space-2); }
+.onboarding h2:focus { outline: none; } /* фокус на заголовке — для экранного диктора, не для клика */
+.onboarding p { color: var(--ds-color-text-secondary); margin: 0 0 var(--space-4); }
+.onboarding-dots { display: flex; justify-content: center; gap: 6px; margin: 0 0 var(--space-4); padding: 0; list-style: none; }
+.onboarding-dots li { width: 8px; height: 8px; border-radius: 999px; background: var(--ds-color-step-todo); }
+.onboarding-dots li[aria-current='step'] { width: 22px; background: var(--ds-color-primary); }
+.onboarding-actions { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); }
+@media (min-width: 768px) { .onboarding { align-items: center; } }
+@keyframes ob-in { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .onboarding-card { animation: none; } }
+
+/* ── 16. Плашка «ИИ работает на телефоне» и мелкие информационные плашки ── */
+.note { display: flex; gap: var(--space-3); align-items: flex-start; padding: var(--space-3) var(--space-4); border-radius: var(--ds-radius-md); background: var(--ds-color-info-bg); color: var(--ds-color-text); }
+.note-ok { background: var(--ds-color-success-bg); }
+.note-warn { background: var(--ds-color-warning-bg); }
+.note-error { background: var(--ds-color-error-bg); }
+.note svg { flex: none; margin-top: 2px; }
+
+/* ── 17. Каталог на главной ───────────────────────────────────────────── */
+.catalog-sub { font-size: var(--ds-text-lg); margin: var(--space-6) 0 var(--space-3); }
+.product-cover.has-photo { aspect-ratio: 4 / 3; }
+
+/* ── 18. Редактор: спокойная рабочая область, фото в центре, крупные цели ── */
+input[type='range'] { accent-color: var(--ds-color-primary); }
+.steps button { font-weight: 500; transition: background-color var(--ds-duration) var(--ds-ease), color var(--ds-duration) var(--ds-ease); }
+.steps button:not(.active):not(:disabled):hover { background: var(--ds-color-bg-hover); color: var(--ds-color-text-strong); }
+.steps button.active { box-shadow: none; }
+.pe-stage { border-radius: var(--ds-radius-md); background: var(--ds-color-bg-muted); }
+.pe-strip .photo-cell { border-radius: var(--ds-radius-sm); }
+.dropzone { border-color: var(--ds-color-border-strong); border-radius: var(--ds-radius-lg); }
+/* подписи страниц — под своими страницами (разворот стоит по центру) */
+.spread + .row.between { justify-content: center; }
+/* N7: ничего не вылезает за край — содержимое сетки может сжиматься */
+.content > * { min-width: 0; }
+.pe, .pe-preview, .pe-stage { max-width: 100%; }
+html[data-text='lg'] { --sticky-h: 92px; }
+/* N7: на компьютере панель цены с «Дальше» не плавает поверх фото — стоит справа от названия проекта */
+@media (min-width: 1024px) {
+  .has-sticky:has(> nav.steps) { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: var(--space-3); align-items: stretch; }
+  .has-sticky:has(> nav.steps) > * { grid-column: 1 / -1; min-width: 0; }
+  .has-sticky:has(> nav.steps) > .card:first-child { grid-column: 1; grid-row: 1; }
+  /* z-index: auto — у элемента сетки z-index действует и без position: иначе 25 из .sticky-bar ставил панель
+     поверх шапки при прокрутке и закрывал «Помощь» и «Корзину» */
+  .has-sticky:has(> nav.steps) > .sticky-bar {
+    grid-column: 2; grid-row: 1; position: static; z-index: auto; margin: 0 0 12px; min-height: 0;
+    border-color: var(--ds-color-card-border); box-shadow: var(--ds-shadow-card);
+  }
+}
+
+/* ── 19. Страница продукта: варианты ровной сеткой ────────────────────── */
+.product-page .options { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 11.5rem), 1fr)); gap: var(--space-2); }
+.product-page .option { width: 100%; }
+
+/* ── 20. Админка: шапка разделов, заголовки карточек ──────────────────── */
+.admin-head { margin-bottom: var(--space-3); gap: var(--space-2); }
+.admin-nav { margin: 0; }
+.admin-h { font-size: var(--ds-text-lg); margin: 0 0 var(--space-3); }
+.admin .stat-tiles { margin: var(--space-3) 0; }
+.admin .data-table a { font-weight: 500; }
+.admin .table-wrap { margin: 0 calc(-1 * var(--space-1)); }
+@media (max-width: 640px) {
+  .admin-nav { flex-wrap: nowrap; overflow-x: auto; padding-bottom: var(--space-1); scrollbar-width: thin; }
+  .admin-nav .filter-chip { flex: none; }
+}
+
+/* ── 21. Шаги редактора с номерами (номер не входит в имя кнопки: content … / "") ── */
+.steps { counter-reset: pp-step; }
+.steps button { counter-increment: pp-step; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 var(--space-2); }
+.steps button::before {
+  content: counter(pp-step) / ""; display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 22px; height: 22px; border-radius: 999px; font-size: var(--ds-text-sm); line-height: 1;
+  background: var(--ds-color-bg-surface); color: var(--ds-color-text-strong);
+}
+.steps button.active::before { background: var(--ds-color-on-accent); color: var(--pp-red); }
+
+/* ── 22. Таблицы статистики — как .data-table ─────────────────────────── */
+.stat-table { font-size: var(--ds-text-sm); }
+.stat-table thead th { background: var(--ds-color-bg-muted); font-weight: 500; }
+.stat-table th.num, .stat-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ── 23. Плашки модерации у клиента (заказ): пастель брендбука, текст тёмный в обеих темах ──
+   (крючки — data-testid карточек: разметку этих блоков меняет N4, стили — здесь) */
+[data-testid='moderation-checking'] { background: var(--ds-color-status-moderation) !important; color: var(--ds-color-on-chip); border-color: transparent; }
+[data-testid='moderation-returned'] { background: var(--ds-color-status-returned); color: var(--ds-color-on-chip); border-color: transparent; border-left-color: var(--pp-red) !important; }
+[data-testid='moderation-returned'] h3, [data-testid='moderation-checking'] b { color: var(--pp-green-900); }
+
+/* ── 24. Вкладки «Вход / Регистрация» и подобные (.options[role=tablist]) — сегменты ── */
+.options[role='tablist'] {
+  display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; padding: 4px;
+  border-radius: var(--ds-radius-pill); background: var(--ds-color-bg-muted); border: 1px solid var(--ds-color-border);
+}
+.options[role='tablist'] .option {
+  border: 0; background: transparent; box-shadow: none; border-radius: var(--ds-radius-pill); text-align: center;
+  padding: 0 var(--space-3); min-height: var(--tap); font-weight: 500; color: var(--ds-color-text);
+}
+.options[role='tablist'] .option.selected { background: var(--ds-color-bg-inverse); color: var(--ds-color-text-inverse); }
+.options[role='tablist'] .option b, .options[role='tablist'] .option span { color: inherit; display: inline; }
+
+/* ── 25. Корзина на компьютере: слева состав и оформление, справа липкий «Итого» (W-02) ── */
+@media (min-width: 1024px) {
+  main > div:has(> section[aria-labelledby='h-total']) {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(20rem, 24rem); column-gap: var(--space-8); row-gap: 0; align-items: start;
+  }
+  main > div:has(> section[aria-labelledby='h-total']) > * { grid-column: 1; min-width: 0; }
+  main > div:has(> section[aria-labelledby='h-total']) > section[aria-labelledby='h-total'] {
+    grid-column: 2; grid-row: 1 / span 60; position: sticky; top: calc(var(--topbar-h, 61px) + var(--space-4));
+  }
+}
+
+/* ── 26. Превью печати фото: белые поля и мягкая тень — как настоящий отпечаток ── */
+.photo-grid:has(> div > .page) { gap: var(--space-5); padding: var(--space-2); }
+.photo-grid > div > .page { box-shadow: 0 0 0 5px var(--pp-white), var(--ds-shadow-photo); border-radius: 1px; }
+
+/* ── 27. «Всё хорошо — можно заказывать»: без полупрозрачности (текст читается), спокойная зелёная пастель ── */
+.issue.ok { opacity: 1; background: var(--ds-color-success-bg); border-left-color: var(--ds-color-success); }
+.issue.ok svg { color: var(--ds-color-success); }

@@ -21,10 +21,12 @@ const LIBRARIES = [
   { name: "react", what: "интерфейс", license: "MIT", url: "https://github.com/facebook/react" },
   { name: "@supabase/supabase-js", what: "база данных, вход и хранилище фото", license: "MIT", url: "https://github.com/supabase/supabase-js" },
   { name: "onnxruntime-web", what: "запуск моделей ИИ прямо в браузере", license: "MIT", url: "https://github.com/microsoft/onnxruntime" },
+  { name: "@huggingface/tokenizers", what: "разбор фразы на слова для модели «по смыслу»", license: "Apache-2.0", url: "https://github.com/huggingface/tokenizers.js" },
   { name: "@huggingface/transformers", what: "работа с моделью выделения предмета", license: "Apache-2.0", url: "https://github.com/huggingface/transformers.js" },
   { name: "upscaler и @upscalerjs/esrgan-slim", what: "«Резкость для печати»", license: "MIT", url: "https://github.com/thekevinscott/UpscalerJS" },
   { name: "@tensorflow/tfjs", what: "вычисления для резкости и проверки фото", license: "Apache-2.0", url: "https://github.com/tensorflow/tfjs" },
-  { name: "nsfwjs", what: "первичная проверка фото на устройстве", license: "MIT", url: "https://github.com/infinitered/nsfwjs" },
+  { name: "nsfwjs", what: "прежняя проверка фото (заменена моделями модерации ниже, пакет ещё установлен)", license: "MIT", url: "https://github.com/infinitered/nsfwjs" },
+  { name: "sharp", what: "уменьшение фото для проверки модерации на сервере", license: "Apache-2.0 (libvips — LGPL-3.0)", url: "https://github.com/lovell/sharp" },
   { name: "web-push", what: "push-уведомления", license: "MPL-2.0", url: "https://github.com/web-push-libs/web-push" },
   { name: "qrcode", what: "QR-код «Открыть на телефоне»", license: "MIT", url: "https://github.com/soldair/node-qrcode" },
   { name: "zod", what: "проверка данных в запросах", license: "MIT", url: "https://github.com/colinhacks/zod" },
@@ -53,23 +55,32 @@ const MODELS = [
     urlText: "Проект UpscalerJS",
   },
   {
-    name: "Модель nsfwjs (MobileNetV2)",
-    what: "Первичная проверка фото перед модерацией. Работает на устройстве.",
-    license: "MIT",
-    url: "https://github.com/infinitered/nsfwjs",
-    urlText: "Проект nsfwjs",
-  },
-  {
-    name: "gpt-oss-120b (Cloudflare Workers AI)",
-    what: "Понимает просьбу своими словами в редакторе. Работает в облаке и только с вашего согласия.",
+    name: "Marqo nsfw-image-detection-384 (ViT-tiny)",
+    what: "Модерация: находит обнажённость на фото. Работает на устройстве при загрузке и повторно на нашем сервере перед заказом.",
     license: "Apache-2.0",
-    url: "https://huggingface.co/openai/gpt-oss-120b",
+    url: "https://huggingface.co/Marqo/nsfw-image-detection-384",
     urlText: "Модель на Hugging Face",
   },
   {
-    name: "Moondream (Cloudflare Workers AI)",
-    what: "Подключён, сейчас не используется.",
-    license: "Moondream Model License 1.0",
+    name: "CLIP ViT-B/32 (OpenAI)",
+    what: "Модерация: узнаёт нацистскую символику, оружие, кровь и наркотики без дообучения. На устройстве и на нашем сервере.",
+    license: "MIT",
+    url: "https://huggingface.co/openai/clip-vit-base-patch32",
+    urlText: "Модель на Hugging Face",
+  },
+  {
+    name: "rubert-tiny (cointegrated)",
+    what: "Понимает просьбу своими словами, если её нет в словаре команд. Работает на устройстве, текст никуда не уходит.",
+    license: "MIT",
+    url: "https://huggingface.co/cointegrated/rubert-tiny",
+    urlText: "Модель на Hugging Face",
+  },
+  {
+    name: "YOLOX-Nano (Megvii)",
+    what: "Находит предмет по слову: «убери машину», «размой собаку». Работает на устройстве, фото никуда не уходит.",
+    license: "Apache-2.0",
+    url: "https://github.com/Megvii-BaseDetection/YOLOX",
+    urlText: "Проект YOLOX",
   },
 ];
 
@@ -145,6 +156,18 @@ export default function LicensesPage() {
           </span>
           <a href="https://fonts.google.com/specimen/Jost">Шрифт на Google Fonts</a>
         </div>
+      </section>
+
+      <section className={`card ${styles.section}`} id="illustrations" aria-labelledby="lic-illustrations">
+        <h2 id="lic-illustrations">Иллюстрации и графика</h2>
+        <p style={{ margin: 0 }}>
+          Линейные иллюстрации пустых экранов, онбординга и главной (книга, фото, посылка, телефон с ИИ, доставка), линейные рамки коллажа и значки
+          нарисованы командой PicPac App для этого приложения в линейном стиле брендбука PicPac. Сезонная графика — тоже наша: осень (клён, дубовый
+          лист, ветка рябины, кружка, плед, листопад), «Чёрная пятница» (ценник, сумка, искры), Новый год (хвоя, ёлочный шар, снежинки, звезда,
+          подарок); логотип в цветах сезона — та же форма. Шаблоны оформления фотокниги («Классика», «Осень», «Свадьба», «Малыш», «Путешествие»:
+          фон, рамки, кольца, облако и звёзды, маршрут и самолётик) и иконка «180°» — тоже наши. Сторонней графики нет. Коллажи на главной
+          собраны из фото тестовой галереи (авторы и лицензии — ниже).
+        </p>
       </section>
 
       <section className={`card ${styles.section}`} id="photoprint" aria-labelledby="lic-photoprint">

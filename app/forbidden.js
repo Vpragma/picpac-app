@@ -13,7 +13,7 @@ export default async function Forbidden() {
   }
   if (moderator)
     return (
-      <div className="card stack" style={{ textAlign: "center", marginTop: 24 }}>
+      <div className="card stack narrow" style={{ textAlign: "center", marginTop: 24 }}>
         <title>Раздел только для администратора — PicPac</title>
         <div>
           <span className="chip">Ошибка 403</span>
@@ -29,7 +29,7 @@ export default async function Forbidden() {
       </div>
     );
   return (
-    <div className="card stack" style={{ textAlign: "center", marginTop: 24 }}>
+    <div className="card stack narrow" style={{ textAlign: "center", marginTop: 24 }}>
       <title>Нет доступа — PicPac</title>
       <div>
         <span className="chip">Ошибка 403</span>

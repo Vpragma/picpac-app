@@ -76,6 +76,70 @@ test("очередь: модератор видит фото по подписа
   s.review = item.id;
 });
 
+// N7: числа модерации согласованы. Одинаковое — одним числом: «Фото ждут проверки» в «Обзоре» = очередь модератора
+// (и = её списку), «Заказы на модерации» в «Обзоре» = плитка «Статистики» с «Все данные». Синтетические заказы
+// двигает ERP-симулятор раз в 30 с, поэтому числа снимаем одновременно и при расхождении снимаем ещё раз.
+const tileValue = (html, id) => {
+  const m = html.match(new RegExp(`data-testid="tile-${id}"[^>]*data-value="(\\d+)"`)) || html.match(new RegExp(`data-value="(\\d+)"[^>]*data-testid="tile-${id}"`));
+  return m ? Number(m[1]) : null;
+};
+
+test("счётчики модерации: «Обзор» = очередь модератора = «Статистика», подписи честные", async () => {
+  let last;
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    const [overview, queue, stats] = await Promise.all([
+      ADM.client.req("/admin"),
+      MOD.client.req("/api/v1/admin/moderation"),
+      ADM.client.req("/api/v1/admin/stats?days=7&source=all"),
+    ]);
+    assert.equal(overview.status, 200);
+    assert.equal(queue.status, 200, queue.text);
+    assert.equal(stats.status, 200, stats.text);
+    const items = queue.json.items;
+    const st = queue.json.stats;
+    last = {
+      photosOverview: tileValue(overview.text, "photos-waiting"),
+      ordersOverview: tileValue(overview.text, "orders-moderation"),
+      pending: st.pending,
+      orders: st.orders,
+      listed: items.length,
+      listedOrders: new Set(items.map((i) => i.orderId)).size,
+      statsOrders: stats.json.tiles.onModeration,
+      statsPhotos: stats.json.moderation?.photosWaiting,
+    };
+    assert.ok(last.pending >= 1, "фото этого теста ждёт модератора");
+    assert.ok(items.some((i) => i.orderId === s.order.id));
+    // Подписи: фото и заказы — разные вещи, у каждой своё имя
+    assert.match(overview.text, /Фото ждут проверки/);
+    assert.match(overview.text, /Заказы на модерации/);
+    assert.doesNotMatch(overview.text, /Ждут модерации/);
+    const same =
+      last.photosOverview === last.pending &&
+      last.statsPhotos === last.pending &&
+      (items.length >= 50 || (last.listed === last.pending && last.listedOrders === last.orders)) &&
+      last.ordersOverview === last.statsOrders;
+    if (same) return;
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  assert.fail("числа модерации расходятся: " + JSON.stringify(last));
+});
+
+// N7 (критик B, серьёзный): требование N4 — на всех экранах сотрудников. Карточка заказа админки показывала
+// фото с флагом целиком; теперь — размыто, вывод модели словами и «Показать», решения — словами очереди.
+test("карточка заказа админки: фото с флагом размыто, вывод словами и «Показать»; без сырого «автопроверка: true»", async () => {
+  const page = await ADM.client.req(`/admin/orders/${s.order.id}`);
+  assert.equal(page.status, 200);
+  const html = page.text;
+  const thumbs = html.slice(html.indexOf('data-testid="admin-order-thumbs"'));
+  assert.match(thumbs, /data-flagged="true"/, "миниатюра помечена флагом");
+  assert.match(thumbs, /data-blurred="true"/, "фото с флагом размыто до нажатия");
+  assert.match(thumbs, /filter:blur\(24px\)/, "то же размытие, что в очереди");
+  assert.match(html, /data-testid="staff-photo-show"[^>]*>Показать фото 1</, "кнопка «Показать»");
+  assert.match(html, /data-testid="admin-flagged-photos"[\s\S]*Найдено: [^<]+\(высокая уверенность\)/, "вывод модели словами у фото");
+  assert.match(html, /data-testid="admin-review-findings"[^>]*>Найдено: /, "блок «Модерация» — словами");
+  assert.doesNotMatch(html, /автопроверка: true|Отклонено/, "без сырых значений и второго названия решения");
+});
+
 test("модератор не читает заказы и фото клиентов своим ключом (RLS, SEC-14)", async () => {
   const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY, { auth: { persistSession: false } });
   const { error } = await sb.auth.signInWithPassword({ email: MOD.email, password: MOD.password });
