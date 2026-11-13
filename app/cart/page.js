@@ -14,6 +14,7 @@ import { cartMoveError, clearAfterOrder, moveLocalToServer, removeLine, retryMov
 import { FIELD_LABELS, PICKUP_POINTS, formatPhone, needsDate, validateCheckout } from "../../lib/checkout";
 import { kvDel, kvGet, kvSet, markOrdered, useDraft } from "../../lib/draft";
 import ModerationNotice, { flaggedCount } from "../../components/ModerationNotice";
+import FreeDeliveryBar from "../../components/FreeDeliveryBar";
 import { isClient, refreshMe, useMe } from "../../lib/me";
 // Печатные версии: обычный import (не import()) — без сети на «Подтвердить» кусок кода не догрузится,
 // а нужна понятная ошибка «нет связи». Тяжёлая часть (воркер) грузится только при сборке.
@@ -415,6 +416,14 @@ export default function CartPage() {
           </button>
         </div>
       ))}
+
+      {/* День 3, задача 1: сколько осталось до бесплатной доставки — та же сумма, что решает строку «Доставка» в итоге */}
+      <FreeDeliveryBar
+        methods={catalog.delivery}
+        afterDiscountKop={totals.goodsKop - totals.discountKop}
+        freeByPromo={!!(totals.promo?.ok && totals.promo.freeDelivery)}
+        promoCode={totals.promo?.ok ? totals.promo.code : ""}
+      />
 
       <section className="card" aria-labelledby="h-recipient">
         <h2 id="h-recipient">Получатель</h2>

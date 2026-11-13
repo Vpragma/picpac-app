@@ -474,3 +474,12 @@ body:has(.sticky-bar) .net-banner { bottom: calc(var(--tabbar-h) + var(--sticky-
    строки состояния выделения (короткий и длинный текст занимают одно место) */
 .pe { overflow-anchor: none; }
 .pe-select > p[role="status"] { min-height: 2.9em; }
+
+/* Корзина: полоса «до бесплатной доставки» (день 3, задача 1) — цвета только из темы */
+.free-ship-text { margin: 0 0 10px; color: var(--ds-color-text-strong); }
+.free-ship-text.ok { color: var(--ds-color-success); font-weight: 500; }
+.free-ship-left { color: var(--ds-color-accent); }
+.free-ship-track { height: 8px; border-radius: var(--ds-radius-pill); background: var(--ds-color-bg-muted); overflow: hidden; }
+.free-ship-fill { height: 100%; border-radius: inherit; background: var(--ds-color-accent); transition: width 0.6s ease; }
+.free-ship-track.ok .free-ship-fill { background: var(--ds-color-success); }
+@media (prefers-reduced-motion: reduce) { .free-ship-fill { transition: none; } }
