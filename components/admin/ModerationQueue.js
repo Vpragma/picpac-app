@@ -293,6 +293,17 @@ export default function ModerationQueue() {
       return next;
     }), []);
   const current = items[Math.min(active, Math.max(0, items.length - 1))];
+  // N7: счётчики меняются сразу, как и сама карточка: скрытые (решение отправлено) вычитаем из чисел сервера.
+  // Сервер не принял — карточка вернётся, и число вместе с ней; после обновления очереди их уже нет в списке — двойного вычета нет.
+  const shownStats = useMemo(() => {
+    if (!stats || !res?.ok) return stats;
+    const gone = res.items.filter((it) => hidden.has(it.id));
+    if (!gone.length) return stats;
+    const left = new Set(items.map((it) => it.orderId));
+    const goneOrders = new Set(gone.map((it) => it.orderId).filter((o) => !left.has(o))).size;
+    const pending = Math.max(0, stats.pending - gone.length);
+    return { ...stats, pending, orders: stats.orders != null ? Math.max(pending ? 1 : 0, stats.orders - goneOrders) : stats.orders };
+  }, [stats, res, hidden, items]);
 
   useEffect(() => {
     if (!keys || !desktop || tab !== "queue") return;
@@ -323,7 +334,7 @@ export default function ModerationQueue() {
 
   return (
     <div className="stack" data-testid="moderation-queue">
-      <Stats stats={stats} />
+      <Stats stats={shownStats} />
       <div className="steps" role="tablist" aria-label="Модерация" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))", maxWidth: 420 }}>
         <button
           type="button"
@@ -335,7 +346,7 @@ export default function ModerationQueue() {
             load();
           }}
         >
-          Очередь{stats ? ` (${stats.pending})` : ""}
+          Очередь{shownStats ? ` (${shownStats.pending})` : ""}
         </button>
         <button type="button" role="tab" aria-selected={tab === "history"} className={tab === "history" ? "active" : ""} onClick={() => setTab("history")}>
           История решений
