@@ -52,6 +52,12 @@ export function StatusChip({ status }) {
   );
 }
 
+// Шаг ленты: пройден (done), текущий (current) или впереди (todo). «Завершён» в статусе «Завершён» — пройден.
+export function stepState(i, idx, status) {
+  if (i < idx || (i === idx && status === "done")) return "done";
+  return i === idx ? "current" : "todo";
+}
+
 // Лента статусов: время каждого шага по Минску и пояснение (причина смены)
 export function Timeline({ order }) {
   const idx = STATUSES.indexOf(order.status);
@@ -73,11 +79,14 @@ export function Timeline({ order }) {
       {STATUSES.map((s, i) => {
         const step = (order.timeline || []).find((t) => t.status === s);
         const h = history.filter((x) => x.status === s).pop();
-        const cls = i < idx || (i === idx && s === "done") ? "done" : i === idx ? "current" : "";
+        // N7: галочка — только у пройденных шагов; текущий — «сейчас» (кольцо и плашка), будущие — бледные
+        const state = stepState(i, idx, s);
         return (
-          <li key={s} className={cls} aria-current={i === idx ? "step" : undefined}>
-            <span className="dot">{i <= idx && <IconCheck size={14} />}</span>
+          <li key={s} className={state} data-state={state} aria-current={i === idx ? "step" : undefined}>
+            <span className="dot" aria-hidden="true">{state === "done" && <IconCheck size={14} />}</span>
             <b>{STATUS_LABELS[s]}</b>
+            {state === "current" && <span className="timeline-now">сейчас</span>}
+            {state !== "current" && <span className="visually-hidden">{state === "done" ? " — пройден" : " — впереди"}</span>}
             {step?.at ? (
               <div className="muted small">
                 {minskTime(step.at)}

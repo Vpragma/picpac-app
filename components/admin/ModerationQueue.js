@@ -8,6 +8,8 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRe
 import { callApi } from "../../lib/api";
 import { REASON_FOR_FINDING, RETURN_REASONS, RETURN_TEMPLATES } from "../../lib/moderation";
 import { minskTime } from "../OrderBits";
+import { plural } from "../../lib/plural";
+import { BLUR_STYLE } from "./moderationBlur";
 
 const SOURCE = { server: "по проверке на сервере", device: "по проверке на телефоне клиента" };
 const KEYS = { approve: ["a", "ф"], ret: ["r", "к"], next: ["n", "т", "j", "о"], show: ["s", "ы"] };
@@ -35,7 +37,8 @@ function Findings({ item }) {
   );
 }
 
-const Card = forwardRef(function Card({ item, active, onActivate, onDone }, ref) {
+// onStart — решение отправлено: карточку убираем из списка сразу (N7), onFail — сервер не принял: возвращаем её
+const Card = forwardRef(function Card({ item, active, onActivate, onDone, onStart = () => {}, onFail = () => {} }, ref) {
   const [mode, setMode] = useState(null); // null | "return"
   const [reason, setReason] = useState("");
   const [comment, setComment] = useState("");
@@ -50,9 +53,14 @@ const Card = forwardRef(function Card({ item, active, onActivate, onDone }, ref)
     setError("");
     if (decision === "return" && !reason) return setError("Выберите причину возврата.");
     setBusy(true);
+    onStart(item.id);
     const r = await callApi(`/api/v1/admin/moderation/${item.id}`, { body: { decision, ...(decision === "return" ? { reason, comment: comment.trim() || undefined } : {}) } });
     setBusy(false);
-    if (!r.ok) return setError(r.error?.fields?.reason || r.error?.message || "Не получилось сохранить решение.");
+    if (!r.ok) {
+      const text = r.error?.fields?.reason || r.error?.message || "Не получилось сохранить решение.";
+      setError(text);
+      return onFail(item.id, `Заказ ${item.orderNumber}, фото № ${(item.photoIndex ?? 0) + 1}: ${text}`);
+    }
     onDone(decision === "approve" ? `Фото из заказа ${item.orderNumber} одобрено${r.waiting ? "" : " — заказ ушёл в производство"}.` : `Фото из заказа ${item.orderNumber} возвращено на замену.`);
   }
 
@@ -114,7 +122,7 @@ const Card = forwardRef(function Card({ item, active, onActivate, onDone }, ref)
               alt={show ? `Фото на проверке, заказ ${item.orderNumber}` : `Фото на проверке скрыто размытием, заказ ${item.orderNumber}`}
               data-testid="moderation-photo"
               data-blurred={show ? "false" : "true"}
-              style={{ display: "block", width: "100%", filter: show ? "none" : "blur(24px)", transform: show ? "none" : "scale(1.08)" }}
+              style={{ display: "block", width: "100%", ...(show ? {} : BLUR_STYLE) }}
             />
           </div>
         ) : (
@@ -173,9 +181,11 @@ function Stats({ stats }) {
   if (!stats) return null;
   return (
     <section className="stat-tiles" aria-label="Очередь коротко" data-testid="moderation-stats">
-      <div className="stat-tile">
-        <span className="small muted">В очереди</span>
+      {/* N7: то же число, что плитка «Фото ждут проверки» в «Обзоре» (lib/server/moderationCounts.js) */}
+      <div className="stat-tile" data-testid="moderation-waiting" data-value={stats.pending}>
+        <span className="small muted">Фото ждут проверки</span>
         <b>{stats.pending}</b>
+        {stats.orders != null && <span className="small muted">{stats.pending ? `в ${stats.orders} ${plural(stats.orders, "заказе", "заказах", "заказах")} · сейчас` : "сейчас"}</span>}
       </div>
       <div className="stat-tile">
         <span className="small muted">Среднее время проверки (7 дней)</span>
@@ -246,6 +256,8 @@ export default function ModerationQueue() {
   const [keys, setKeys] = useState(true);
   const [desktop, setDesktop] = useState(false);
   const [stats, setStats] = useState(null);
+  const [hidden, setHidden] = useState(() => new Set()); // N7: решение отправлено — карточки уже нет в списке
+  const [noteError, setNoteError] = useState(false);
   const cards = useRef({});
   const load = useCallback(async () => {
     const r = await callApi("/api/v1/admin/moderation", { method: "GET" });
@@ -272,7 +284,14 @@ export default function ModerationQueue() {
     return () => m.removeEventListener?.("change", upd);
   }, []);
 
-  const items = useMemo(() => (res?.ok ? res.items : []), [res]);
+  const items = useMemo(() => (res?.ok ? res.items.filter((it) => !hidden.has(it.id)) : []), [res, hidden]);
+  const hide = useCallback((id, on) =>
+    setHidden((h) => {
+      const next = new Set(h);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    }), []);
   const current = items[Math.min(active, Math.max(0, items.length - 1))];
 
   useEffect(() => {
@@ -337,7 +356,7 @@ export default function ModerationQueue() {
             </div>
           )}
           {note && (
-            <p className="ok-text" role="status">
+            <p className={noteError ? "err-text" : "ok-text"} role={noteError ? "alert" : "status"}>
               {note}
             </p>
           )}
@@ -354,7 +373,14 @@ export default function ModerationQueue() {
               item={it}
               active={desktop && current?.id === it.id}
               onActivate={() => setActive(i)}
+              onStart={(id) => hide(id, true)}
+              onFail={(id, text) => {
+                hide(id, false);
+                setNoteError(true);
+                setNote(text);
+              }}
               onDone={(text) => {
+                setNoteError(false);
                 setNote(text);
                 load();
               }}

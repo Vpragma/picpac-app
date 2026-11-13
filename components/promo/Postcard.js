@@ -4,11 +4,12 @@
 // «Сохранить картинкой» рисует ту же открытку на canvas и сохраняет PNG — всё на устройстве, без сторонних сервисов.
 import { useEffect, useState } from "react";
 import { benefitText, promoDate } from "../../lib/promo";
-import { ART, BRAND_COLORS, CARD_H, CARD_W, cardText, drawCard, seasonColors, spaced } from "./postcardArt";
+import { artFor, BRAND_COLORS, CARD_H, CARD_W, cardText, drawCard, seasonColors, spaced } from "./postcardArt";
 import "./promo.css";
 
-// hideHeading — когда у секции вокруг уже есть свой заголовок (экран заказа)
-export default function Postcard({ card, orderNumber, compact = false, hideHeading = false }) {
+// hideHeading — когда у секции вокруг уже есть свой заголовок (экран заказа).
+// art — рисунок: «book» (в заказе есть фотокнига) или «prints» (только печать фото — без книги, N7)
+export default function Postcard({ card, orderNumber, compact = false, hideHeading = false, art = "book" }) {
   const [msg, setMsg] = useState(null);
   const [busy, setBusy] = useState(false);
   const [season, setSeason] = useState(null);
@@ -23,7 +24,7 @@ export default function Postcard({ card, orderNumber, compact = false, hideHeadi
   }, []);
 
   if (!card) return null;
-  const data = { code: card.code, benefit: benefitText(card), validToText: promoDate(card.validTo), orderNumber };
+  const data = { code: card.code, benefit: benefitText(card), validToText: promoDate(card.validTo), orderNumber, art };
   const t = cardText(data);
   const c = { ...BRAND_COLORS, ...(season || {}) };
   const label = `Открытка PicPac. ${t.title.join(" ")}. ${t.body.join(" ")} ${t.codeLabel}: ${card.code}. ${t.terms}.`;
@@ -69,12 +70,12 @@ export default function Postcard({ card, orderNumber, compact = false, hideHeadi
           Открытка с личным кодом
         </h2>
       )}
-      <svg className="postcard-art" viewBox={`0 0 ${CARD_W} ${CARD_H}`} role="img" aria-label={label} data-season={season?.season || undefined}>
+      <svg className="postcard-art" viewBox={`0 0 ${CARD_W} ${CARD_H}`} role="img" aria-label={label} data-season={season?.season || undefined} data-art={art}>
         <rect x="0" y="0" width={CARD_W} height={CARD_H} rx="22" fill={c.paper} />
         <rect x="14" y="14" width={CARD_W - 28} height={CARD_H - 28} rx="14" fill="none" stroke={c.frame} strokeWidth="1.5" />
         <g fill="none" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-          {ART.map((a, i) => (
-            <path key={i} d={a.d} stroke={c[a.ink]} />
+          {artFor(art).map((a, i) => (
+            <path key={i} d={a.d} stroke={c[a.ink]} fill={a.fill ? c[a.fill] : undefined} />
           ))}
         </g>
         <g textAnchor="middle" className="postcard-text">

@@ -5,6 +5,8 @@ import { requirePageRole } from "@/lib/server/session";
 import { createSupabaseAdmin } from "@/lib/server/supabaseAdmin";
 import Link from "next/link";
 import { StatusChip } from "@/components/OrderBits";
+import { plural } from "@/lib/plural";
+import { moderationCounts } from "@/lib/server/moderationCounts";
 
 export const dynamic = "force-dynamic";
 
@@ -17,29 +19,57 @@ export default async function AdminPage() {
   const auth = await requirePageRole(["moderator", "admin"], "/admin");
   const isAdmin = auth.activeRole === "admin";
   const db = createSupabaseAdmin();
-  const [orders, interactions] = await Promise.all([
+  const head = { count: "exact", head: true };
+  const [orders, interactions, mod, production, open] = await Promise.all([
     db.from("orders").select("id, number, status, total_kop, payment_status, is_demo, created_at").order("created_at", { ascending: false }).limit(30),
     db.from("interactions").select("id, topic, kind, status, sla_due, created_at, orders(number)").order("created_at", { ascending: false }).limit(30),
+    moderationCounts(db).catch((e) => (console.error(e?.message), null)),
+    db.from("orders").select("id", head).eq("status", "production"),
+    db.from("interactions").select("id, orders!inner(id)", head).eq("status", "open"),
   ]);
   const orderRows = orders.data || [];
   const itRows = interactions.data || [];
-  const count = (list, f) => list.filter(f).length;
-  // Плитки — по тем же последним 30 заказам и обращениям (полная статистика — «Статистика»)
+  const n = (r) => (r?.error ? null : (r?.count ?? null));
+  // N7: плитки — «сейчас» по всей базе, а не по последним 30 строкам таблиц ниже. Модерация — тот же источник,
+  // что очередь модератора и «Статистика» (lib/server/moderationCounts.js): фото и заказы — разные числа с разными подписями.
   const tiles = [
-    { label: "Ждут модерации", value: count(orderRows, (o) => o.status === "moderation") },
-    { label: "В производстве", value: count(orderRows, (o) => o.status === "production") },
-    { label: "Обращения без ответа", value: count(itRows, (i) => i.status === "open"), warn: true },
-    { label: "Оплачено (тест)", value: count(orderRows, (o) => o.payment_status === "paid_test") },
+    {
+      id: "photos-waiting",
+      label: "Фото ждут проверки",
+      value: mod?.photosWaiting,
+      sub: mod ? (mod.photosWaiting ? `в ${mod.ordersWithPhotos} ${plural(mod.ordersWithPhotos, "заказе", "заказах", "заказах")} · очередь модератора` : "очередь модератора пуста") : null,
+      href: "/admin/moderation",
+      hrefLabel: "Открыть очередь",
+      warn: true,
+    },
+    {
+      id: "orders-moderation",
+      label: "Заказы на модерации",
+      value: mod?.orders,
+      sub: mod?.synthetic ? `из них синтетика: ${mod.synthetic} (фото у них нет)` : "сейчас",
+      href: isAdmin ? "/admin/orders?moderation=1" : null,
+      hrefLabel: "Открыть список",
+    },
+    { id: "production", label: "В производстве", value: n(production), sub: "сейчас" },
+    { id: "unanswered", label: "Обращения без ответа", value: n(open), sub: "сейчас", warn: true },
   ];
   return (
     <div>
       <h1>Обзор</h1>
-      <p className="muted small">Последние 30 заказов и обращений из базы.{isAdmin ? " Откройте заказ, чтобы сменить статус, или обращение, чтобы ответить клиенту." : ""}</p>
+      <p className="muted small">
+        Плитки — сейчас, по всей базе. Ниже — последние 30 заказов и обращений.{isAdmin ? " Откройте заказ, чтобы сменить статус, или обращение, чтобы ответить клиенту." : ""}
+      </p>
       <div className="stat-tiles" data-testid="overview-tiles">
         {tiles.map((t) => (
-          <div key={t.label} className={"stat-tile" + (t.warn && t.value > 0 ? " warn" : "")}>
+          <div key={t.id} className={"stat-tile" + (t.warn && t.value > 0 ? " warn" : "")} data-testid={"tile-" + t.id} data-value={t.value ?? ""}>
             <span className="muted small">{t.label}</span>
-            <b>{t.value}</b>
+            <b>{t.value ?? "—"}</b>
+            {t.sub && <span className="muted small">{t.sub}</span>}
+            {t.href && (
+              <Link className="small" href={t.href}>
+                {t.hrefLabel}
+              </Link>
+            )}
           </div>
         ))}
       </div>

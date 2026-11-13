@@ -293,8 +293,10 @@ html[data-text='lg'] { --sticky-h: 92px; }
   .has-sticky:has(> nav.steps) { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: var(--space-3); align-items: stretch; }
   .has-sticky:has(> nav.steps) > * { grid-column: 1 / -1; min-width: 0; }
   .has-sticky:has(> nav.steps) > .card:first-child { grid-column: 1; grid-row: 1; }
+  /* z-index: auto — у элемента сетки z-index действует и без position: иначе 25 из .sticky-bar ставил панель
+     поверх шапки при прокрутке и закрывал «Помощь» и «Корзину» */
   .has-sticky:has(> nav.steps) > .sticky-bar {
-    grid-column: 2; grid-row: 1; position: static; margin: 0 0 12px; min-height: 0;
+    grid-column: 2; grid-row: 1; position: static; z-index: auto; margin: 0 0 12px; min-height: 0;
     border-color: var(--ds-color-card-border); box-shadow: var(--ds-shadow-card);
   }
 }

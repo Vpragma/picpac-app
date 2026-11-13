@@ -107,6 +107,11 @@ test("админ создаёт коды: проверка ввода, дубл�
   const dup = await createCode({ code: `${TAG}X`, kind: "percent", value: 10 });
   assert.equal(dup.status, 409);
   assert.equal(dup.json.error.code, "promo_exists");
+  // N7: ответ на сохранение оборвался, админ жмёт ещё раз с теми же условиями — успех, тот же код (не «уже есть»)
+  const replay = await createCode({ code: `${TAG}x`, kind: "percent", value: 20, productSlugs: ["layflat"], maxUses: 1, label: "тест N8", validTo: "2030-12-31" });
+  assert.equal(replay.status, 200, replay.text);
+  assert.equal(replay.json.replayed, true);
+  assert.equal(replay.json.promo.code, `${TAG}X`);
   const { data: log } = await admin.from("audit_log").select("action, result, user_id").eq("object_id", `${TAG}X`).eq("action", "admin.promo_create");
   assert.ok(log.some((r) => r.result === "success" && r.user_id === ADM.id), "создание в журнале");
   assert.ok(log.some((r) => r.result === "denied"), "дубль в журнале");
