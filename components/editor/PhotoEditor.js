@@ -783,11 +783,15 @@ export default function PhotoEditor({ draft, thumbs, readOnly, lowDpiIds, dupIds
             Что изменить?
           </label>
           <div className="row" style={{ gap: 8 }}>
-            <input id="pe-cmd" className="input" value={cmd} onChange={(e) => setCmd(e.target.value)} placeholder="Например: тёплый вечер, ч/б, убери машину" disabled={readOnly} autoComplete="off" enterKeyHint="done" />
+            <input id="pe-cmd" className="input" value={cmd} onChange={(e) => setCmd(e.target.value)} placeholder="Своими словами" aria-describedby="pe-cmd-hint" disabled={readOnly} autoComplete="off" enterKeyHint="done" />
             <button type="submit" className="btn btn-primary" disabled={readOnly}>
               Сделать
             </button>
           </div>
+          {/* N7: примеры — отдельной строкой: в поле на телефоне длинная подсказка обрезалась */}
+          <p id="pe-cmd-hint" className="small muted pe-hint">
+            Например: тёплый вечер, ч/б, убери машину
+          </p>
           <div className="pe-chips" aria-label="Подсказки">
             {/* «Размыть фон» без выделения касанием на этом устройстве — тупик (S12): не показываем */}
             {SUGGESTIONS.filter((s) => aiOk || s !== "Размыть фон").map((s) => (
