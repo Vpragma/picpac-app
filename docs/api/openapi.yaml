@@ -959,10 +959,11 @@ paths:
             example: { code: OSEN2026, kind: percent, value: 15, productSlugs: [layflat], season: autumn, validTo: "2026-11-30", maxUsesPerUser: 1, label: "−15% на фотокниги осенью" }
       responses:
         "201": { description: "{ ok, promo: AdminPromo }" }
+        "200": { description: "N7: повтор того же создания тем же админом за 30 минут с теми же условиями (ответ на первое сохранение потерялся) — { ok, promo, replayed: true }, без второй записи в журнал" }
         "400": { $ref: "#/components/responses/Invalid" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "409": { description: "promo_exists — такой код уже есть" }
+        "409": { description: "promo_exists — такой код уже есть (другие условия или другой админ)" }
         "429": { $ref: "#/components/responses/TooMany" }
 
   /api/v1/admin/promo/{code}:
@@ -993,6 +994,9 @@ paths:
         воронка «просмотр → проект → корзина → оформление → оплачено (тест)» с конверсией шагов и cartToPaid,
         медиана времени на шагах редактора и «где бросают», использование ИИ-редактора. Формулы — README «Формулы статистики».
         N9: promo — заказы с промокодом за период (orders, withCode, sharePct), сумма скидок discountKop, top — 5 самых частых кодов.
+        N7: tiles.onModeration — заказы в статусе «Модерация» сейчас (не за период); moderation — очередь модератора сейчас:
+        photosWaiting (фото настоящих заказов без решения — то же число, что stats.pending очереди и плитка «Фото ждут проверки»
+        в «Обзоре») и ordersWithPhotos.
       parameters:
         - { name: days, in: query, description: "N9: сутки, 7, 30 или 90 дней", schema: { type: integer, enum: [1, 7, 30, 90], default: 7 } }
         - { name: source, in: query, description: "all — с синтетикой (подпись «демо-данные»), real — без строк is_synthetic", schema: { type: string, enum: [all, real], default: all } }
@@ -1166,7 +1170,7 @@ paths:
         - { name: q, in: query, description: "часть номера: латинские буквы, цифры, дефис", schema: { type: string, maxLength: 40, pattern: "^[A-Za-z0-9-]*$" } }
         - { name: status, in: query, schema: { type: string, enum: [accepted, moderation, production, shipped, done] } }
         - { name: product, in: query, description: "slug продукта (заказы, где он есть)", schema: { type: string } }
-        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: from, in: query, description: "N7: несуществующая дата (2026-13-45) или from позже to → 400 «Проверьте дату в фильтре»", schema: { type: string, format: date } }
         - { name: to, in: query, schema: { type: string, format: date } }
         - { name: overdue, in: query, description: "1 — не готов и не завершён, срок готовности прошёл", schema: { type: string, enum: ["1"] } }
         - { name: moderation, in: query, description: "1 — на модерации", schema: { type: string, enum: ["1"] } }
@@ -1357,7 +1361,7 @@ paths:
       parameters:
         - { name: view, in: query, required: false, schema: { type: string, enum: [history] }, description: "history — история решений" }
       responses:
-        "200": { description: Очередь или история, content: { application/json: { example: { ok: true, items: [{ id: "…", orderId: "…", orderNumber: PP-…, photoIndex: 0, url: "https://…(10 минут)", source: server, findings: [{ id: nazi, level: high, text: "Найдено: нацистская символика (высокая уверенность)" }], client: { name: "Т. Т.", phone: "+375 ••••••• 21", email: "t•••@example.com" }, createdAt: "…" }], stats: { pending: 1, avgMinutes: 4.5, decided7d: 12, decided24h: 3 } } } } }
+        "200": { description: Очередь или история, content: { application/json: { example: { ok: true, items: [{ id: "…", orderId: "…", orderNumber: PP-…, photoIndex: 0, url: "https://…(10 минут)", source: server, findings: [{ id: nazi, level: high, text: "Найдено: нацистская символика (высокая уверенность)" }], client: { name: "Т. Т.", phone: "+375 ••••••• 21", email: "t•••@example.com" }, createdAt: "…" }], stats: { pending: 1, orders: 1, avgMinutes: 4.5, decided7d: 12, decided24h: 3 } } } } }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
   /api/v1/admin/moderation/{id}:
