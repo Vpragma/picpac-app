@@ -134,6 +134,8 @@ export default function PromoAdmin() {
     setBusy(false);
     if (!r.ok) {
       setForm((f) => ({ ...f, errors: r.error?.fields || {}, message: r.error?.message || "Не получилось сохранить. Попробуйте ещё раз." }));
+      // N7: «уже есть» или оборванный ответ — код мог появиться; список обновляем, чтобы админ его увидел
+      if (r.status === 409 || r.status === 0) load();
       return;
     }
     setForm(null);
