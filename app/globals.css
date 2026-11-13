@@ -233,6 +233,14 @@ button, input, select { font: inherit; color: inherit; }
 .timeline li.done::before { background: var(--ds-color-step-done); }
 .timeline li.current .dot { background: var(--ds-color-step-current); box-shadow: 0 0 0 4px var(--ds-color-bg-hover); }
 .timeline li.current b { color: var(--ds-color-accent); }
+/* N7: текущий шаг — без галочки (точка в кольце) и с плашкой «сейчас»; будущие — бледные */
+.timeline li.current .dot::after { content: ""; width: 8px; height: 8px; border-radius: 999px; background: currentColor; }
+.timeline-now {
+  display: inline-block; margin-left: var(--space-2); padding: 0 var(--space-2); border-radius: var(--ds-radius-pill);
+  font-size: var(--ds-text-sm); line-height: 1.5; font-weight: 500; vertical-align: 1px;
+  background: var(--ds-color-step-current); color: var(--ds-color-text-inverse);
+}
+.timeline li.todo b { color: var(--ds-color-text-muted); font-weight: 400; }
 
 /* Поля */
 .field { display: block; margin-bottom: 12px; }

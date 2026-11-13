@@ -189,9 +189,11 @@ export default async function AdminOrderPage({ params }) {
             Лента статусов
           </h2>
           <ol className="stack small" style={{ paddingLeft: 18, margin: 0 }} data-testid="admin-history">
-            {(history || []).map((h) => (
-              <li key={h.id}>
+            {(history || []).map((h, n, all) => (
+              <li key={h.id} data-current={n === all.length - 1 && h.status === o.status ? "1" : undefined}>
                 <b>{STATUS_LABELS[h.status]}</b>
+                {/* N7: последняя запись с текущим статусом — «сейчас», как в ленте клиента */}
+                {n === all.length - 1 && h.status === o.status ? <span className="timeline-now">сейчас</span> : null}
                 {h.substatus ? ` · ${h.substatus}` : ""} <span className="muted">· {time(h.at)} · {SOURCE[h.source] || h.source}</span>
                 {h.event_type ? <span className="muted"> · {EVENT_LABELS[h.event_type] || h.event_type}</span> : null}
                 {h.reason ? <div style={{ overflowWrap: "anywhere" }}>Причина: {h.reason}</div> : null}
