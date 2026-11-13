@@ -93,7 +93,13 @@ export default async function StatsPage({ searchParams }) {
             <Tile label="Заказы сегодня" value={num(s.tiles.ordersToday)} formula="Заказы, созданные с 00:00 сегодняшнего дня по Минску." />
             <Tile label="В работе" value={num(s.tiles.inWork)} formula="Заказы в статусах «Принят», «Модерация» и «Производство» сейчас." />
             <Tile label="Просрочено" value={num(s.tiles.overdue)} warn={s.tiles.overdue > 0} formula="Заказы не в статусах «Готов / передан в доставку» и «Завершён», у которых крайний срок готовности уже прошёл." href={`/admin/orders?overdue=1&sort=eta${q.source === "real" ? "&source=real" : ""}`} />
-            <Tile label="На модерации" value={num(s.tiles.onModeration)} formula="Заказы в статусе «Модерация» сейчас." href={`/admin/orders?moderation=1${q.source === "real" ? "&source=real" : ""}`} />
+            <Tile
+              label="Заказы на модерации"
+              value={num(s.tiles.onModeration)}
+              sub={s.moderation ? `сейчас · фото ждут проверки: ${num(s.moderation.photosWaiting)}` : "сейчас"}
+              formula="Заказы в статусе «Модерация» сейчас, не за период; синтетика — по переключателю «Источник данных». С «Все данные» — то же число, что «Заказы на модерации» в «Обзоре». «Фото ждут проверки» — очередь модератора: фото настоящих заказов на «Модерации» без решения (у синтетических заказов фото нет)."
+              href={`/admin/orders?moderation=1${q.source === "real" ? "&source=real" : ""}`}
+            />
             <Tile label="Обращения без ответа" value={num(s.tiles.unanswered)} sub={s.tiles.unansweredOverdue ? `${num(s.tiles.unansweredOverdue)} — срок ответа прошёл` : "все в срок"} warn={s.tiles.unansweredOverdue > 0} formula="Обращения в статусе «Ждёт ответа». «После SLA» — срок ответа уже прошёл." />
             <Tile label={`Выручка (тест) за ${s.days} дн.`} value={byn(s.tiles.revenueKop)} formula={`Сумма «Итого» заказов с тестовой оплатой, оплаченных за последние ${s.days} дней (по дате оплаты). Деньги не списывались. Оплаченных заказов: ${num(s.tiles.paidPeriod)}, всего заказов за период: ${num(s.tiles.ordersPeriod)}.`} />
           </section>

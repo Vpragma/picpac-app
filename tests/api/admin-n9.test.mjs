@@ -97,6 +97,19 @@ test("N9 заказы: фильтры, сортировка, страницы, �
   const day = await get("from=2026-11-11&to=2026-11-11");
   assert.ok(day.json.items.every((o) => o.createdAt >= "2026-11-10T21:00:00" && o.createdAt < "2026-11-11T21:00:00"), "день по Минску");
   for (const bad of ["q=%25", "status=lost", "foo=1", "from=11.11.2026", "per=1000"]) assert.equal((await get(bad)).status, 400, bad);
+  // N7: несуществующая дата не уходит в базу — 400 «Проверьте дату» (а не 500 «date/time field value out of range»)
+  for (const bad of ["from=2026-13-45", "to=2026-02-30", "from=2026-00-10", "from=2026-11-12&to=2026-11-11"]) {
+    const r = await get(bad);
+    assert.equal(r.status, 400, `${bad}: ${r.text}`);
+    assert.match(r.json.error.message, /Проверьте дат/, bad);
+  }
+  assert.equal((await get("from=2028-02-29&to=2028-02-29")).status, 200, "29 февраля високосного года — настоящая дата");
+  // То же на экране: подсказка вместо ошибки сервера
+  const page = await A.client.req("/admin/orders?from=2026-13-45");
+  assert.equal(page.status, 200);
+  assert.match(page.text, /Проверьте дату/);
+  const csv = await A.client.req("/api/v1/admin/orders/export?from=2026-13-45");
+  assert.equal(csv.status, 400, "выгрузка CSV с неверной датой — тоже 400");
   // N7: страница за пределами списка — 200 и пустой список (не 500 orders_unavailable)
   for (const q of [`page=${all.json.pages + 50}`, "status=moderation&page=999", "product=pages-book&page=500&per=50"]) {
     const far = await get(q);

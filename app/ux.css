@@ -213,3 +213,6 @@ body:has(.sticky-bar) .site-footer { padding-bottom: calc(var(--tabbar-h) + var(
 /* A8: миниатюры фото в карточке заказа (админка) */
 .admin-thumbs { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 6px 0 0; padding: 0; align-items: center; }
 .admin-thumbs img, .admin-thumb-empty { display: block; width: 72px; height: 72px; border-radius: 8px; object-fit: cover; background: var(--ds-color-bg-muted); }
+/* N7: миниатюра с флагом модерации — размытие не выходит за рамку */
+.admin-thumb-frame { display: block; overflow: hidden; border-radius: 8px; }
+.admin-flagged { list-style: none; padding: 0; margin: var(--space-2) 0 0; }

@@ -313,8 +313,12 @@ function useAdder() {
     setBusy(true);
     if (fromGallery) setMissing([]);
     try {
-      const { added, rejected, failed, missing: miss = [] } = fromGallery ? await addGalleryFiles(files, setProgress) : await addFiles(files);
+      const { added, unsupported = 0, tooLarge = 0, rejected, failed, missing: miss = [] } = fromGallery ? await addGalleryFiles(files, setProgress) : await addFiles(files);
       if (added) notify(`Добавлено фото: ${added}`, "success");
+      // N7: файлы не того типа (GIF, SVG, текст под именем .jpg) и слишком большие — отдельной строкой, а не «Добавлено фото»
+      const files_ = (n) => `${n} ${plural(n, "файл", "файла", "файлов")}`;
+      if (unsupported) notify(`Не подошёл формат: ${files_(unsupported)}. Подходят JPEG и PNG.`, "error");
+      if (tooLarge) notify(`Слишком большой: ${files_(tooLarge)}. Подробности — в ячейке фото.`, "error");
       if (rejected.length) notify(`Это не фото, пропустили: ${rejected.join(", ")}`, "error");
       if (failed) notify(`Не получилось добавить фото: ${failed}. Нажмите «Повторить» в списке.`, "error");
       if (miss.length) setMissing(miss);

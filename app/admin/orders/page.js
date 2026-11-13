@@ -68,7 +68,9 @@ export default async function AdminOrdersPage({ searchParams }) {
 
       <details className="card" open={active > 0}>
         <summary style={{ cursor: "pointer", minHeight: 44, display: "flex", alignItems: "center", fontWeight: 500 }}>Поиск и фильтры{active ? ` · включено: ${active}` : ""}</summary>
-        <form method="get" action="/admin/orders" style={{ marginTop: 12 }} data-testid="orders-filters">
+        {/* N7: форма всегда показывает фильтры из адреса — после «назад» браузер не восстанавливает старые значения
+            (autoComplete="off"), а key пересоздаёт поля при каждом новом адресе */}
+        <form method="get" action="/admin/orders" style={{ marginTop: 12 }} data-testid="orders-filters" autoComplete="off" key={JSON.stringify(f)}>
           <div className="admin-filters">
             <label className="field">
               <span>Номер заказа</span>
@@ -145,9 +147,13 @@ export default async function AdminOrdersPage({ searchParams }) {
       </details>
 
       {!parsed.success && (
-        <div className="card" role="alert">
-          <b className="err-text">Фильтр не распознан — показаны все заказы.</b>
-          <p className="muted small">{parsed.error.issues[0]?.message}</p>
+        <div className="card" role="alert" data-testid="orders-filter-error">
+          {/* N7: понятная подсказка про фильтр (а не «сбой сервера») и сброс фильтра */}
+          <b className="err-text">{parsed.error.issues[0]?.message || "Фильтр не распознан."}</b>
+          <p className="muted small">Пока показаны все заказы без фильтра.</p>
+          <Link className="btn btn-small" href="/admin/orders">
+            Сбросить фильтр
+          </Link>
         </div>
       )}
       {failed && (

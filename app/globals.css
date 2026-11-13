@@ -24,7 +24,8 @@ button, input, select { font: inherit; color: inherit; }
 .content { padding: 8px 16px calc(var(--tabbar-h) + 24px + env(safe-area-inset-bottom)); }
 
 .topbar {
-  position: sticky; top: 0; z-index: 20;
+  /* N7: шапка выше всех слоёв страницы (панель цены — 25, нижнее меню — 30), но ниже окон и тостов (50+) */
+  position: sticky; top: 0; z-index: 40;
   display: flex; align-items: center; justify-content: space-between;
   padding: 8px 16px; padding-top: calc(8px + env(safe-area-inset-top));
   /* N7: шапка непрозрачная — текст под ней не просвечивает */
@@ -232,6 +233,14 @@ button, input, select { font: inherit; color: inherit; }
 .timeline li.done::before { background: var(--ds-color-step-done); }
 .timeline li.current .dot { background: var(--ds-color-step-current); box-shadow: 0 0 0 4px var(--ds-color-bg-hover); }
 .timeline li.current b { color: var(--ds-color-accent); }
+/* N7: текущий шаг — без галочки (точка в кольце) и с плашкой «сейчас»; будущие — бледные */
+.timeline li.current .dot::after { content: ""; width: 8px; height: 8px; border-radius: 999px; background: currentColor; }
+.timeline-now {
+  display: inline-block; margin-left: var(--space-2); padding: 0 var(--space-2); border-radius: var(--ds-radius-pill);
+  font-size: var(--ds-text-sm); line-height: 1.5; font-weight: 500; vertical-align: 1px;
+  background: var(--ds-color-step-current); color: var(--ds-color-text-inverse);
+}
+.timeline li.todo b { color: var(--ds-color-text-muted); font-weight: 400; }
 
 /* Поля */
 .field { display: block; margin-bottom: 12px; }

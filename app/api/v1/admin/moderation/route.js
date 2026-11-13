@@ -1,12 +1,14 @@
 // GET /api/v1/admin/moderation — очередь модерации (модератор и админ): фото с флагом из заказов на «Модерации».
 //   Вывод модели — словами (N4): «Найдено: обнажённая грудь (высокая уверенность)», без процентов и сырых оценок.
 //   Фото — по подписанной ссылке на 10 минут. Данные клиента замаскированы (SEC-14): только инициалы, без адреса.
-//   stats — сколько ждёт, среднее время проверки за 7 дней, решений за сутки. В журнал — moderation.view.
+//   stats — сколько фото ждёт (pending) и в скольких заказах (orders), среднее время проверки за 7 дней, решений за сутки.
+//   В журнал — moderation.view.
 // GET ?view=history — последние 30 решений: решение модели и модератора, причина, время. Без фото и без данных клиента.
 import { requireUser, serverError } from "@/lib/server/api";
 import { json } from "@/lib/server/http";
 import { maskClient } from "@/lib/mask";
 import { describeFinding, RETURN_REASONS, reviewFindings } from "@/lib/moderation";
+import { queueCounts, queueQuery } from "@/lib/server/moderationCounts";
 
 const words = (r) => {
   const f = reviewFindings({ verdict: r.project_photos?.moderation, device: r.project_photos?.nsfw ?? r.auto_scores });
@@ -16,13 +18,8 @@ const words = (r) => {
 async function stats(ctx) {
   const weekAgo = new Date(Date.now() - 7 * 86400_000).toISOString();
   const dayAgo = Date.now() - 86400_000;
-  const [{ count }, { data: done }] = await Promise.all([
-    ctx.admin
-      .from("moderation_reviews")
-      .select("id, orders!inner(id)", { count: "exact", head: true })
-      .eq("decision", "pending")
-      .eq("orders.status", "moderation")
-      .eq("orders.is_synthetic", false),
+  const [queue, { data: done }] = await Promise.all([
+    queueCounts(ctx.admin),
     ctx.admin
       .from("moderation_reviews")
       .select("created_at, decided_at, orders!inner(is_synthetic)")
@@ -34,7 +31,9 @@ async function stats(ctx) {
   ]);
   const mins = (done || []).filter((r) => r.decided_at && r.created_at).map((r) => (new Date(r.decided_at) - new Date(r.created_at)) / 60000);
   return {
-    pending: count || 0,
+    // N7: «Фото ждут проверки» — тот же счётчик, что плитка «Обзора» (lib/server/moderationCounts.js)
+    pending: queue.photosWaiting,
+    orders: queue.ordersWithPhotos,
     avgMinutes: mins.length ? Math.round((mins.reduce((a, b) => a + b, 0) / mins.length) * 10) / 10 : null,
     decided7d: mins.length,
     decided24h: (done || []).filter((r) => new Date(r.decided_at).getTime() >= dayAgo).length,
@@ -75,13 +74,8 @@ export async function GET(request) {
       const [items, st] = await Promise.all([history(ctx), stats(ctx)]);
       return json({ ok: true, items, stats: st });
     }
-    const { data, error } = await ctx.admin
-      .from("moderation_reviews")
-      .select("id, order_id, photo_path, photo_index, auto_scores, created_at, project_photos(moderation, nsfw), orders!inner(id, number, status, is_synthetic, recipient, created_at)")
-      .eq("decision", "pending")
-      .eq("orders.status", "moderation")
-      .eq("orders.is_synthetic", false)
-      .not("photo_path", "is", null)
+    // Список и счётчик — один фильтр (queueQuery): «Очередь (N)» совпадает со списком
+    const { data, error } = await queueQuery(ctx.admin, "id, order_id, photo_path, photo_index, auto_scores, created_at, project_photos(moderation, nsfw), orders!inner(id, number, status, is_synthetic, recipient, created_at)")
       .order("created_at")
       .limit(50);
     if (error) throw new Error(error.message);

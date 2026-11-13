@@ -19,6 +19,9 @@ export default async function AdminUsersPage({ searchParams }) {
     console.error(e?.message);
     return null;
   });
+  // N7: по запросу никого, а тестовые аккаунты скрыты — проверим их и подскажем включить галочку
+  const hiddenTests =
+    res && !res.total && f.q && f.tests !== "1" ? ((await listUsers(auth, { ...f, tests: "1", page: 1 }).catch(() => null))?.total ?? 0) : 0;
   const link = (patch = {}) => {
     const p = new URLSearchParams();
     for (const [k, v] of Object.entries({ ...f, ...patch })) if (v !== undefined && v !== null && v !== "") p.set(k, String(v));
@@ -79,6 +82,12 @@ export default async function AdminUsersPage({ searchParams }) {
           <p className="small" aria-live="polite" data-testid="users-summary">
             {res.total ? `Найдено: ${res.total.toLocaleString("ru-RU")}. Сначала сотрудники.` : "Никого не нашли."}
           </p>
+          {hiddenTests > 0 && (
+            <p className="note small" data-testid="users-hidden-tests">
+              Среди тестовых аккаунтов есть совпадения: {hiddenTests.toLocaleString("ru-RU")}.{" "}
+              <Link href={link({ tests: "1", page: undefined })}>Показать тестовые аккаунты</Link>
+            </p>
+          )}
           {!!res.items.length && (
             <div className="table-wrap">
               <table className="data-table" data-testid="users-table">

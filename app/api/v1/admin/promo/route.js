@@ -6,8 +6,33 @@ import { limitWrite, parseBody, requireUser, serverError, z } from "@/lib/server
 import { loadCatalog } from "@/lib/server/catalog";
 import { json, jsonError } from "@/lib/server/http";
 import { auditTerms, checkBody, createSchema, shapeAdminPromo, toRow, unknownProducts } from "@/lib/server/promoAdmin";
+import { promoChanged } from "@/lib/server/promo";
 
 const PERSONAL_LIMIT = 200;
+
+// Тот же код уже создал этот админ за последние 30 минут, и условия совпадают — вернуть строку, иначе null
+const day = (v) => (v ? new Date(v).getTime() : null);
+async function sameRecentCreate(ctx, row) {
+  const since = new Date(Date.now() - 30 * 60_000).toISOString();
+  const [{ data: existing }, { count }] = await Promise.all([
+    ctx.admin.from("promo_codes").select("*").eq("code", row.code).maybeSingle(),
+    ctx.admin.from("audit_log").select("id", { count: "exact", head: true }).eq("action", "admin.promo_create").eq("result", "success").eq("object_id", row.code).eq("user_id", ctx.userId).gte("at", since),
+  ]);
+  if (!existing || existing.owner_user_id || !count) return null;
+  const same =
+    existing.kind === row.kind &&
+    Number(existing.value) === Number(row.value) &&
+    (existing.min_total_kop || 0) === (row.min_total_kop || 0) &&
+    day(existing.valid_from) === day(row.valid_from) &&
+    day(existing.valid_to) === day(row.valid_to) &&
+    (existing.max_uses ?? null) === (row.max_uses ?? null) &&
+    (existing.max_uses_per_user ?? null) === (row.max_uses_per_user ?? null) &&
+    [...(existing.product_slugs || [])].sort().join() === [...(row.product_slugs || [])].sort().join() &&
+    (existing.season || null) === (row.season || null) &&
+    (existing.label || "") === (row.label || "") &&
+    !!existing.active === !!row.active;
+  return same ? existing : null;
+}
 
 export async function GET(request) {
   const { ctx, response } = await requireUser(request, ["admin"]);
@@ -78,6 +103,10 @@ export async function POST(request) {
   const row = { ...toRow(body), is_synthetic: false };
   const { data, error } = await ctx.admin.from("promo_codes").insert(row).select("*").maybeSingle();
   if (error?.code === "23505") {
+    // N7: ответ на первое сохранение мог оборваться, а код уже создан. Повтор тем же админом с теми же условиями
+    // в течение 30 минут — успех: возвращаем существующий код (без второй записи «создан» в журнале)
+    const same = await sameRecentCreate(ctx, row);
+    if (same) return json({ ok: true, promo: shapeAdminPromo(same, null), replayed: true }, 200);
     await ctx.audit("admin.promo_create", "promo", body.code, "denied", { reason: "exists" });
     return jsonError(409, "promo_exists", `Код ${body.code} уже есть. Придумайте другой или измените существующий.`, { fields: { code: "Такой код уже есть." } });
   }
@@ -86,6 +115,7 @@ export async function POST(request) {
     await ctx.audit("admin.promo_create", "promo", body.code, "error");
     return serverError("promo_save_failed", "Не получилось сохранить промокод. Попробуйте ещё раз.");
   }
+  promoChanged(); // N7: плашка сезонного кода на главной (кэш 30 с) — сразу с новым кодом
   await ctx.audit("admin.promo_create", "promo", data.code, "success", auditTerms(data));
   return json({ ok: true, promo: shapeAdminPromo(data, null) }, 201);
 }

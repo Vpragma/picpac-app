@@ -145,7 +145,7 @@ test("модератор: вывод словами, размытое фото �
   await expect(card.getByTestId("moderation-findings")).toContainText("Найдено: нацистская символика (высокая уверенность)");
   expect(await card.innerText()).not.toMatch(/\d\s*%|sexy|nsfw/i);
   await expect(card.getByTestId("moderation-photo")).toHaveAttribute("data-blurred", "true");
-  await expect(page.getByTestId("moderation-stats")).toContainText("В очереди");
+  await expect(page.getByTestId("moderation-stats")).toContainText("Фото ждут проверки");
 
   const desktop = (page.viewportSize()?.width || 0) >= 1024;
   if (desktop) {
