@@ -138,3 +138,12 @@ test("сезон «Осень»: осенний шаблон первым и п�
   assert.equal(initialBook("none"), null);
   assert.equal(initialBook("blackfriday"), null);
 });
+
+test("строка оформления для экранов заказа: шаблон, вариант обложки, название и дата; мусор не ломает", async () => {
+  const { bookSummary } = await import("../../lib/book.js");
+  const snap = bookForOrder({ settings: { book: { template: "wedding", cover: { title: "Наша свадьба", date: "июнь 2026", layout: "title" } } } });
+  assert.equal(bookSummary(snap), "Оформление «Свадьба» · обложка «Только название»: «Наша свадьба», июнь 2026");
+  assert.equal(bookSummary(bookForOrder({})), "Оформление «Классика» · обложка «Фото и подпись»");
+  assert.equal(bookSummary({ template: "zzz", cover: "x" }), "Оформление «Классика» · обложка «Фото и подпись»");
+  assert.equal(bookSummary(null), "");
+});

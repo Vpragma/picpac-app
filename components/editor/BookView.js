@@ -382,6 +382,7 @@ export default function BookView({ layout, thumbs, size, issues, byId, book: raw
             <Book views={views} ctx={ctx} view={view} flip={flip} onFlipDone={onFlipDone} onSwipe={go} ratio={ratio} big />
             <Controls views={views} view={target} label={v.label} pages={v.pages} go={go} />
             <p className="muted small bk-dialog-hint">Листайте свайпом, стрелками или кнопками. Закрыть — Esc.</p>
+            <p className="muted small bk-dialog-hint bk-rotate-hint">Поверните телефон — книга станет крупнее.</p>
           </div>
         )}
       </dialog>

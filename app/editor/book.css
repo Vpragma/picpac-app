@@ -55,8 +55,8 @@
   background-color: var(--bk-paper, var(--pp-white));
   /* лёгкая «бумажная» фактура */
   background-image:
-    repeating-linear-gradient(0deg, color-mix(in srgb, var(--pp-green-900) 2.5%, transparent) 0 1px, transparent 1px 4px),
-    repeating-linear-gradient(90deg, color-mix(in srgb, var(--pp-green-900) 1.5%, transparent) 0 1px, transparent 1px 5px);
+    repeating-linear-gradient(0deg, color-mix(in srgb, var(--pp-green-900) 1.6%, transparent) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(90deg, color-mix(in srgb, var(--pp-green-900) 1%, transparent) 0 1px, transparent 1px 4px);
 }
 /* тень корешка: у левой страницы — справа, у правой — слева */
 .bk-page.side-left::after, .bk-page.side-right::after {
@@ -165,6 +165,8 @@
 .bk-dialog-head b { font-size: var(--ds-text-lg); font-weight: 500; }
 .bk-stage.bk-big { width: 100%; max-width: min(100%, calc((100dvh - 210px) * var(--bk-ar, 2))); }
 .bk-dialog-hint { text-align: center; margin: 0; }
+.bk-rotate-hint { display: none; }
+@media (orientation: portrait) and (max-width: 600px) { .bk-rotate-hint { display: block; } }
 
 /* ── 7. Выбор шаблона и обложки (шаг «Автомакет») ─────────────────────── */
 .bk-design { display: grid; gap: var(--space-5); margin-top: var(--space-5); }
@@ -192,6 +194,7 @@
 .bk-sample-line { display: block; width: 62%; height: 5cqw; margin: 1.5cqw auto; border-radius: 2px; background: currentColor; }
 .bk-sample-line.short { width: 38%; height: 3.5cqw; opacity: 0.6; }
 .bk-cover-grid { margin-top: var(--space-2); }
+.bk-pick .field { max-width: 36rem; }
 
 @media (prefers-reduced-motion: reduce) {
   .bk-book { transition: none; }
