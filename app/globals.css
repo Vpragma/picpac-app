@@ -358,6 +358,9 @@ body:has(.net-banner) .toasts { bottom: calc(var(--tabbar-h, 64px) + 76px + env(
 .pe-label { display: block; font-weight: 500; color: var(--ds-color-text-strong); margin-bottom: 6px; }
 .pe-cmd .input { flex: 1; min-width: 0; }
 .pe-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.pe-hint { margin: 6px 0 0; }
+/* карточка заказа, «Состав»: квадрат с рамкой и подложкой — пока фото грузится, он не выглядит сломанным (N7) */
+.order-thumb { display: block; flex: none; width: 56px; height: 56px; object-fit: cover; border-radius: var(--ds-radius-sm); background: var(--ds-color-bg-muted); border: 1px solid var(--ds-color-card-border); }
 .pe-answer { min-height: 1.5em; margin: 8px 0 0; }
 .pe-sliders { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 4px 16px; margin-top: 12px; }
 .pe-slider { display: block; }

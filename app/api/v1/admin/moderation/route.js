@@ -79,6 +79,11 @@ export async function GET(request) {
       .order("created_at")
       .limit(50);
     if (error) throw new Error(error.message);
+    // N7: фото одного заказа — по номеру в заказе (время постановки в очередь у них совпадает почти до мс,
+    // и порядок выходил 2, 1, 3); заказы — по-прежнему по времени (sort устойчивый)
+    const rank = new Map();
+    for (const r of data) if (!rank.has(r.order_id)) rank.set(r.order_id, rank.size);
+    data.sort((a, b) => rank.get(a.order_id) - rank.get(b.order_id) || (a.photo_index ?? 0) - (b.photo_index ?? 0));
     const paths = data.map((r) => r.photo_path);
     const urls = {};
     if (paths.length) {

@@ -155,10 +155,12 @@ export default function OrderPage() {
               <div className="row wrap" style={{ gap: 6 }} aria-label="Миниатюры фото">
                 {i.thumbs.map((t) =>
                   t.url ? (
+                    // N7: уменьшенной копии в хранилище нет — лениво, декодирование вне основного потока, рамка с подложкой,
+                    // чтобы пока фото грузится, квадрат не выглядел пустым и сломанным
                     // eslint-disable-next-line @next/next/no-img-element -- подписанная ссылка на 10 минут, оптимизатор не нужен
-                    <img key={t.id} src={t.url} alt="" width="56" height="56" loading="lazy" style={{ objectFit: "cover", borderRadius: 8, width: 56, height: 56 }} />
+                    <img key={t.id} src={t.url} alt="" width="56" height="56" loading="lazy" decoding="async" className="order-thumb" />
                   ) : (
-                    <span key={t.id} style={{ width: 56, height: 56, borderRadius: 8, background: "var(--ds-color-bg-muted)" }} />
+                    <span key={t.id} className="order-thumb" />
                   ),
                 )}
                 {i.photoCount > i.thumbs.length && <span className="muted small">и ещё {i.photoCount - i.thumbs.length}</span>}

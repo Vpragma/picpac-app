@@ -10,7 +10,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { IconImage, IconTrash } from "../../components/icons";
 import { EmptyState } from "../../components/LineArt";
-import { clearAfterOrder, moveLocalToServer, removeLine, retryMove, setLineQuantity, useCart } from "../../lib/cart";
+import { cartMoveError, clearAfterOrder, moveLocalToServer, removeLine, retryMove, setLineQuantity, useCart } from "../../lib/cart";
 import { FIELD_LABELS, PICKUP_POINTS, formatPhone, needsDate, validateCheckout } from "../../lib/checkout";
 import { kvDel, kvGet, kvSet, markOrdered, useDraft } from "../../lib/draft";
 import ModerationNotice, { flaggedCount } from "../../components/ModerationNotice";
@@ -236,7 +236,12 @@ export default function CartPage() {
     try {
       // 1. Позиции с устройства — в серверную корзину (проект и фото уходят на сервер)
       await moveLocalToServer();
-      if (readKey("cart", []).some((c) => c?.projectId)) throw new Error(navigator.onLine === false ? "offline" : "Ещё не все фото загрузились. Подождите немного и нажмите «Повторить».");
+      if (readKey("cart", []).some((c) => c?.projectId)) {
+        if (navigator.onLine === false) throw new Error("offline");
+        // N7: о незагруженных фото уже говорит строка над корзиной со своей «Повторить» — второе сообщение не показываем
+        if (cartMoveError()) throw Object.assign(new Error("moving"), { silent: true });
+        throw new Error("Ещё не все фото загрузились. Подождите немного и нажмите «Повторить».");
+      }
       // 2. Свежие настройки проектов корзины — на сервер (цену посчитает сервер)
       for (const l of lines) if (l.localProjectId) await syncProject(l.localProjectId);
       // 2а. Печатные версии изменённых фото: файл полного размера со всеми правками (оригинал не меняется)
@@ -309,6 +314,10 @@ export default function CartPage() {
       notify(`Заказ ${order.number} оформлен`, "success");
     } catch (e) {
       lock.current = false;
+      if (e?.silent) {
+        setFailure(null);
+        return;
+      }
       // Отказ по существу (например, слишком много правок по выделению на фото): честный текст и ссылка на правки,
       // кнопка остаётся «Подтвердить заказ» — повтор без исправления ничего не даст
       if (e?.final) {
@@ -365,7 +374,8 @@ export default function CartPage() {
           )}
         </p>
       )}
-      {pending.length > 0 && (
+      {/* N7: при ошибке переноса — одно сообщение (строка выше), без второй строки о ходе переноса */}
+      {pending.length > 0 && !cart.error && (
         <p className="muted small" role="status">
           Переносим в аккаунт: {uploading.total ? `загружено фото ${uploading.done} из ${uploading.total}` : "сохраняем проект"}…
         </p>

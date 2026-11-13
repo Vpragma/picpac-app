@@ -90,7 +90,9 @@ test("PWA: манифест, сервис-воркер, офлайн-экран,
     await expect(page.locator(".photo-cell img")).toHaveCount(GALLERY.length, { timeout: 30_000 });
     await page.goto("/orders/00000000-0000-4000-8000-000000000000");
     await expect(page.getByRole("heading", { name: "Нет сети" })).toBeVisible();
-    await expect(page.getByText("Черновики сохранены на устройстве")).toBeVisible();
+    // N7: текст для всех — и гостя, у которого нет аккаунта
+    await expect(page.getByText("Черновики и фото сохранены на этом устройстве")).toBeVisible();
+    await expect(page.getByText(/аккаунт/i)).toHaveCount(0);
     await page.getByRole("link", { name: /Мои книги/ }).click();
     await expect(page).toHaveURL(/\/books$/);
     await setOfflineAll(context, false);

@@ -59,7 +59,7 @@ export default async function AdminOrderPage({ params }) {
     db.from("order_status_history").select("id, status, substatus, at, source, reason, event_type").eq("order_id", id).order("at").order("id"),
     db.from("order_items").select("id, title, product_slug, quantity, unit_price_kop, line_total_kop, snapshot").eq("order_id", id),
     db.from("interactions").select("id, topic, kind, status, created_at, sla_due").eq("order_id", id).order("created_at"),
-    db.from("moderation_reviews").select("id, decision, reason, comment, auto_flag, auto_scores, photo_id, photo_path, photo_index, created_at, decided_at").eq("order_id", id).order("created_at"),
+    db.from("moderation_reviews").select("id, decision, reason, comment, auto_flag, auto_scores, photo_id, photo_path, photo_index, created_at, decided_at").eq("order_id", id).order("photo_index").order("created_at"), // N7: по номеру фото
     // История действий по заказу — от имени админа (правило RLS журнала)
     auth.supabase.from("audit_log_view").select("id, at, role, action, result, details").eq("object_type", "order").eq("object_id", o.number).order("id", { ascending: false }).limit(20),
     loadCatalog().catch(() => ({ products: [], delivery: [] })),
