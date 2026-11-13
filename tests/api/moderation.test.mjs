@@ -124,6 +124,22 @@ test("счётчики модерации: «Обзор» = очередь мо�
   assert.fail("числа модерации расходятся: " + JSON.stringify(last));
 });
 
+// N7 (критик B, серьёзный): требование N4 — на всех экранах сотрудников. Карточка заказа админки показывала
+// фото с флагом целиком; теперь — размыто, вывод модели словами и «Показать», решения — словами очереди.
+test("карточка заказа админки: фото с флагом размыто, вывод словами и «Показать»; без сырого «автопроверка: true»", async () => {
+  const page = await ADM.client.req(`/admin/orders/${s.order.id}`);
+  assert.equal(page.status, 200);
+  const html = page.text;
+  const thumbs = html.slice(html.indexOf('data-testid="admin-order-thumbs"'));
+  assert.match(thumbs, /data-flagged="true"/, "миниатюра помечена флагом");
+  assert.match(thumbs, /data-blurred="true"/, "фото с флагом размыто до нажатия");
+  assert.match(thumbs, /filter:blur\(24px\)/, "то же размытие, что в очереди");
+  assert.match(html, /data-testid="staff-photo-show"[^>]*>Показать фото 1</, "кнопка «Показать»");
+  assert.match(html, /data-testid="admin-flagged-photos"[\s\S]*Найдено: [^<]+\(высокая уверенность\)/, "вывод модели словами у фото");
+  assert.match(html, /data-testid="admin-review-findings"[^>]*>Найдено: /, "блок «Модерация» — словами");
+  assert.doesNotMatch(html, /автопроверка: true|Отклонено/, "без сырых значений и второго названия решения");
+});
+
 test("модератор не читает заказы и фото клиентов своим ключом (RLS, SEC-14)", async () => {
   const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY, { auth: { persistSession: false } });
   const { error } = await sb.auth.signInWithPassword({ email: MOD.email, password: MOD.password });

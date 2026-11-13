@@ -3,11 +3,13 @@
 // Данные клиента замаскированы (SEC-14). Читаем сервисным ключом после проверки роли; журнал — от имени админа (RLS).
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import AdminThumbs from "@/components/admin/AdminThumbs";
 import OrderStatusForm from "@/components/admin/OrderStatusForm";
 import { StatusChip } from "@/components/OrderBits";
 import { ACTION_LABELS, RESULT_LABELS } from "@/lib/auditLabels";
 import { EVENT_LABELS, progressFor } from "@/lib/erp";
 import { maskClient } from "@/lib/mask";
+import { describeFinding, RETURN_REASONS, reviewFindings } from "@/lib/moderation";
 import { ROLE_LABELS } from "@/lib/roles";
 import { loadCatalog } from "@/lib/server/catalog";
 import { STATUS_LABELS } from "@/lib/server/orders";
@@ -23,7 +25,8 @@ const SOURCE = { erp: "ERP", admin: "сотрудник", system: "систем�
 const THUMBS_PER_ITEM = 12;
 const AUTHOR = { client: "Клиент", bot: "Бот", operator: "Оператор" };
 const IT_STATUS = { open: "Ждёт ответа", answered: "Есть ответ", closed: "Закрыто" };
-const DECISION = { pending: "Ждёт проверки", approved: "Одобрено", rejected: "Отклонено", returned: "Вернули на замену" };
+// N7: решения — те же слова, что в очереди модерации («Возвращено», не «Отклонено»)
+const DECISION = { pending: "Ждёт проверки", approved: "Одобрено", rejected: "Возвращено", returned: "Возвращено" };
 const PAY = { card_test: "карта (тест)", erip_test: "ЕРИП (тест)" };
 
 // A8: миниатюры состава — первые фото каждой позиции по подписанным ссылкам на 10 минут (бакет приватный)
@@ -55,7 +58,7 @@ export default async function AdminOrderPage({ params }) {
     db.from("order_status_history").select("id, status, substatus, at, source, reason, event_type").eq("order_id", id).order("at").order("id"),
     db.from("order_items").select("id, title, product_slug, quantity, unit_price_kop, line_total_kop, snapshot").eq("order_id", id),
     db.from("interactions").select("id, topic, kind, status, created_at, sla_due").eq("order_id", id).order("created_at"),
-    db.from("moderation_reviews").select("id, decision, reason, comment, auto_flag, photo_index, created_at, decided_at").eq("order_id", id).order("created_at"),
+    db.from("moderation_reviews").select("id, decision, reason, comment, auto_flag, auto_scores, photo_id, photo_path, photo_index, created_at, decided_at").eq("order_id", id).order("created_at"),
     // История действий по заказу — от имени админа (правило RLS журнала)
     auth.supabase.from("audit_log_view").select("id, at, role, action, result, details").eq("object_type", "order").eq("object_id", o.number).order("id", { ascending: false }).limit(20),
     loadCatalog().catch(() => ({ products: [], delivery: [] })),
@@ -65,7 +68,25 @@ export default async function AdminOrderPage({ params }) {
     ? await db.from("interaction_messages").select("id, interaction_id, author_kind, body, created_at").in("interaction_id", itIds).order("created_at").limit(200)
     : { data: [] };
   const client = maskClient(o, "admin");
-  const thumbs = await signThumbs(db, items || []);
+  // N7 (N4 на всех экранах сотрудников): фото с флагом модерации — размыто, вывод модели словами, «Показать».
+  // Флаг — из снимка заказа, из project_photos и из записей модерации (они есть только у фото с флагом).
+  const shownPhotos = (items || []).flatMap((i) => (i.snapshot?.photos || []).slice(0, THUMBS_PER_ITEM));
+  const photoIds = [...new Set([...shownPhotos.map((p) => p?.id), ...(reviews || []).map((r) => r.photo_id)].filter(Boolean))];
+  const [thumbs, { data: checks }] = await Promise.all([
+    signThumbs(db, items || []),
+    photoIds.length ? db.from("project_photos").select("id, moderation_flag, moderation, nsfw").in("id", photoIds) : { data: [] },
+  ]);
+  const checkById = new Map((checks || []).map((c) => [c.id, c]));
+  const reviewByPath = new Map((reviews || []).filter((r) => r.photo_path).map((r) => [r.photo_path, r]));
+  const words = (photoId, review) => {
+    const c = checkById.get(photoId);
+    return reviewFindings({ verdict: c?.moderation, device: c?.nsfw ?? review?.auto_scores }).list.map(describeFinding);
+  };
+  const photoView = (p, n) => {
+    const review = reviewByPath.get(p?.path);
+    const flagged = !!(p?.moderationFlag || checkById.get(p?.id)?.moderation_flag || review);
+    return { key: p?.id || p?.path || String(n), src: (p?.path && thumbs[p.path]) || null, alt: `Фото ${n + 1}`, flagged, findings: flagged ? words(p?.id, review) : [] };
+  };
   const names = Object.fromEntries(catalog.products.map((p) => [p.slug, p.name]));
   const delivery = catalog.delivery?.find((d) => d.code === o.delivery_code);
   const overdue = ["accepted", "moderation", "production"].includes(o.status) && o.eta_to && new Date(o.eta_to) < new Date();
@@ -164,19 +185,7 @@ export default async function AdminOrderPage({ params }) {
                 <span>{byn(i.line_total_kop)}</span>
               </div>
               {!!shown.length && (
-                <ul className="admin-thumbs" aria-label={`Фото позиции «${i.title || names[i.product_slug] || ""}»`} data-testid="admin-order-thumbs">
-                  {shown.map((p, n) => (
-                    <li key={p.id || n}>
-                      {thumbs[p.path] ? (
-                        // eslint-disable-next-line @next/next/no-img-element -- подписанная ссылка на 10 минут на фото клиента, оптимизатор не нужен
-                        <img src={thumbs[p.path]} alt={`Фото ${n + 1}`} width="72" height="72" loading="lazy" />
-                      ) : (
-                        <span className="admin-thumb-empty" title="Фото недоступно" />
-                      )}
-                    </li>
-                  ))}
-                  {count > shown.length && <li className="muted small admin-thumbs-more">и ещё {count - shown.length}</li>}
-                </ul>
+                <AdminThumbs photos={shown.map(photoView)} label={`Фото позиции «${i.title || names[i.product_slug] || ""}»`} more={Math.max(0, count - shown.length)} />
               )}
             </div>
           );
@@ -223,9 +232,13 @@ export default async function AdminOrderPage({ params }) {
                     <span className="muted">
                       {" "}
                       · фото {r.photo_index != null ? r.photo_index + 1 : "—"} · {r.decided_at ? time(r.decided_at) : `на проверке с ${time(r.created_at)}`}
-                      {r.auto_flag ? ` · автопроверка: ${r.auto_flag}` : ""}
                     </span>
-                    {(r.comment || r.reason) && <div style={{ overflowWrap: "anywhere" }}>Комментарий: {r.comment || r.reason}</div>}
+                    {/* N7: вывод модели словами, как в очереди (было «автопроверка: true») */}
+                    <div className="small" data-testid="admin-review-findings">
+                      {words(r.photo_id, r).join("; ") || "Модель ничего не нашла: фото помечено вручную или старой проверкой."}
+                    </div>
+                    {r.reason && <div>Причина возврата: {RETURN_REASONS[r.reason] || r.reason}</div>}
+                    {r.comment && <div style={{ overflowWrap: "anywhere" }}>Комментарий: {r.comment}</div>}
                   </li>
                 ))}
               </ul>
