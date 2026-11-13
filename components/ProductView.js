@@ -9,7 +9,9 @@ import { daysWord, etaFromDay, formatByn, formatEtaRange, linePrice, minskDate }
 import { plural } from "../lib/plural";
 import { createProject } from "../lib/draft";
 import { notify } from "../lib/store";
+import { isYmd, needByCheck } from "../lib/needBy";
 import { OPENS_FLAT, tagClass } from "./CatalogView";
+import { IconCalendar } from "./icons";
 
 // Группы опций из каталога — в таком порядке и с такими подписями
 const GROUPS = [
@@ -78,6 +80,7 @@ function ProductForm({ product: p, delivery, serverToday, gallery }) {
   const [quantity, setQuantity] = useState(1);
   const [photoCount, setPhotoCount] = useState("");
   const [busy, setBusy] = useState(false);
+  const [needBy, setNeedBy] = useState(""); // «Нужно к дате» (день 3, задача 2), YYYY-MM-DD
   const today = useMinskToday(serverToday);
 
   const priceFor = (size) => linePrice(p, { sizeCode: size, pages, photoCount: 1, quantity: 1, options: opts })?.unitKop ?? 0;
@@ -97,8 +100,22 @@ function ProductForm({ product: p, delivery, serverToday, gallery }) {
   }
 
   // Сроки по Минску: печать + доставка выбранного способа
-  const etas = delivery.map((d) => ({ ...d, range: formatEtaRange(...Object.values(etaFromDay(today, p.printDays, d.minDays, d.maxDays))) }));
+  const etas = delivery.map((d) => {
+    const { from, to } = etaFromDay(today, p.printDays, d.minDays, d.maxDays);
+    return { ...d, from, to, range: formatEtaRange(from, to) };
+  });
   const main = etas[0];
+  // «Нужно к дате»: успевает ли каждый способ к выбранной дате (календарные даты по Минску)
+  const need = needByCheck(etas, needBy, today);
+
+  // На компьютере календарь открывается и по клику в поле (на телефоне его открывает система)
+  function openPicker(e) {
+    try {
+      e.currentTarget.showPicker?.();
+    } catch {
+      // браузер без showPicker или календарь уже открыт — ничего не делаем
+    }
+  }
 
   // Сколько точек нужно фото на всю страницу (книга) или на весь отпечаток
   const longCm = Math.max(size.w, size.h);
@@ -247,18 +264,79 @@ function ProductForm({ product: p, delivery, serverToday, gallery }) {
               <span className="muted"> ({main.name.toLowerCase().startsWith("европочта") ? "в пункт Европочты" : main.name})</span>.
             </p>
           )}
-          {etas.length > 1 && (
-            <details className="small" style={{ marginTop: 4 }}>
-              <summary>Сроки и цена других способов доставки</summary>
-              <ul style={{ margin: "4px 0 0", paddingLeft: 20 }}>
-                {etas.map((d) => (
-                  <li key={d.code}>
-                    {d.name}: {d.range}, {formatByn(d.priceKop)}
-                    {d.freeFromKop != null ? `, бесплатно от ${formatByn(d.freeFromKop)}` : ""}
+          {etas.length > 0 && (
+            <div className="need-by" data-testid="need-by">
+              <label htmlFor="need-by-date" className="need-by-label">
+                Нужно к дате
+              </label>
+              <div className="need-by-box">
+                <IconCalendar size={18} />
+                <span className={"need-by-value" + (isYmd(needBy) ? "" : " empty")} aria-hidden="true">
+                  {isYmd(needBy) ? formatEtaRange(needBy, needBy) : "Выберите дату"}
+                </span>
+                <input
+                  id="need-by-date"
+                  type="date"
+                  className="need-by-input"
+                  min={today}
+                  value={needBy}
+                  onChange={(e) => setNeedBy(e.target.value)}
+                  onClick={openPicker}
+                  aria-describedby={need && (need.invalid || need.earliest) ? "need-by-msg" : undefined}
+                />
+                {needBy && (
+                  <button type="button" className="need-by-clear" aria-label="Сбросить дату" onClick={() => setNeedBy("")}>
+                    ×
+                  </button>
+                )}
+              </div>
+              {need?.invalid && (
+                <p id="need-by-msg" className="need-by-warn" role="alert">
+                  Эта дата уже прошла — выберите другую.
+                </p>
+              )}
+              {need?.earliest && (
+                <p id="need-by-msg" className="need-by-warn" role="status">
+                  К этой дате не успеем. Ближайшая возможная — {formatEtaRange(need.earliest.to, need.earliest.to)} ({need.earliest.name})
+                </p>
+              )}
+            </div>
+          )}
+          {need && !need.invalid ? (
+            <ul className="eta-list" aria-label="Способы доставки к выбранной дате">
+              {etas.map((d) => {
+                const ok = need.fits[d.code];
+                return (
+                  <li key={d.code} className={"eta-row" + (ok ? "" : " late")} data-testid={"eta-" + d.code}>
+                    <div className="eta-main">
+                      <b>{d.name}</b>
+                      <span className="muted small">
+                        {d.range}
+                        {d.freeFromKop != null ? ` · бесплатно от ${formatByn(d.freeFromKop)}` : ""}
+                      </span>
+                    </div>
+                    <div className="eta-side">
+                      <span className={"fit-chip" + (ok ? " ok" : "")}>{ok ? "✓ Успеете" : "Не успеете"}</span>
+                      <span className="eta-price">{formatByn(d.priceKop)}</span>
+                    </div>
                   </li>
-                ))}
-              </ul>
-            </details>
+                );
+              })}
+            </ul>
+          ) : (
+            etas.length > 1 && (
+              <details className="small" style={{ marginTop: 4 }}>
+                <summary>Сроки и цена других способов доставки</summary>
+                <ul style={{ margin: "4px 0 0", paddingLeft: 20 }}>
+                  {etas.map((d) => (
+                    <li key={d.code}>
+                      {d.name}: {d.range}, {formatByn(d.priceKop)}
+                      {d.freeFromKop != null ? `, бесплатно от ${formatByn(d.freeFromKop)}` : ""}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )
           )}
           <p className="muted small" style={{ marginTop: 4 }}>Сроки по Минску. Платить сейчас не нужно. Брак — перепечатаем бесплатно.</p>
         </section>

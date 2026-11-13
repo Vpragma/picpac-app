@@ -89,6 +89,12 @@ export const IconChat = (p) => (
     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
   </Icon>
 );
+export const IconCalendar = (p) => (
+  <Icon {...p}>
+    <rect x="3" y="4" width="18" height="18" rx="2" />
+    <path d="M16 2v4M8 2v4M3 10h18" />
+  </Icon>
+);
 export const IconBell = (p) => (
   <Icon {...p}>
     <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10 21h4" />
