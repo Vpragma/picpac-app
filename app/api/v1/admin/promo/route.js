@@ -6,6 +6,7 @@ import { limitWrite, parseBody, requireUser, serverError, z } from "@/lib/server
 import { loadCatalog } from "@/lib/server/catalog";
 import { json, jsonError } from "@/lib/server/http";
 import { auditTerms, checkBody, createSchema, shapeAdminPromo, toRow, unknownProducts } from "@/lib/server/promoAdmin";
+import { promoChanged } from "@/lib/server/promo";
 
 const PERSONAL_LIMIT = 200;
 
@@ -86,6 +87,7 @@ export async function POST(request) {
     await ctx.audit("admin.promo_create", "promo", body.code, "error");
     return serverError("promo_save_failed", "Не получилось сохранить промокод. Попробуйте ещё раз.");
   }
+  promoChanged(); // N7: плашка сезонного кода на главной (кэш 30 с) — сразу с новым кодом
   await ctx.audit("admin.promo_create", "promo", data.code, "success", auditTerms(data));
   return json({ ok: true, promo: shapeAdminPromo(data, null) }, 201);
 }

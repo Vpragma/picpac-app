@@ -1,10 +1,12 @@
 // PATCH /api/v1/admin/promo/{code} — изменить условия кода или выключить/включить его (N8). Только роль admin.
 // Код (название) не меняется; удалить нельзя — только { active: false }. Каждое изменение — в журнал действий
-// (что было → что стало). Выключенный код перестаёт работать сразу: сервер читает коды без кэша.
+// (что было → что стало). Выключенный код перестаёт работать сразу: корзина читает коды без кэша,
+// плашка на главной (кэш 30 с) сбрасывается здесь же — promoChanged().
 import { limitWrite, parseBody, requireUser, serverError, z } from "@/lib/server/api";
 import { json, jsonError } from "@/lib/server/http";
 import { normalizeCode, shapePromo } from "@/lib/promo";
 import { auditTerms, checkBody, shapeAdminPromo, termsError, toDay, toRow, unknownProducts, updateSchema } from "@/lib/server/promoAdmin";
+import { promoChanged } from "@/lib/server/promo";
 
 export async function PATCH(request, { params }) {
   const { code: raw } = await params;
@@ -44,6 +46,7 @@ export async function PATCH(request, { params }) {
     await ctx.audit("admin.promo_update", "promo", code, "error");
     return serverError("promo_save_failed", "Не получилось сохранить промокод. Попробуйте ещё раз.");
   }
+  promoChanged(); // N7: плашка сезонного кода на главной (кэш 30 с) — сразу без выключенного или изменённого кода
   const onlyToggle = Object.keys(body).length === 1 && body.active !== undefined;
   const action = onlyToggle ? (body.active ? "admin.promo_enable" : "admin.promo_disable") : "admin.promo_update";
   await ctx.audit(action, "promo", code, "success", { before: auditTerms(before), after: auditTerms(after), personal: !!after.owner_user_id });
