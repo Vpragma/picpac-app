@@ -13,6 +13,15 @@ const toKop = (s) => {
   if (!/^\d+(\.\d{1,2})?$/.test(t)) return NaN;
   return Math.round(Number(t) * 100);
 };
+// N7: «-5» и «0» — не «не число», а «меньше допустимого»: та же нижняя граница, что проверяет сервер
+const rub = (kop) => (kop / 100).toFixed(2).replace(".", ",");
+function priceError(text, label, minKop, example) {
+  const t = String(text ?? "").trim().replace(",", ".").replace(/\s+/g, "");
+  const n = Number(t);
+  if (t && Number.isFinite(n) && Math.round(n * 100) < minKop) return `${label} — не меньше ${rub(minKop)} BYN.`;
+  if (!Number.isFinite(toKop(text))) return `${label} — число, например ${example}.`;
+  return "";
+}
 
 export default function CatalogEditor({ product, badges }) {
   const router = useRouter();
@@ -36,17 +45,22 @@ export default function CatalogEditor({ product, badges }) {
     if (isBook) {
       const b = toKop(base);
       const p = toKop(per2);
-      if (!Number.isFinite(b)) return bad("Цена книги — число, например 70,00.");
-      if (!Number.isFinite(p)) return bad("Надбавка за 2 страницы — число, например 2,00.");
+      const eb = priceError(base, "Цена", 100, "70,00");
+      if (eb) return bad(eb);
+      const ep = priceError(per2, "Надбавка за 2 страницы", 1, "2,00");
+      if (ep) return bad(ep);
       body.basePriceKop = b;
       body.per2PagesKop = p;
       body.sizes = sizes.map((s) => ({ code: s.code, priceK: Number(String(s.k).replace(",", ".")) }));
       if (body.sizes.some((s) => !Number.isFinite(s.priceK))) return bad("Коэффициент размера — число, например 1,345.");
     } else {
       body.sizes = sizes.map((s) => ({ code: s.code, unitPriceKop: toKop(s.unit) }));
-      if (body.sizes.some((s) => !Number.isFinite(s.unitPriceKop))) return bad("Цена отпечатка — число, например 1,30.");
+      const eu = sizes.map((s) => priceError(s.unit, "Цена отпечатка", 1, "1,30")).find(Boolean);
+      if (eu) return bad(eu);
     }
     const o = toKop(old);
+    const eo = String(old ?? "").trim() ? priceError(old, "Старая цена", 1, "80,00") : "";
+    if (eo) return bad(eo);
     if (Number.isNaN(o)) return bad("Старая цена — число или пусто.");
     body.oldPriceKop = o;
     setState({ busy: true, error: "", ok: "" });

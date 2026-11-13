@@ -145,9 +145,13 @@ export default async function AdminOrdersPage({ searchParams }) {
       </details>
 
       {!parsed.success && (
-        <div className="card" role="alert">
-          <b className="err-text">Фильтр не распознан — показаны все заказы.</b>
-          <p className="muted small">{parsed.error.issues[0]?.message}</p>
+        <div className="card" role="alert" data-testid="orders-filter-error">
+          {/* N7: понятная подсказка про фильтр (а не «сбой сервера») и сброс фильтра */}
+          <b className="err-text">{parsed.error.issues[0]?.message || "Фильтр не распознан."}</b>
+          <p className="muted small">Пока показаны все заказы без фильтра.</p>
+          <Link className="btn btn-small" href="/admin/orders">
+            Сбросить фильтр
+          </Link>
         </div>
       )}
       {failed && (
