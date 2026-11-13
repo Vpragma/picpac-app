@@ -12,6 +12,7 @@ import { json, jsonError } from "@/lib/server/http";
 import { advanceDemoOrders } from "@/lib/server/orderFlow";
 import { getOwnOrder, loadOrderFull, ORDER_FIELDS, shapeOrder } from "@/lib/server/orders";
 import { loadCart } from "@/lib/server/projects";
+import { bookForOrder } from "@/lib/book";
 import { cardsByOrder, cardTerms, currentSeason, findPromoFull, issueCard, promoUsage } from "@/lib/server/promo";
 import { trackServer } from "@/lib/server/analytics";
 import { checkProjectsBeforeOrder } from "@/lib/server/moderationCheck";
@@ -182,7 +183,14 @@ export async function POST(request) {
     quantity: i.quantity,
     unit_price_kop: i.unitPriceKop,
     line_total_kop: i.lineTotalKop,
-    snapshot: { photoCount: i.photoCount, productName: i.product.name, kind: i.product.kind, printDays: i.product.printDays },
+    snapshot: {
+      photoCount: i.photoCount,
+      productName: i.product.name,
+      kind: i.product.kind,
+      printDays: i.product.printDays,
+      // N11: оформление книги для производства — шаблон (поля и зазор автомакета) и обложка (название, дата, вариант)
+      ...(i.product.kind === "book" ? { book: bookForOrder(i.options) } : {}),
+    },
   }));
 
   // N4: оценки с устройства клиент может подделать — перед заказом сервер сам проверяет файлы, которые пойдут
