@@ -15,6 +15,7 @@ import { loadCatalog } from "@/lib/server/catalog";
 import { STATUS_LABELS } from "@/lib/server/orders";
 import { requirePageRole } from "@/lib/server/session";
 import { createSupabaseAdmin } from "@/lib/server/supabaseAdmin";
+import { bookSummary } from "@/lib/book";
 
 export const dynamic = "force-dynamic";
 
@@ -184,6 +185,12 @@ export default async function AdminOrderPage({ params }) {
                 </span>
                 <span>{byn(i.line_total_kop)}</span>
               </div>
+              {/* N11: шаблон и обложка книги — для производства (снимок заказа) */}
+              {i.snapshot?.book && (
+                <p className="muted small" data-testid="admin-order-book">
+                  {bookSummary(i.snapshot.book)}
+                </p>
+              )}
               {!!shown.length && (
                 <AdminThumbs photos={shown.map(photoView)} label={`Фото позиции «${i.title || names[i.product_slug] || ""}»`} more={Math.max(0, count - shown.length)} />
               )}

@@ -1,0 +1,201 @@
+/*
+ * PicPac · превью фотокниги и шаблоны оформления (N11). Подключается в app/editor/layout.js.
+ * Цвета — только токены N1 (--pp-*, --ds-*) и сезонные --season-* («Осень», класс .season-palette-autumn — app/season.css).
+ * Страницы — бумага: светлые в обеих темах (это изображение книги). Движение — только transform и opacity,
+ * при prefers-reduced-motion — без анимации (компонент не запускает перелистывание, переходы выключены).
+ */
+
+/* ── 1. Рамка превью и сцена ─────────────────────────────────────────── */
+.bk-wrap { margin-top: var(--space-3); }
+.bk-frame {
+  padding: var(--space-5) var(--space-3);
+  border-radius: var(--ds-radius-lg);
+  background: var(--ds-color-bg-muted);
+  overflow: hidden;
+}
+.bk-frame:focus-visible { outline: 2px solid var(--ds-color-focus); outline-offset: 2px; }
+.bk-stage {
+  position: relative;
+  max-width: min(100%, 640px);
+  margin: 0 auto;
+  perspective: 1800px;
+  touch-action: pan-y; /* вертикальная прокрутка — браузеру, горизонтальный свайп — книге */
+  user-select: none;
+  -webkit-user-select: none;
+}
+.bk-book {
+  position: relative;
+  width: 100%;
+  aspect-ratio: var(--bk-ar, 2);
+  transform-style: preserve-3d;
+  transition: transform 650ms var(--ds-ease);
+}
+.bk-half, .bk-leaf { position: absolute; top: 0; bottom: 0; width: 50%; }
+.bk-left { left: 0; }
+.bk-right { right: 0; }
+.bk-half:not(:empty) { box-shadow: var(--ds-shadow-photo); }
+.bk-left:not(:empty), .bk-left .bk-page { border-radius: var(--ds-radius-xs) 0 0 var(--ds-radius-xs); }
+.bk-right:not(:empty), .bk-right .bk-page { border-radius: 0 var(--ds-radius-xs) var(--ds-radius-xs) 0; }
+
+/* Лист, который переворачивается: лицевая и оборотная стороны */
+.bk-leaf { left: 50%; z-index: 2; transform-origin: left center; transform-style: preserve-3d; }
+.bk-leaf-back { left: 0; transform-origin: right center; }
+.bk-face { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.bk-face.bk-back { transform: rotateY(180deg); }
+.bk-shade {
+  position: absolute; inset: 0; opacity: 0; pointer-events: none;
+  background: linear-gradient(to right, color-mix(in srgb, var(--pp-green-900) 28%, transparent), transparent 70%);
+}
+.bk-leaf-back .bk-shade { background: linear-gradient(to left, color-mix(in srgb, var(--pp-green-900) 28%, transparent), transparent 70%); }
+
+/* ── 2. Страница: бумага, корешок, места под фото ───────────────────────── */
+.bk-page {
+  position: absolute; inset: 0; overflow: hidden;
+  container-type: inline-size;
+  background-color: var(--bk-paper, var(--pp-white));
+  /* лёгкая «бумажная» фактура */
+  background-image:
+    repeating-linear-gradient(0deg, color-mix(in srgb, var(--pp-green-900) 1.6%, transparent) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(90deg, color-mix(in srgb, var(--pp-green-900) 1%, transparent) 0 1px, transparent 1px 4px);
+}
+/* тень корешка: у левой страницы — справа, у правой — слева */
+.bk-page.side-left::after, .bk-page.side-right::after {
+  content: ''; position: absolute; inset: 0; z-index: 3; pointer-events: none;
+}
+.bk-page.side-left::after { background: linear-gradient(to left, color-mix(in srgb, var(--pp-green-900) 20%, transparent), transparent 10%); }
+.bk-page.side-right::after { background: linear-gradient(to right, color-mix(in srgb, var(--pp-green-900) 20%, transparent), transparent 10%); }
+
+.bk-slot { position: absolute; z-index: 1; overflow: hidden; background: var(--pp-stone); }
+.bk-slot img { display: block; width: 100%; height: 100%; object-fit: cover; -webkit-user-drag: none; }
+.bk-slot::after { content: ''; position: absolute; inset: 0; pointer-events: none; }
+.bk-slot.warn { outline: 3px solid var(--ds-color-warning); outline-offset: -3px; }
+.bk-slot.err { outline: 3px solid var(--ds-color-error); outline-offset: -3px; }
+.bk-empty { display: flex; align-items: center; justify-content: center; }
+.bk-empty > span {
+  position: relative; z-index: 1;
+  padding: 1cqw 3cqw; border-radius: var(--ds-radius-pill);
+  background: var(--pp-white); color: var(--pp-green-900);
+  font-size: max(11px, 5cqw);
+}
+
+/* Украшения шаблона: в полях, под фото */
+.bk-decor { position: absolute; z-index: 0; pointer-events: none; overflow: visible; }
+.bk-decor :is(path, circle) { vector-effect: non-scaling-stroke; }
+.bk-tl { left: -2%; top: -2%; width: 27%; }
+.bk-tr { right: -1%; top: -1%; width: 24%; }
+.bk-bl { left: -1%; bottom: -1%; width: 24%; }
+.bk-br { right: -1%; bottom: -1%; width: 25%; }
+.bk-bc { left: 32%; width: 36%; bottom: 0.4%; }
+
+/* ── 3. Шаблоны ─────────────────────────────────────────────────────── */
+.tpl-classic { --bk-paper: var(--pp-white); }
+
+.tpl-autumn { --bk-paper: var(--season-bg); }
+.tpl-autumn .bk-slot::after { border: 1cqw solid var(--pp-white); box-shadow: inset 0 0 0 1px var(--season-1); }
+
+.tpl-wedding { --bk-paper: var(--pp-snow); }
+.tpl-wedding::before {
+  content: ''; position: absolute; inset: 3.4%; z-index: 0; pointer-events: none;
+  border: 1px solid var(--pp-frame-strong); outline: 1px solid var(--pp-frame); outline-offset: 0.9cqw;
+}
+.tpl-wedding .bk-decor { color: var(--pp-gray-500); }
+.tpl-wedding .bk-slot::after { border: 0.8cqw solid var(--pp-white); box-shadow: inset 0 0 0 1px var(--pp-frame-strong); }
+
+.tpl-baby { --bk-paper: var(--pp-sky); }
+.tpl-baby .bk-decor { color: var(--pp-blue); }
+.tpl-baby .bk-slot { border-radius: 3.5cqw; }
+.tpl-baby .bk-slot::after { border: 1cqw solid var(--pp-white); border-radius: inherit; }
+
+.tpl-travel { --bk-paper: var(--pp-sand); }
+.tpl-travel .bk-decor { color: var(--pp-green-700); }
+.tpl-travel .bk-route { color: var(--pp-apricot); }
+.tpl-travel .bk-slot { box-shadow: var(--ds-shadow-sm); }
+.tpl-travel .bk-slot::after { border: 1.1cqw solid var(--pp-white); border-bottom-width: 3cqw; }
+
+/* ── 4. Обложка: три варианта расположения ─────────────────────────────── */
+.bk-cover-photo { position: absolute; z-index: 1; overflow: hidden; background: var(--pp-stone); }
+.bk-cover-photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.cover-photo .bk-cover-photo { left: 11%; right: 11%; top: 10%; height: 58%; }
+.cover-full .bk-cover-photo { inset: 0; }
+.bk-cover-text {
+  position: absolute; z-index: 2;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.5cqw;
+  text-align: center; color: var(--pp-green-900);
+}
+.tpl-autumn .bk-cover-text { color: var(--season-ink); }
+.cover-photo .bk-cover-text { left: 8%; right: 8%; top: 70%; bottom: 5%; }
+.cover-full .bk-cover-text {
+  left: 9%; right: 9%; bottom: 8%;
+  padding: 3cqw 4cqw; border-radius: var(--ds-radius-sm);
+  background: var(--pp-white); color: var(--pp-green-900);
+}
+.cover-title .bk-cover-text { inset: 18% 11%; }
+.cover-title .bk-cover-text::before, .cover-title .bk-cover-text::after {
+  content: ''; width: 22cqw; height: 1px; background: currentColor; opacity: 0.5; margin: 2cqw 0;
+}
+.bk-cover-title {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
+  max-width: 100%; overflow-wrap: anywhere;
+  font-weight: 500; line-height: 1.15; font-size: max(11px, 7.4cqw);
+}
+.cover-title .bk-cover-title { font-size: max(12px, 9.5cqw); }
+.bk-cover-date { font-size: max(10px, 4.6cqw); letter-spacing: 0.04em; overflow-wrap: anywhere; }
+
+/* ── 5. Кнопки и подписи ─────────────────────────────────────────────── */
+.bk-controls { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); margin-top: var(--space-3); }
+.bk-count { display: flex; flex-direction: column; align-items: center; text-align: center; font-weight: 500; color: var(--ds-color-text-strong); }
+.bk-count .small { font-weight: 400; }
+.bk-nav { min-width: var(--tap); }
+.bk-open-row { display: flex; justify-content: center; margin-top: var(--space-3); }
+.bk-open svg { flex: none; }
+
+/* ── 6. На весь экран ─────────────────────────────────────────────────── */
+.bk-dialog {
+  width: 100%; max-width: 100%; height: 100%; max-height: 100%;
+  margin: 0; padding: 0; border: 0;
+  background: var(--ds-color-bg-page); color: var(--ds-color-text);
+}
+.bk-dialog::backdrop { background: var(--ds-color-scrim); }
+.bk-dialog-body {
+  display: flex; flex-direction: column; justify-content: center; gap: var(--space-3);
+  min-height: 100%; max-width: 1200px; margin: 0 auto;
+  padding: max(var(--space-4), env(safe-area-inset-top)) var(--space-4) max(var(--space-4), env(safe-area-inset-bottom));
+}
+.bk-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); color: var(--ds-color-text-strong); }
+.bk-dialog-head b { font-size: var(--ds-text-lg); font-weight: 500; }
+.bk-stage.bk-big { width: 100%; max-width: min(100%, calc((100dvh - 210px) * var(--bk-ar, 2))); }
+.bk-dialog-hint { text-align: center; margin: 0; }
+.bk-rotate-hint { display: none; }
+@media (orientation: portrait) and (max-width: 600px) { .bk-rotate-hint { display: block; } }
+
+/* ── 7. Выбор шаблона и обложки (шаг «Автомакет») ─────────────────────── */
+.bk-design { display: grid; gap: var(--space-5); margin-top: var(--space-5); }
+.bk-pick { margin: 0; padding: 0; border: 0; min-width: 0; }
+.bk-pick legend { padding: 0; margin-bottom: var(--space-2); font-size: var(--ds-text-lg); font-weight: 500; color: var(--ds-color-text-strong); }
+.bk-pick > p { margin: 0 0 var(--space-3); }
+.bk-pick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: var(--space-2); }
+.bk-pick-item {
+  position: relative; display: flex; flex-direction: column; gap: var(--space-1);
+  min-height: var(--tap); padding: var(--space-2); cursor: pointer;
+  border: 1px solid var(--ds-color-border); border-radius: var(--ds-radius-md); background: var(--ds-color-bg-field);
+  transition: border-color var(--ds-duration) var(--ds-ease), background-color var(--ds-duration) var(--ds-ease);
+}
+.bk-pick-item:hover { border-color: var(--ds-color-border-strong); }
+.bk-pick-item:has(input:checked) { border-color: var(--ds-color-accent); background: var(--ds-color-bg-selected); box-shadow: 0 0 0 1px var(--ds-color-accent); }
+.bk-pick-item:has(input:focus-visible) { outline: 2px solid var(--ds-color-focus); outline-offset: 2px; }
+.bk-pick-item input { position: absolute; top: var(--space-3); right: var(--space-3); z-index: 4; width: 20px; height: 20px; margin: 0; accent-color: var(--ds-color-accent); }
+.bk-pick-item b { font-weight: 500; font-size: var(--ds-text-sm); color: var(--ds-color-text-strong); }
+.bk-pick-hint { font-size: var(--ds-text-sm); line-height: 1.3; color: var(--ds-color-text-secondary); }
+.bk-pick:disabled .bk-pick-item { cursor: default; opacity: 0.7; }
+.bk-page.bk-sample { position: relative; inset: auto; display: block; width: 100%; aspect-ratio: 1; border-radius: var(--ds-radius-xs); box-shadow: 0 0 0 1px var(--pp-frame); }
+.bk-sample .bk-slot { display: block; }
+.bk-sample-photo { display: block; }
+.bk-sample .bk-cover-text { gap: 0; }
+.bk-sample-line { display: block; width: 62%; height: 5cqw; margin: 1.5cqw auto; border-radius: 2px; background: currentColor; }
+.bk-sample-line.short { width: 38%; height: 3.5cqw; opacity: 0.6; }
+.bk-cover-grid { margin-top: var(--space-2); }
+.bk-pick .field { max-width: 36rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bk-book { transition: none; }
+}

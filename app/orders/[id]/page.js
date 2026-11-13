@@ -12,6 +12,7 @@ import { notify } from "../../../lib/store";
 import { StatusChip, Timeline, byn, minskDay, minskDayRange, minskTime } from "../../../components/OrderBits";
 import { IconChat } from "../../../components/icons";
 import Postcard from "../../../components/promo/Postcard";
+import { bookSummary } from "@/lib/book";
 
 const POLL_MS = 10000;
 const PAY = { card_test: "Карта (тест)", erip_test: "ЕРИП (тест)" };
@@ -149,6 +150,7 @@ export default function OrderPage() {
               {i.snapshot?.productName ? `${i.snapshot.productName} · ` : ""}
               {(i.optionsText || []).join(" · ")} · {i.photoCount} фото
             </div>
+            {i.snapshot?.book && <div className="muted small">{bookSummary(i.snapshot.book)}</div>}
             {!!i.thumbs?.length && (
               <div className="row wrap" style={{ gap: 6 }} aria-label="Миниатюры фото">
                 {i.thumbs.map((t) =>
