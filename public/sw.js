@@ -57,6 +57,23 @@ async function noteVersion(res) {
   await meta.put(LATEST, new Response(v, { headers: { "Content-Type": "text/plain" } }));
 }
 
+// N7 (C1, C2): куски, которые страница подгружает по требованию (у редактора — перетаскивание, «Правки», превью книги,
+// анализ фото; ~70 КБ сжатого JS). Их адреса — строки "static/chunks/…" внутри файлов сборки страницы. Кладём их в кэш
+// при установке воркера, пока есть сеть, — и у новой версии до «Обновить»: иначе без сети ChunkLoadError.
+// Только один уровень: следующие (библиотеки ИИ, ~1,6 МБ) нужны лишь с моделями — их кэширует «Скачать ИИ заранее».
+const LAZY_PAGES = ["/editor"];
+const chunkRefs = (js) => (js.match(/static\/chunks\/[\w.~-]+\.(?:js|css)/g) || []).map((p) => "/_next/" + p);
+
+async function cacheLazyChunks(assets) {
+  const cache = await caches.open(STATIC);
+  const found = new Set();
+  for (const u of assets.filter((a) => a.endsWith(".js"))) {
+    const hit = await cache.match(u);
+    if (hit) for (const ref of chunkRefs(await hit.text())) if (!assets.includes(ref)) found.add(ref);
+  }
+  await Promise.allSettled([...found].slice(0, 60).map((u) => put(STATIC, u)));
+}
+
 // Скачать страницу оболочки в кэш (только своей версии) и её файлы сборки
 async function cachePage(path) {
   const res = await fetch(path, { credentials: "same-origin" });
@@ -66,7 +83,9 @@ async function cachePage(path) {
   const html = await res.clone().text();
   const pages = await caches.open(PAGES);
   await pages.put(new URL(path, self.location.origin).href, res);
-  await Promise.allSettled(assetsOf(html).map((u) => put(STATIC, u)));
+  const assets = assetsOf(html);
+  await Promise.allSettled(assets.map((u) => put(STATIC, u)));
+  if (LAZY_PAGES.includes(path)) await cacheLazyChunks(assets).catch(() => {});
 }
 
 async function precache() {
@@ -122,10 +141,36 @@ self.addEventListener("message", (event) => {
   }
 });
 
-function offlineResponse() {
-  return caches.match(OFFLINE).then(
-    (hit) => hit || new Response("Нет сети. Черновики сохранены на устройстве — продолжите, когда связь вернётся.", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } }),
-  );
+// N7 (C6): тема приложения для страницы «Нет сети»: cookie pp_theme (Cookie Store API), иначе — атрибут сохранённой
+// страницы (его ставит сервер по той же cookie). Не узнали — страница сама следует настройке телефона (prefers-color-scheme).
+const THEMES = ["light", "dark", "system"];
+async function currentTheme() {
+  try {
+    if (self.cookieStore) {
+      const c = await self.cookieStore.get("pp_theme");
+      return c && THEMES.includes(c.value) ? c.value : "light"; // нет cookie — светлая, как в приложении
+    }
+  } catch {
+    // Cookie Store недоступен — смотрим сохранённые страницы
+  }
+  const pages = await caches.open(PAGES);
+  for (const req of (await pages.keys()).slice(0, 3)) {
+    const hit = await pages.match(req);
+    const m = hit && (await hit.text()).slice(0, 2000).match(/data-color-scheme="(light|dark|system)"/);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+async function offlineResponse() {
+  const hit = await caches.match(OFFLINE);
+  if (!hit) return new Response("Нет сети. Черновики сохранены на устройстве — продолжите, когда связь вернётся.", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  const theme = await currentTheme().catch(() => null);
+  if (!theme) return hit;
+  const html = (await hit.text()).replace("<html lang=\"ru\">", `<html lang="ru" data-color-scheme="${theme}">`);
+  const headers = new Headers(hit.headers);
+  headers.delete("content-length");
+  return new Response(html, { status: hit.status, statusText: hit.statusText, headers });
 }
 
 async function cacheFirst(request, cacheName) {

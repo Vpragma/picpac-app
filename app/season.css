@@ -52,7 +52,8 @@
   :root[data-season='newyear'][data-color-scheme='system'], :root[data-color-scheme='system'] .season-palette-newyear { --season-logo: #d6a84a; }
 }
 .topbar .logo picture { display: block; position: relative; }
-:root:is([data-season='autumn'], [data-season='blackfriday'], [data-season='newyear']) .topbar .logo img { opacity: 0; }
+/* N7: обычный логотип не прячем — сезонный (та же форма, маска /logo.svg) ложится поверх, когда маска загрузится;
+ * на медленной сети до этого виден обычный, а не пустое место */
 :root:is([data-season='autumn'], [data-season='blackfriday'], [data-season='newyear']) .topbar .logo picture::after {
   content: '';
   position: absolute;

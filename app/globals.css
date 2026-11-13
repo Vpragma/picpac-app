@@ -378,8 +378,9 @@ body:has(.net-banner) .toasts { bottom: calc(var(--tabbar-h, 64px) + 76px + env(
 body:has(.sticky-bar) .net-banner { bottom: calc(var(--tabbar-h) + var(--sticky-h) + 12px + env(safe-area-inset-bottom)); }
 .net-banner b { font-weight: 500; }
 .net-banner-queue { display: block; }
+/* N7: по центру без transform (left/right 0 + margin auto) — анимация toast-in (transform) не сдвигает тост вправо */
 .pwa-update {
-  position: fixed; left: 50%; transform: translateX(-50%); top: calc(64px + env(safe-area-inset-top));
+  position: fixed; left: 0; right: 0; margin-inline: auto; top: calc(64px + env(safe-area-inset-top));
   width: calc(100% - 32px); max-width: 488px; z-index: 61; display: flex; align-items: center; justify-content: space-between; gap: 12px;
 }
 .pwa-install { margin-top: 16px; }
