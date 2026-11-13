@@ -25,7 +25,14 @@ function objectText(item) {
     const host = typeof item.details?.host === "string" && /^[a-z0-9.-]{1,80}$/i.test(item.details.host) ? item.details.host : "";
     return item.object_type === "push" && host ? `${label} (${host})` : label;
   }
-  const id = item.object_type === "user" || item.object_type === "profile" ? item.object_id.slice(0, 8) + "…" : item.object_id;
+  // N7: решение модератора — номер заказа и фото (записи после 13.11); у старых записей — короткий id
+  if (item.object_type === "moderation_review") {
+    const d = item.details || {};
+    const order = typeof d.order === "string" && /^[A-Z0-9-]{3,40}$/.test(d.order) ? d.order : "";
+    if (order) return `${label}: заказ ${order}${Number.isInteger(d.photo) ? `, фото ${d.photo}` : ""}`;
+  }
+  const short = ["user", "profile", "moderation_review"].includes(item.object_type);
+  const id = short ? item.object_id.slice(0, 8) + "…" : item.object_id;
   return `${label}: ${id}`;
 }
 
