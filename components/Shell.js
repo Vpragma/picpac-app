@@ -63,7 +63,11 @@ export default function Shell({ children, logo, phoneQr = null }) {
   const path = usePathname() || "/";
   const count = cartCount(useCart());
   const me = useMe();
-  const staffRole = me?.authenticated && (me.activeRole === "admin" || me.activeRole === "moderator") ? me.activeRole : null;
+  // N7: пока не ответил сервер «кто вошёл» (me ещё нет или неизвестно), в админке сразу меню сотрудника (набор модератора,
+  // «Статистика» добавится для админа) — без мигания клиентского меню с подсвеченным «Профилем». Доступ к /admin
+  // всё равно проверяет сервер.
+  const pending = (!me || me.unknown) && adminSectionOf(path) !== null;
+  const staffRole = me?.authenticated && (me.activeRole === "admin" || me.activeRole === "moderator") ? me.activeRole : pending ? "moderator" : null;
   const tabs = staffRole ? STAFF_TABS.filter((t) => !t.adminOnly || staffRole === "admin") : TABS;
   // Проекты вошедшего клиента синхронизируются с аккаунтом (гость работает только на устройстве)
   useEffect(() => {
