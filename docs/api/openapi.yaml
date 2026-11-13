@@ -22,8 +22,8 @@ info:
 servers:
   - url: http://localhost:3000
     description: Локально (npm start)
-  - url: https://picpac-app-git-night-pragma21.vercel.app
-    description: Превью ветки night
+  - url: https://picpac-app-jade.vercel.app
+    description: Основной сайт
 tags:
   - name: Каталог
   - name: Проекты
