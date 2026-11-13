@@ -132,7 +132,7 @@ a.card { transition: box-shadow var(--ds-duration) var(--ds-ease), transform var
 @media (max-width: 1023px) {
   .hero { gap: var(--space-4); padding-top: var(--space-4); }
   .hero-media { order: -1; }
-  .collage { max-width: min(21rem, max(12rem, calc((100svh - 470px) * 1.25))); }
+  .collage { max-width: 21rem; max-width: min(21rem, max(12rem, calc((100svh - 470px) * 1.25))); } /* первое — для браузеров без svh */
   .hero-text { display: flex; flex-direction: column; }
   .hero-title { margin-bottom: var(--space-4); }
   .hero .lead { order: 1; margin: var(--space-4) 0 0; }
