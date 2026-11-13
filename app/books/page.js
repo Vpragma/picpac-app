@@ -23,7 +23,12 @@ export default function BooksPage() {
   const sync = useSyncState();
   if (error) return <DraftError />;
   if (!ready) return <SkeletonList rows={2} label="Загружаем…" />;
-  const list = Object.values(projects).sort((a, b) => b.updatedAt - a.updatedAt);
+  // N7 E2: в аккаунте пустые черновики (ни одного фото) не хранятся — после входа их не показываем и здесь
+  const signedIn = isClient(me);
+  const blank = (p) => p.status === "draft" && !p.serverId && !p.photos.some((ph) => ph.supported) && !p.book?.cover?.title;
+  const list = Object.values(projects)
+    .filter((p) => !(signedIn && blank(p)))
+    .sort((a, b) => b.updatedAt - a.updatedAt);
   const active = list.filter((p) => p.status !== "ordered");
   const ordered = list.filter((p) => p.status === "ordered");
   const productOf = (p) => catalog?.products.find((x) => x.slug === p.productSlug);
@@ -78,6 +83,8 @@ function ProjectCard({ p, product, thumbs }) {
   const router = useRouter();
   const st = STATUS[p.status] || STATUS.draft;
   const name = product ? (product.kind === "book" ? "Фотокнига " : "") + product.name : "Проект";
+  // N7 E4: считаем, как редактор, — только подошедшие фото (GIF, текст под .jpg и т. п. не в счёт)
+  const photos = p.photos.filter((ph) => ph.supported);
   const when = new Date(p.updatedAt).toLocaleString("ru-RU", { timeZone: "Europe/Minsk", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
   async function open() {
     await openProject(p.id);
@@ -102,10 +109,10 @@ function ProjectCard({ p, product, thumbs }) {
         </span>
       </div>
       <div className="muted small">
-        {p.sizeId?.replace("x", "×")} см{p.pages ? ` · ${p.pages} стр.` : ""} · {p.photos.length} фото · {p.status === "ordered" && p.orderNumber ? `заказ ${p.orderNumber}` : `изменён ${when}`}
+        {p.sizeId?.replace("x", "×")} см{p.pages ? ` · ${p.pages} стр.` : ""} · {photos.length} фото · {p.status === "ordered" && p.orderNumber ? `заказ ${p.orderNumber}` : `изменён ${when}`}
       </div>
       <div className="photo-grid" style={{ gridTemplateColumns: "repeat(6, 1fr)", gap: 4, margin: "12px 0" }}>
-        {p.photos.slice(0, 6).map((ph) => (
+        {photos.slice(0, 6).map((ph) => (
           <div key={ph.id} className="photo-cell">
             {thumbs[ph.id] && (
               // eslint-disable-next-line @next/next/no-img-element -- миниатюра с устройства (blob: из IndexedDB): next/image её не оптимизирует, оптимизатор Vercel для фото клиентов не используем
