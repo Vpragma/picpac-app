@@ -683,12 +683,16 @@ function LayoutStep({ draft, thumbs, product }) {
   return (
     <div>
       <p className="muted">Автомакет разложил фото по страницам: 1–3 на страницу, вертикальные и горизонтальные — по своим местам. Листайте книгу пальцем, стрелками или кнопками.</p>
-      <BookView layout={layout} thumbs={thumbs} size={size} issues={issues} byId={byId} book={draft.book} coverPhotoId={coverPhotoId} slotClass={slotClass} placeStyle={placeStyle} />
+      <ChunkBoundary>
+        <BookView layout={layout} thumbs={thumbs} size={size} issues={issues} byId={byId} book={draft.book} coverPhotoId={coverPhotoId} slotClass={slotClass} placeStyle={placeStyle} />
+      </ChunkBoundary>
       {layout.overflow.length > 0 && <p className="err-text" style={{ marginTop: 12 }}>Не поместились фото: {layout.overflow.length}. Добавьте страницы — подробности в «Проверке».</p>}
       <p className="muted small" style={{ marginTop: 12 }}>
         Оранжевая рамка — фото может быть нечётким, красная — будет размыто.
       </p>
-      <BookDesign book={draft.book} readOnly={draft.status === "ordered"} />
+      <ChunkBoundary fallback={null}>
+        <BookDesign book={draft.book} readOnly={draft.status === "ordered"} />
+      </ChunkBoundary>
     </div>
   );
 }

@@ -57,30 +57,21 @@ async function noteVersion(res) {
   await meta.put(LATEST, new Response(v, { headers: { "Content-Type": "text/plain" } }));
 }
 
-// N7 (C1, C2): куски, которые страница подгружает по требованию (у редактора — перетаскивание, «Правки», анализ фото,
-// превью книги, код воркеров). Их адреса — строки "static/chunks/…" внутри файлов сборки страницы. Кладём их в кэш при
-// установке воркера, пока есть сеть, — и у новой версии до «Обновить»: иначе без сети ChunkLoadError.
+// N7 (C1, C2): куски, которые страница подгружает по требованию (у редактора — перетаскивание, «Правки», превью книги,
+// анализ фото; ~60 КБ сжатого JS). Их адреса — строки "static/chunks/…" внутри файлов сборки страницы. Кладём их в кэш
+// при установке воркера, пока есть сеть, — и у новой версии до «Обновить»: иначе без сети ChunkLoadError.
+// Только один уровень: следующие (библиотеки ИИ, ~1,6 МБ) нужны лишь с моделями — их кэширует «Скачать ИИ заранее».
 const LAZY_PAGES = ["/editor"];
 const chunkRefs = (js) => (js.match(/static\/chunks\/[\w.~-]+\.(?:js|css)/g) || []).map((p) => "/_next/" + p);
 
-async function cacheChunkTree(start) {
+async function cacheLazyChunks(assets) {
   const cache = await caches.open(STATIC);
-  const seen = new Set(start);
-  let level = start.filter((u) => u.endsWith(".js"));
-  for (let depth = 0; depth < 3 && level.length; depth++) {
-    const found = [];
-    for (const u of level) {
-      const hit = await cache.match(u);
-      if (!hit) continue;
-      for (const ref of chunkRefs(await hit.text())) {
-        if (seen.has(ref) || seen.size >= 200) continue;
-        seen.add(ref);
-        found.push(ref);
-      }
-    }
-    await Promise.allSettled(found.map((u) => put(STATIC, u)));
-    level = found.filter((u) => u.endsWith(".js"));
+  const found = new Set();
+  for (const u of assets.filter((a) => a.endsWith(".js"))) {
+    const hit = await cache.match(u);
+    if (hit) for (const ref of chunkRefs(await hit.text())) if (!assets.includes(ref)) found.add(ref);
   }
+  await Promise.allSettled([...found].slice(0, 60).map((u) => put(STATIC, u)));
 }
 
 // Скачать страницу оболочки в кэш (только своей версии) и её файлы сборки
@@ -94,7 +85,7 @@ async function cachePage(path) {
   await pages.put(new URL(path, self.location.origin).href, res);
   const assets = assetsOf(html);
   await Promise.allSettled(assets.map((u) => put(STATIC, u)));
-  if (LAZY_PAGES.includes(path)) await cacheChunkTree(assets).catch(() => {});
+  if (LAZY_PAGES.includes(path)) await cacheLazyChunks(assets).catch(() => {});
 }
 
 async function precache() {
