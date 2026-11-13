@@ -215,6 +215,12 @@ function Book({ views, ctx, view, flip, onFlipDone, onSwipe, ratio, big = false 
       onPointerDown={(e) => {
         if (e.button > 0) return;
         swipe.current = { x: e.clientX, y: e.clientY };
+        // палец или мышь ушли за край книги — отпускание всё равно дойдёт сюда
+        try {
+          e.currentTarget.setPointerCapture(e.pointerId);
+        } catch {
+          // старый браузер — без захвата, свайп внутри книги работает и так
+        }
       }}
       onPointerUp={(e) => {
         const s = swipe.current;
