@@ -172,5 +172,6 @@ test.describe("кусок «Правок» не скачан", () => {
     await page.getByRole("button", { name: "Фото", exact: true }).click();
     await expect(page.locator(".photo-cell[data-photo]")).toHaveCount(2);
     await context.setOffline(false);
+    await context.unrouteAll({ behavior: "ignoreErrors" });
   });
 });
