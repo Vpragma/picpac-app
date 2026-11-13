@@ -474,3 +474,53 @@ body:has(.sticky-bar) .net-banner { bottom: calc(var(--tabbar-h) + var(--sticky-
    строки состояния выделения (короткий и длинный текст занимают одно место) */
 .pe { overflow-anchor: none; }
 .pe-select > p[role="status"] { min-height: 2.9em; }
+
+/* Корзина: полоса «до бесплатной доставки» (день 3, задача 1) — цвета только из темы */
+.free-ship-text { margin: 0 0 10px; color: var(--ds-color-text-strong); }
+.free-ship-text.ok { color: var(--ds-color-success); font-weight: 500; }
+.free-ship-left { color: var(--ds-color-accent); }
+.free-ship-track { height: 8px; border-radius: var(--ds-radius-pill); background: var(--ds-color-bg-muted); overflow: hidden; }
+.free-ship-fill { height: 100%; border-radius: inherit; background: var(--ds-color-accent); transition: width 0.6s ease; }
+.free-ship-track.ok .free-ship-fill { background: var(--ds-color-success); }
+@media (prefers-reduced-motion: reduce) { .free-ship-fill { transition: none; } }
+
+/* Страница товара: «Нужно к дате» (день 3, задача 2). Нативный выбор даты лежит прозрачным поверх поля:
+   на телефоне открывается системный календарь, а в поле видно «18 ноября» или «Выберите дату». */
+.need-by { margin-top: 12px; }
+.need-by-label { display: block; margin-bottom: 4px; font-size: 13px; color: var(--ds-color-text-secondary); }
+.need-by-box {
+  position: relative; display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 48px 0 12px;
+  border: 1px solid var(--ds-color-border-input); border-radius: var(--ds-radius-md); background: var(--ds-color-bg-field);
+  color: var(--ds-color-text-secondary);
+}
+.need-by-box:focus-within { outline: 2px solid var(--ds-color-focus); outline-offset: 2px; }
+.need-by-value { color: var(--ds-color-text-strong); }
+.need-by-value.empty { color: var(--ds-color-text-secondary); }
+.need-by-input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; border: 0; opacity: 0; cursor: pointer; }
+.need-by-clear {
+  position: absolute; right: 2px; top: 50%; transform: translateY(-50%); z-index: 1; width: 44px; height: 44px;
+  display: grid; place-items: center; border: 0; border-radius: var(--ds-radius-pill); background: transparent;
+  color: var(--ds-color-text-strong); font-size: 22px; line-height: 1; cursor: pointer;
+}
+.need-by-clear:hover { background: var(--ds-color-bg-hover); }
+.need-by-warn {
+  margin: 8px 0 0; padding: 8px 12px; border-radius: var(--ds-radius-md); border-left: 3px solid var(--ds-color-warning);
+  background: var(--ds-color-warning-bg); color: var(--ds-color-text-strong); font-size: 14px;
+}
+.eta-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.eta-row {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px;
+  border: 1px solid var(--ds-color-border); border-radius: var(--ds-radius-md);
+}
+.eta-row b { color: var(--ds-color-text-strong); font-weight: 500; }
+.eta-main { display: flex; flex-direction: column; min-width: 0; }
+.eta-side { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0; }
+.eta-price { font-weight: 500; color: var(--ds-color-text-strong); }
+/* Не успевает: строка приглушена цветами темы, а не прозрачностью — так текст проходит контраст AA */
+.eta-row.late { background: var(--ds-color-bg-muted); border-color: transparent; }
+.eta-row.late b, .eta-row.late .eta-price { color: var(--ds-color-text-secondary); font-weight: 400; }
+.fit-chip {
+  display: inline-block; padding: 1px 8px; border-radius: var(--ds-radius-pill); font-size: 12px; font-weight: 500;
+  line-height: 1.6; white-space: nowrap; background: var(--ds-color-bg-surface); color: var(--ds-color-text-secondary);
+}
+.fit-chip.ok { background: var(--ds-color-success-bg); color: var(--ds-color-text-strong); }
