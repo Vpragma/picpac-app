@@ -8,6 +8,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRe
 import { callApi } from "../../lib/api";
 import { REASON_FOR_FINDING, RETURN_REASONS, RETURN_TEMPLATES } from "../../lib/moderation";
 import { minskTime } from "../OrderBits";
+import { plural } from "../../lib/plural";
 
 const SOURCE = { server: "по проверке на сервере", device: "по проверке на телефоне клиента" };
 const KEYS = { approve: ["a", "ф"], ret: ["r", "к"], next: ["n", "т", "j", "о"], show: ["s", "ы"] };
@@ -173,9 +174,11 @@ function Stats({ stats }) {
   if (!stats) return null;
   return (
     <section className="stat-tiles" aria-label="Очередь коротко" data-testid="moderation-stats">
-      <div className="stat-tile">
-        <span className="small muted">В очереди</span>
+      {/* N7: то же число, что плитка «Фото ждут проверки» в «Обзоре» (lib/server/moderationCounts.js) */}
+      <div className="stat-tile" data-testid="moderation-waiting" data-value={stats.pending}>
+        <span className="small muted">Фото ждут проверки</span>
         <b>{stats.pending}</b>
+        {stats.orders != null && <span className="small muted">{stats.pending ? `в ${stats.orders} ${plural(stats.orders, "заказе", "заказах", "заказах")} · сейчас` : "сейчас"}</span>}
       </div>
       <div className="stat-tile">
         <span className="small muted">Среднее время проверки (7 дней)</span>
