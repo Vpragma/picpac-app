@@ -125,11 +125,18 @@ a.card { transition: box-shadow var(--ds-duration) var(--ds-ease), transform var
 .print-c { right: 6%; bottom: 2%; width: 46%; aspect-ratio: 3 / 2; z-index: 3; }
 .print-d { left: 10%; bottom: 0; width: 30%; aspect-ratio: 1; z-index: 1; display: none; }
 .print figcaption { position: absolute; left: 10px; bottom: -26px; font-size: var(--ds-text-sm); color: var(--ds-color-text-secondary); white-space: nowrap; }
-/* на телефоне коллаж — первым: сначала воспоминания, потом слоган и кнопка (порядок в разметке — заголовок первый) */
+/* на телефоне коллаж — первым: сначала воспоминания, потом слоган и кнопка (порядок в разметке — заголовок первый).
+   N7: главная кнопка — на первом экране над нижним меню, даже в Safari с панелями (390×664) и на 360×640:
+   кнопка сразу под заголовком, вводный текст — после неё, а коллаж ужимается по малой высоте экрана
+   (svh не меняется при прокрутке и скрытии панелей — без сдвигов макета; 5:4 → ширина = высота × 1,25). */
 @media (max-width: 1023px) {
-  .hero { gap: var(--space-5); padding-top: var(--space-5); }
+  .hero { gap: var(--space-4); padding-top: var(--space-4); }
   .hero-media { order: -1; }
-  .collage { max-width: 21rem; }
+  .collage { max-width: min(21rem, max(12rem, calc((100svh - 470px) * 1.25))); }
+  .hero-text { display: flex; flex-direction: column; }
+  .hero-title { margin-bottom: var(--space-4); }
+  .hero .lead { order: 1; margin: var(--space-4) 0 0; }
+  .hero-note { order: 2; }
 }
 .collage-credit { text-align: center; margin: var(--space-2) 0 0; font-size: var(--ds-text-sm); color: var(--ds-color-text-secondary); }
 .collage-credit a { color: inherit; }
