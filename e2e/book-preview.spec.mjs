@@ -233,7 +233,10 @@ test("prefers-reduced-motion: листается сразу, без анимац
   await page.getByRole("button", { name: "Вперёд: следующий разворот" }).click();
   await expect(inline(page)).toHaveText("Разворот 1 из 10");
   await expect(page.locator(".bk-wrap .bk-leaf")).toHaveCount(0);
-  const running = await page.evaluate(() => document.getAnimations().filter((a) => a.effect?.target?.closest?.(".bk-wrap")).length);
+  // Движение — анимации длиннее 1 мс. Глобальное правило reduce (motion.css) даёт любому изменению стиля переход 0,01 мс
+  // (например, тень у левой страницы, когда она перестаёт быть пустой) — это не движение, но в getAnimations() он виден
+  // один кадр; раньше тест из-за этого иногда падал. Перелистывание (650 мс) и сдвиг книги (650 мс) этот фильтр ловит.
+  const running = await page.evaluate(() => document.getAnimations().filter((a) => a.effect?.target?.closest?.(".bk-wrap") && Number(a.effect.getComputedTiming().duration) > 1).length);
   expect(running).toBe(0);
   const dur = await page.locator(".bk-wrap .bk-book").evaluate((el) => parseFloat(getComputedStyle(el).transitionDuration));
   expect(dur).toBeLessThan(0.01);
