@@ -38,6 +38,8 @@ import ModerationNotice, { flaggedCount } from "../../components/ModerationNotic
 import ModerationDemoButton from "../../components/ModerationDemoButton";
 import { ANALYSIS_VERSION, findDuplicates } from "../../lib/photo/analyze";
 import { useStepTimer } from "@/lib/analytics";
+import ChunkBoundary from "../../components/editor/ChunkBoundary";
+import { warmEditorChunks } from "../../lib/editorWarm";
 
 // N5: перетаскивание фото (@dnd-kit, ≈ 27 КБ сжатого JS) — отдельный кусок, грузится, только когда в черновике есть фото.
 // Пока он грузится, та же сетка без перетаскивания (кнопки «раньше / позже» работают) — подмена без сдвига вёрстки.
@@ -123,6 +125,7 @@ export default function EditorPage() {
   const step = chosenStep || (STEPS.some((s) => s.id === urlStep && s.id !== "status") ? urlStep : "photos");
   useStepTimer(step);
   useAnalysis(draft);
+  useEffect(() => warmEditorChunks(), []); // N7: куски «Правок» и перетаскивания — на устройство, пока есть сеть
   const lowDpi = useLowDpi(draft, product);
   const dups = useMemo(() => findDuplicates(draft?.photos || []), [draft?.photos]);
   // Дубли: «Удалить дубли» на плашке и «Удалить дубль» на «Проверке» → тост «Удалено дублей: N» с «Вернуть»
@@ -236,7 +239,9 @@ export default function EditorPage() {
       )}
       {step === "layout" && <LayoutStep draft={draft} thumbs={thumbs} product={product} />}
       {step === "edits" && (
-        <PhotoEditor key={editPhoto || "edits"} draft={draft} thumbs={thumbs} readOnly={ordered} lowDpiIds={lowDpi} dupIds={dups} initialPhotoId={editPhoto} extra={(photo) => <PlacementCard photo={photo} thumb={thumbs[photo.id]} readOnly={ordered} />} />
+        <ChunkBoundary key={editPhoto || "edits"}>
+          <PhotoEditor draft={draft} thumbs={thumbs} readOnly={ordered} lowDpiIds={lowDpi} dupIds={dups} initialPhotoId={editPhoto} extra={(photo) => <PlacementCard photo={photo} thumb={thumbs[photo.id]} readOnly={ordered} />} />
+        </ChunkBoundary>
       )}
       {step === "check" && (
         <CheckStep
@@ -650,10 +655,13 @@ function PhotoGrid({ draft, thumbs, readOnly, lowDpi, dups }) {
       ))}
     </div>
   );
+  // N7: кусок перетаскивания не скачался (нет сети) — та же сетка без перетаскивания, а не ошибка страницы
   return (
-    <Suspense fallback={plain}>
-      <SortablePhotos cells={cells} readOnly={readOnly} />
-    </Suspense>
+    <ChunkBoundary fallback={plain}>
+      <Suspense fallback={plain}>
+        <SortablePhotos cells={cells} readOnly={readOnly} />
+      </Suspense>
+    </ChunkBoundary>
   );
 }
 
