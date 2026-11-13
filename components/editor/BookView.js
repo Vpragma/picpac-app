@@ -614,7 +614,7 @@ export default function BookView({ layout, thumbs, size, issues, byId, book: raw
             <div className="muted small bk-dialog-hints">
               <p className="bk-dialog-hint bk-hint-touch">Листайте свайпом или кнопками.</p>
               <p className="bk-dialog-hint bk-hint-keys">Листайте стрелками ← →, мышью или кнопками. Закрыть — Esc.</p>
-              {rotate && <p className="bk-dialog-hint bk-rotate-hint">Поверните телефон — книга станет крупнее.</p>}
+              {rotate && <p className="bk-dialog-hint bk-rotate-hint">Поверните экран — книга станет крупнее.</p>}
             </div>
           </div>
         )}
