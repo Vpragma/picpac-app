@@ -86,13 +86,34 @@ export default function PromoAdmin() {
   }
   const set = (patch) => setForm((f) => ({ ...f, data: { ...f.data, ...patch }, errors: {} }));
 
+  // N7 E1: код в списке совпадает с формой по всем полям — его создал этот же запрос, ответ на который оборвался.
+  // Тогда не «Такой код уже есть», а повтор запроса: сервер узнаёт свой повтор и отвечает 200 — «Промокод … создан».
+  function sameAsForm(p, b) {
+    const n = (x) => (x === undefined || x === "" ? null : x);
+    const day = (x) => (x ? String(x).slice(0, 10) : null);
+    return (
+      p.kind === b.kind &&
+      Number(p.value || 0) === Number(b.value || 0) &&
+      (p.minTotalKop || 0) === (b.minTotalKop || 0) &&
+      day(p.validFrom) === day(b.validFrom) &&
+      day(p.validTo) === day(b.validTo) &&
+      n(p.maxUses) === n(b.maxUses) &&
+      n(p.maxUsesPerUser) === n(b.maxUsesPerUser) &&
+      [...(p.productSlugs || [])].sort().join() === [...(b.productSlugs || [])].sort().join() &&
+      n(p.season) === n(b.season) &&
+      (p.label || "") === (b.label || "") &&
+      !!p.active === !!b.active
+    );
+  }
+
   // Проверка формы до отправки — те же правила, что на сервере (сервер проверит ещё раз)
-  function formErrors(d, value) {
+  function formErrors(d, value, body) {
     const e = {};
     if (form.mode === "new") {
       const code = d.code.trim().toUpperCase();
+      const existing = (res?.items || []).find((i) => i.code === code);
       if (!/^[A-Z0-9]{3,20}$/.test(code)) e.code = "Код — от 3 до 20 латинских букв и цифр, без пробелов.";
-      else if ((res?.items || []).some((i) => i.code === code)) e.code = "Такой код уже есть — придумайте другой или измените существующий.";
+      else if (existing && !sameAsForm(existing, body)) e.code = "Такой код уже есть — придумайте другой или измените существующий.";
     }
     if (d.kind === "percent" && !(Number.isInteger(value) && value >= 1 && value <= 100)) e.value = "Процент скидки — целое число от 1 до 100.";
     if (d.kind === "amount" && !(value >= 10)) e.value = "Сумма скидки — от 0,10 BYN.";
@@ -107,11 +128,6 @@ export default function PromoAdmin() {
     e.preventDefault();
     const d = form.data;
     const value = d.kind === "percent" ? Number(String(d.value).replace(",", ".")) : d.kind === "amount" ? toKop(d.value) : 0;
-    const errs = formErrors(d, value);
-    if (Object.keys(errs).length) {
-      setForm((f) => ({ ...f, errors: errs, message: "Проверьте поля формы: " + Object.values(errs)[0] }));
-      return;
-    }
     const body = {
       kind: d.kind,
       value: Number.isFinite(value) ? Math.round(value) : -1,
@@ -126,6 +142,11 @@ export default function PromoAdmin() {
       active: d.active,
     };
     if (form.mode === "new") body.code = d.code.trim().toUpperCase();
+    const errs = formErrors(d, value, body);
+    if (Object.keys(errs).length) {
+      setForm((f) => ({ ...f, errors: errs, message: "Проверьте поля формы: " + Object.values(errs)[0] }));
+      return;
+    }
     setBusy(true);
     const r =
       form.mode === "new"

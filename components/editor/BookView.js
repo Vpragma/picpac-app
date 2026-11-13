@@ -7,8 +7,8 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { IconLeft, IconRight } from "../icons";
 import { ART_SVG, Leaf, Maple, Oak } from "../season/SeasonArt";
-import { COVER_LAYOUTS, DATE_MAX, TITLE_MAX, bookTemplate, normBook, templatesInOrder } from "../../lib/book";
-import { setBook } from "../../lib/draft";
+import { COVER_LAYOUTS, TITLE_MAX, bookTemplate, normBook, templatesInOrder, textLength } from "../../lib/book";
+import { getLocalPhotoBlob, setBook } from "../../lib/draft";
 import { useSeason } from "../../lib/season";
 
 const FLIP_MS = 650;
@@ -21,6 +21,172 @@ function subscribeReduce(cb) {
 }
 function useReducedMotion() {
   return useSyncExternalStore(subscribeReduce, () => window.matchMedia(reduceQuery).matches, () => false);
+}
+
+// Размер окна и тип указателя — для подсказки «Поверните телефон» (N7 D2)
+function subscribeResize(cb) {
+  window.addEventListener("resize", cb);
+  return () => window.removeEventListener("resize", cb);
+}
+function useViewport() {
+  const snap = useSyncExternalStore(
+    subscribeResize,
+    () => `${window.innerWidth}x${window.innerHeight}x${window.matchMedia("(pointer: coarse)").matches ? 1 : 0}`,
+    () => "0x0x0",
+  );
+  const [w, h, coarse] = snap.split("x").map(Number);
+  return { w, h, coarse: coarse === 1 };
+}
+
+// Высота книги «на весь экран» на экране w×h — та же раскладка, что в book.css (раздел 6). Нужна, чтобы подсказка
+// «Поверните телефон» появлялась, только если в другой ориентации книга правда станет крупнее.
+function bigBookHeight(w, h, ar) {
+  if (w > h && h <= 560) return Math.min((w - 120) / ar, h - 38); // телефон лёжа: кнопки по бокам, подписи — одна строка
+  const pad = w <= 600 ? 8 : 16;
+  return Math.min((Math.min(w, 1200) - 2 * pad) / ar, h - 2 * pad - 184);
+}
+
+// N7 D4: в превью — миниатюра 480 px. Если место на экране крупнее (с учётом плотности экрана, не больше ×2), подменяем её
+// уменьшенной копией оригинала с устройства нужного размера. Лениво: только для показанных страниц, по одному фото за раз;
+// в памяти — не больше SHARP_MAX копий (старые освобождаются).
+const SHARP_MAX = 24;
+const sharpCache = new Map(); // «id@px» → адрес копии
+const sharpWait = new Map();
+let sharpChain = Promise.resolve();
+
+function sharpCopy(id, w, h, px) {
+  const key = id + "@" + px;
+  if (sharpCache.has(key)) {
+    const url = sharpCache.get(key);
+    sharpCache.delete(key);
+    sharpCache.set(key, url); // свежая — в конец очереди на освобождение
+    return Promise.resolve(url);
+  }
+  if (sharpWait.has(key)) return sharpWait.get(key);
+  const k = px / Math.max(w, h);
+  const tw = Math.max(1, Math.round(w * k));
+  const th = Math.max(1, Math.round(h * k));
+  const job = sharpChain
+    .then(async () => {
+      const blob = await getLocalPhotoBlob(id);
+      if (!blob) return null;
+      let bmp;
+      try {
+        bmp = await createImageBitmap(blob, { resizeWidth: tw, resizeHeight: th, resizeQuality: "high" });
+      } catch {
+        bmp = await createImageBitmap(blob);
+      }
+      const c = document.createElement("canvas");
+      c.width = tw;
+      c.height = th;
+      const g = c.getContext("2d");
+      g.imageSmoothingQuality = "high";
+      g.drawImage(bmp, 0, 0, tw, th);
+      bmp.close?.();
+      const out = await new Promise((r) => c.toBlob(r, "image/jpeg", 0.88));
+      c.width = c.height = 0;
+      if (!out) return null;
+      const url = URL.createObjectURL(out);
+      sharpCache.set(key, url);
+      while (sharpCache.size > SHARP_MAX) {
+        const [oldKey, oldUrl] = sharpCache.entries().next().value;
+        sharpCache.delete(oldKey);
+        URL.revokeObjectURL(oldUrl);
+      }
+      return url;
+    })
+    .catch(() => null);
+  sharpChain = job;
+  sharpWait.set(key, job);
+  job.finally(() => sharpWait.delete(key));
+  return job;
+}
+
+// Фото на странице: миниатюра, а если места на экране больше — чёткая копия (см. sharpCopy)
+function PhotoImg({ id, ctx }) {
+  const photo = ctx.byId[id];
+  const thumb = ctx.thumbs[id];
+  const w = photo?.w || 0;
+  const h = photo?.h || 0;
+  const contain = photo?.fit === "contain";
+  const ref = useRef(null);
+  const asked = useRef(0);
+  const [hi, setHi] = useState(null);
+  const check = useCallback(() => {
+    const img = ref.current;
+    if (!img || !img.complete || !img.naturalWidth || !w || !h) return;
+    const bw = img.clientWidth;
+    const bh = img.clientHeight;
+    if (!bw || !bh) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const long = Math.max(w, h);
+    const k = Math.min(1, (contain ? Math.min(bw / w, bh / h) : Math.max(bw / w, bh / h)) * dpr);
+    const need = long * k;
+    const have = Math.max(img.naturalWidth, img.naturalHeight);
+    if (need <= have * 1.25) return; // миниатюры хватает
+    const px = Math.min(long, Math.ceil(need / 256) * 256);
+    if (px <= have || asked.current >= px) return;
+    asked.current = px;
+    sharpCopy(id, w, h, px).then((url) => url && setHi({ id, url }));
+  }, [id, w, h, contain]);
+  const src = hi && hi.id === id ? hi.url : thumb;
+  useEffect(() => {
+    const img = ref.current;
+    if (!img || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => check());
+    ro.observe(img);
+    return () => ro.disconnect();
+  }, [check, src]);
+  if (!src) return null;
+  // eslint-disable-next-line @next/next/no-img-element -- фото клиента с устройства (blob:/data:): next/image их не оптимизирует
+  return <img ref={ref} src={src} alt="" draggable={false} style={ctx.placeStyle(photo)} onLoad={check} />;
+}
+
+// N7 D1: название и дата на обложке помещаются целиком: шрифт уменьшается под длину и место (перенос по словам).
+// Размеры шрифта — доли ширины страницы (cqw) × --bk-fit, поэтому на телефоне и на компьютере перенос одинаковый.
+// Слово длиннее строки даже при самом мелком шрифте — последний вариант: перенос посреди слова (класс bk-fit-break).
+const FIT_MIN = 0.15;
+function fitCoverText(box) {
+  const inner = box?.firstElementChild;
+  if (!inner || !box.isConnected) return;
+  const cs = getComputedStyle(box);
+  const room = () => box.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+  const fits = () => {
+    if (inner.offsetHeight > room() + 0.5) return false;
+    for (const el of inner.children) if (el.scrollWidth > el.clientWidth + 0.5) return false;
+    return true;
+  };
+  const set = (k) => box.style.setProperty("--bk-fit", String(k));
+  box.classList.remove("bk-fit-break");
+  set(1);
+  if (fits()) return;
+  let lo = FIT_MIN;
+  let hi = 1;
+  for (let i = 0; i < 10; i++) {
+    const mid = (lo + hi) / 2;
+    set(mid);
+    if (fits()) lo = mid;
+    else hi = mid;
+  }
+  set(lo);
+  if (!fits()) box.classList.add("bk-fit-break");
+}
+
+function useCoverFit(ref, deps) {
+  useLayoutEffect(() => {
+    const box = ref.current;
+    if (!box) return;
+    fitCoverText(box);
+    let alive = true;
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => fitCoverText(box)) : null;
+    ro?.observe(box.parentElement);
+    document.fonts?.ready.then(() => alive && fitCoverText(box));
+    return () => {
+      alive = false;
+      ro?.disconnect();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- пересчёт при смене текста и варианта обложки
+  }, deps);
 }
 
 // Иконка «180°» из брендбука (раскрытие книги): книга раскрыта в линию, над ней дуга. Нарисована нами, линейная.
@@ -126,8 +292,7 @@ function Face({ spec, ctx, side }) {
       <Decor tpl={tpl} />
       {pg.slots.map((sl) => (
         <div key={sl.photoId} className={"bk-slot" + ctx.slotClass(sl.photoId)} style={{ left: sl.x * 100 + "%", top: sl.y * 100 + "%", width: sl.w * 100 + "%", height: sl.h * 100 + "%" }}>
-          {/* eslint-disable-next-line @next/next/no-img-element -- фото клиента с устройства (blob:/data:): next/image их не оптимизирует */}
-          {ctx.thumbs[sl.photoId] && <img src={ctx.thumbs[sl.photoId]} alt="" draggable={false} style={ctx.placeStyle(ctx.byId[sl.photoId])} />}
+          <PhotoImg id={sl.photoId} ctx={ctx} />
         </div>
       ))}
     </div>
@@ -137,20 +302,20 @@ function Face({ spec, ctx, side }) {
 function Cover({ ctx, cls }) {
   const { title, date, layout } = ctx.book.cover;
   const id = ctx.coverPhotoId;
-  const src = id && ctx.thumbs[id];
+  const box = useRef(null);
+  useCoverFit(box, [title, date, layout, ctx.book.template]);
   return (
     <div className={cls + " bk-cover cover-" + layout} data-cover-layout={layout}>
       <Decor tpl={ctx.book.template} where="cover" />
-      {layout !== "title" && (
-        <div className="bk-cover-photo">
-          {/* eslint-disable-next-line @next/next/no-img-element -- фото клиента с устройства */}
-          {src && <img src={src} alt="" draggable={false} style={ctx.placeStyle(ctx.byId[id])} />}
-        </div>
-      )}
+      {layout !== "title" && <div className="bk-cover-photo">{id && <PhotoImg id={id} ctx={ctx} />}</div>}
       {(title || date) && (
-        <div className="bk-cover-text">
-          {title && <b className="bk-cover-title">{title}</b>}
-          {date && <span className="bk-cover-date">{date}</span>}
+        <div className="bk-cover-text" ref={box}>
+          <div className="bk-cover-fit">
+            {layout === "title" && <span className="bk-cover-rule" aria-hidden="true" />}
+            {title && <b className="bk-cover-title">{title}</b>}
+            {date && <span className="bk-cover-date">{date}</span>}
+            {layout === "title" && <span className="bk-cover-rule" aria-hidden="true" />}
+          </div>
         </div>
       )}
     </div>
@@ -258,7 +423,7 @@ function Book({ views, ctx, view, flip, onFlipDone, onSwipe, ratio, big = false 
 function Controls({ views, view, label, go, pages }) {
   return (
     <div className="bk-controls">
-      <button type="button" className="btn btn-small bk-nav" onClick={() => go(-1)} disabled={view === 0} aria-label="Назад: предыдущий разворот">
+      <button type="button" className="btn btn-small bk-nav" data-dir="prev" onClick={() => go(-1)} disabled={view === 0} aria-label="Назад: предыдущий разворот">
         <IconLeft size={18} /> <span aria-hidden="true">Назад</span>
       </button>
       <div className="bk-count">
@@ -267,7 +432,7 @@ function Controls({ views, view, label, go, pages }) {
         </span>
         {pages && <span className="muted small">стр. {pages.join(" и ")}</span>}
       </div>
-      <button type="button" className="btn btn-small bk-nav" onClick={() => go(1)} disabled={view >= views.length - 1} aria-label="Вперёд: следующий разворот">
+      <button type="button" className="btn btn-small bk-nav" data-dir="next" onClick={() => go(1)} disabled={view >= views.length - 1} aria-label="Вперёд: следующий разворот">
         <span aria-hidden="true">Вперёд</span> <IconRight size={18} />
       </button>
     </div>
@@ -301,21 +466,44 @@ export default function BookView({ layout, thumbs, size, issues, byId, book: raw
   );
   const onFlipDone = useCallback((f) => setState((s) => (s.flip === f ? { view: f.to, flip: null } : s)), []);
 
-  const onKey = (e) => {
-    if (e.target.closest("input, textarea, select")) return;
+  // N7 D6: кнопка «Вперёд» на задней обложке (или «Назад» на обложке) станет недоступной — фокус заранее переводим
+  // на книгу (в превью) или на соседнюю кнопку (на весь экран), иначе он упадёт на <body> и стрелки перестанут листать.
+  // На книгу, а не на «Назад»: следующее Enter не перелистнёт неожиданно назад.
+  const keepFocus = (to) => {
+    const el = document.activeElement;
+    const dir = el?.dataset?.dir;
+    if (!((dir === "next" && to >= last) || (dir === "prev" && to <= 0))) return;
+    const frame = el.closest("dialog") ? null : el.closest(".bk-wrap")?.querySelector(".bk-frame");
+    (frame || el.closest(".bk-controls")?.querySelector(`[data-dir="${dir === "next" ? "prev" : "next"}"]`))?.focus();
+  };
+  const move = (d) => {
+    keepFocus(Math.max(0, Math.min(last, target + d)));
+    go(d);
+  };
+  const jump = (to) => {
+    keepFocus(to);
+    setState({ view: to, flip: null });
+  };
+  const handleNav = (e) => {
     if (e.key === "ArrowRight") {
       e.preventDefault();
-      go(1);
+      move(1);
     } else if (e.key === "ArrowLeft") {
       e.preventDefault();
-      go(-1);
+      move(-1);
     } else if (e.key === "Home") {
       e.preventDefault();
-      setState({ view: 0, flip: null });
+      jump(0);
     } else if (e.key === "End") {
       e.preventDefault();
-      setState({ view: last, flip: null });
+      jump(last);
     }
+  };
+  // Стрелки, Home и End листают, где бы ни был фокус в превью (книга, «Вперёд»/«Назад», «180°»). Поля ввода и
+  // открытый диалог обрабатывают клавиши сами.
+  const onKey = (e) => {
+    if (e.target.closest("input, textarea, select, dialog")) return;
+    handleNav(e);
   };
 
   // Фокус не уходит из диалога: Tab с последней кнопки — на первую, Shift+Tab с первой — на последнюю
@@ -334,7 +522,7 @@ export default function BookView({ layout, thumbs, size, issues, byId, book: raw
       }
       return;
     }
-    onKey(e);
+    handleNav(e);
   };
 
   useEffect(() => {
@@ -343,6 +531,30 @@ export default function BookView({ layout, thumbs, size, issues, byId, book: raw
     if (full && !d.open) d.showModal();
     if (!full && d.open) d.close();
   }, [full]);
+
+  // N7 D3: «назад» браузера или жест «назад» закрывает книгу, а не уводит из редактора. При открытии — своя запись в
+  // истории (тот же адрес); закрытие кнопкой или Esc эту запись убирает, поэтому лишних шагов «назад» не остаётся.
+  const pushed = useRef(false);
+  const openFull = () => {
+    setFull(true);
+    try {
+      window.history.pushState({ bkFull: true }, "");
+      pushed.current = true;
+    } catch {
+      pushed.current = false;
+    }
+  };
+  useEffect(() => {
+    if (!full) return;
+    const onPop = () => {
+      if (!pushed.current) return;
+      pushed.current = false;
+      setFull(false);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [full]);
+  const vp = useViewport();
 
   const ctx = {
     layout,
@@ -355,15 +567,16 @@ export default function BookView({ layout, thumbs, size, issues, byId, book: raw
   };
   const ratio = (2 * size.w) / size.h;
   const v = views[target];
+  const rotate = full && vp.coarse && vp.w < vp.h && bigBookHeight(vp.h, vp.w, ratio) > 1.15 * bigBookHeight(vp.w, vp.h, ratio);
 
   return (
-    <section className="bk-wrap" aria-label="Превью книги" data-template={book.template}>
-      <div className="bk-frame" role="group" aria-roledescription="книга" aria-label="Книга: листайте стрелками влево и вправо или свайпом" tabIndex={0} onKeyDown={onKey}>
+    <section className="bk-wrap" aria-label="Превью книги" data-template={book.template} onKeyDown={onKey}>
+      <div className="bk-frame" role="group" aria-roledescription="книга" aria-label="Книга: листайте стрелками влево и вправо или свайпом" tabIndex={0}>
         <Book views={views} ctx={ctx} view={view} flip={flip} onFlipDone={onFlipDone} onSwipe={go} ratio={ratio} />
       </div>
-      <Controls views={views} view={target} label={v.label} pages={v.pages} go={go} />
+      <Controls views={views} view={target} label={v.label} pages={v.pages} go={move} />
       <div className="bk-open-row">
-        <button type="button" ref={opener} className="btn btn-secondary bk-open" onClick={() => setFull(true)}>
+        <button type="button" ref={opener} className="btn btn-secondary bk-open" onClick={openFull}>
           <Icon180 size={22} /> Посмотреть книгу целиком
         </button>
       </div>
@@ -373,6 +586,10 @@ export default function BookView({ layout, thumbs, size, issues, byId, book: raw
         aria-label="Книга целиком"
         onClose={() => {
           setFull(false);
+          if (pushed.current) {
+            pushed.current = false;
+            if (window.history.state?.bkFull) window.history.back();
+          }
           opener.current?.focus();
         }}
         onKeyDown={onDialogKey}
@@ -381,14 +598,24 @@ export default function BookView({ layout, thumbs, size, issues, byId, book: raw
           <div className="bk-dialog-body">
             <div className="bk-dialog-head">
               <b>Книга целиком</b>
-              <button type="button" className="btn btn-small" onClick={() => setFull(false)} autoFocus>
-                Закрыть
+              <button type="button" className="btn btn-small bk-close" onClick={() => setFull(false)} autoFocus aria-label="Закрыть">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true" focusable="false">
+                  <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
+                <span className="bk-close-text" aria-hidden="true">
+                  Закрыть
+                </span>
               </button>
             </div>
-            <Book views={views} ctx={ctx} view={view} flip={flip} onFlipDone={onFlipDone} onSwipe={go} ratio={ratio} big />
-            <Controls views={views} view={target} label={v.label} pages={v.pages} go={go} />
-            <p className="muted small bk-dialog-hint">Листайте свайпом, стрелками или кнопками. Закрыть — Esc.</p>
-            <p className="muted small bk-dialog-hint bk-rotate-hint">Поверните телефон — книга станет крупнее.</p>
+            <div className="bk-dialog-main">
+              <Book views={views} ctx={ctx} view={view} flip={flip} onFlipDone={onFlipDone} onSwipe={go} ratio={ratio} big />
+            </div>
+            <Controls views={views} view={target} label={v.label} pages={v.pages} go={move} />
+            <div className="muted small bk-dialog-hints">
+              <p className="bk-dialog-hint bk-hint-touch">Листайте свайпом или кнопками.</p>
+              <p className="bk-dialog-hint bk-hint-keys">Листайте стрелками ← →, мышью или кнопками. Закрыть — Esc.</p>
+              {rotate && <p className="bk-dialog-hint bk-rotate-hint">Поверните экран — книга станет крупнее.</p>}
+            </div>
           </div>
         )}
       </dialog>
@@ -452,15 +679,16 @@ export function BookDesign({ book: rawBook, readOnly }) {
         <div className="field">
           <label>
             <span>Название</span>
-            <input className="input" name="bk-title" value={title} maxLength={TITLE_MAX} placeholder="Например, Лето у бабушки" autoComplete="off" aria-describedby={hintId} onChange={(e) => setBook({ cover: { title: e.target.value } })} />
+            {/* N7 D7: длина — в знаках, которые видит человек (👨‍👩‍👧 — один знак); обрезает setBook, maxLength считал бы UTF-16 */}
+            <input className="input" name="bk-title" value={title} placeholder="Например, Лето у бабушки" autoComplete="off" aria-describedby={hintId} onChange={(e) => setBook({ cover: { title: e.target.value } })} />
           </label>
           <small className="field-hint" id={hintId}>
-            {Array.from(title).length} из {TITLE_MAX} знаков
+            {textLength(title)} из {TITLE_MAX} знаков
           </small>
         </div>
         <label className="field">
           <span>Дата</span>
-          <input className="input" name="bk-date" value={date} maxLength={DATE_MAX} placeholder="Например, август 2026" autoComplete="off" onChange={(e) => setBook({ cover: { date: e.target.value } })} />
+          <input className="input" name="bk-date" value={date} placeholder="Например, август 2026" autoComplete="off" onChange={(e) => setBook({ cover: { date: e.target.value } })} />
         </label>
         <div className="bk-pick-grid bk-cover-grid" role="radiogroup" aria-label="Расположение на обложке">
           {COVER_LAYOUTS.map((c) => (

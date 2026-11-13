@@ -14,10 +14,13 @@ import {
   bookFromSettings,
   bookTemplate,
   bookToSettings,
+  cleanText,
+  graphemes,
   initialBook,
   layoutOptions,
   normBook,
   templatesInOrder,
+  textLength,
 } from "../../lib/book.js";
 
 const EPS = 1e-9;
@@ -105,6 +108,20 @@ test("нормализация: неизвестный шаблон и вари�
   assert.equal(long.cover.date.length, DATE_MAX);
   // эмодзи не режется посередине
   assert.equal(Array.from(normBook({ cover: { title: "📷".repeat(50) } }).cover.title).length, TITLE_MAX);
+});
+
+test("название (N7 D7): эмодзи-последовательности не распадаются, длина — в знаках, которые видит человек", () => {
+  const fam = "\u{1F468}\u200d\u{1F469}\u200d\u{1F467}"; // 👨‍👩‍👧 — три эмодзи через ZWJ
+  assert.equal(normBook({ cover: { title: "Мы " + fam } }).cover.title, "Мы " + fam, "ZWJ не вырезается");
+  assert.equal(textLength("Мы " + fam), 4);
+  assert.equal(textLength("🍂".repeat(20)), 20, "20 листьев — 20 знаков, а не 40");
+  assert.equal(textLength("🇧🇾 й"), 3, "флаг и «й» из двух кодовых точек — по одному знаку");
+  const many = normBook({ cover: { title: fam.repeat(45) } }).cover.title;
+  assert.equal(textLength(many), TITLE_MAX);
+  assert.equal(many, fam.repeat(TITLE_MAX), "обрезка по графемам — семья не режется посередине");
+  assert.deepEqual(graphemes(fam + "a"), [fam, "a"]);
+  assert.equal(cleanText("a\u200bb\u202ec", 10), "a b c", "невидимый пробел и смена направления — по-прежнему убираются");
+  assert.equal(textLength(cleanText("x".repeat(100000), TITLE_MAX)), TITLE_MAX, "огромная вставка не ломает");
 });
 
 test("сохранение выбора: проект → настройки аккаунта → другое устройство — то же оформление", () => {

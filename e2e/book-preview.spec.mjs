@@ -114,6 +114,63 @@ test("превью книги: обложка и развороты, кнопк�
     await expect(inline(page)).toHaveText("Разворот 2 из 10"); // превью и полный экран — один и тот же разворот
   });
 
+  await test.step("«назад» браузера закрывает книгу на весь экран и остаётся в редакторе; после «Закрыть» лишней записи нет (N7 D3)", async () => {
+    const open = page.getByRole("button", { name: "Посмотреть книгу целиком" });
+    const dialog = page.getByRole("dialog", { name: "Книга целиком" });
+    const url = page.url();
+    await open.click();
+    await expect(dialog).toBeVisible();
+    await page.goBack();
+    await expect(dialog).toBeHidden();
+    expect(page.url()).toBe(url);
+    await expect(page.locator(".bk-wrap")).toBeVisible();
+    await open.click();
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: "Закрыть" }).click();
+    await expect(dialog).toBeHidden();
+    await expect.poll(() => page.evaluate(() => !!window.history.state?.bkFull)).toBe(false);
+    expect(page.url()).toBe(url);
+  });
+
+  await test.step("клавиатура после кнопок: стрелки листают и после «Вперёд», фокус не падает на <body> (N7 D6)", async () => {
+    await page.getByRole("button", { name: "Вперёд: следующий разворот" }).click();
+    await expect(inline(page)).toHaveText("Разворот 3 из 10");
+    await page.keyboard.press("ArrowRight");
+    await expect(inline(page)).toHaveText("Разворот 4 из 10");
+    await page.keyboard.press("End");
+    await expect(inline(page)).toHaveText("Задняя обложка");
+    await expect(page.locator(".bk-wrap .bk-frame")).toBeFocused(); // кнопка «Вперёд» заблокирована — фокус на книге, не на <body>
+    await page.keyboard.press("ArrowLeft");
+    await expect(inline(page)).toHaveText("Разворот 10 из 10");
+  });
+
+  expect(errors, errors.join("\n")).toEqual([]);
+});
+
+test("обложка: название до 40 знаков целиком во всех вариантах и пропорциях страниц, без обрезки (N7 D1)", async ({ page }) => {
+  const errors = watchErrors(page);
+  await bookWithPhotos(page, 2);
+  const titleBox = page.getByRole("textbox", { name: "Название", exact: true });
+  await page.getByRole("textbox", { name: "Дата", exact: true }).fill("август 2026");
+  // текст не обрезан: scrollHeight ≤ clientHeight у места под текст, слова не вылезают по ширине
+  const fits = () =>
+    page.locator(".bk-wrap .bk-cover-text").evaluate((el) => {
+      const parts = [...el.querySelectorAll(".bk-cover-title, .bk-cover-date")];
+      return el.scrollHeight <= el.clientHeight + 1 && el.scrollWidth <= el.clientWidth + 1 && parts.every((x) => x.scrollWidth <= x.clientWidth + 1);
+    });
+  const titles = ["Лето у бабушки в Несвиже 2026", "Наше большое лето у бабушки в Несвиже 26", "Достопримечательности Несвижского замка", "Я".repeat(40)];
+  for (const title of titles) {
+    await titleBox.fill(title);
+    for (const layout of ["photo", "full", "title"]) {
+      await page.locator(`.bk-pick-item[data-cover=${layout}] input`).check();
+      await expect(page.locator(".bk-wrap .bk-cover .bk-cover-title")).toHaveText(title);
+      // пропорции разворота форматов каталога: 20×20, 30×20, 20×30, 15×20, 30×30-широкий
+      for (const ar of [2, 3, 4 / 3, 1.5, 2.6]) {
+        await page.locator(".bk-wrap .bk-stage").evaluate((el, a) => el.style.setProperty("--bk-ar", String(a)), ar);
+        await expect.poll(fits, { message: `«${layout}», ${title.length} знаков, разворот ${ar.toFixed(2)}` }).toBe(true);
+      }
+    }
+  }
   expect(errors, errors.join("\n")).toEqual([]);
 });
 
@@ -143,8 +200,17 @@ test("шаблон «Осень» и обложка: поля автомакет
     await expect(cover).toHaveAttribute("data-cover-layout", "title");
     await expect(cover.locator(".bk-cover-title")).toHaveText("Осень у бабушки");
     await expect(cover.locator(".bk-cover-date")).toHaveText("октябрь 2026");
-    // длина названия ограничена
-    await expect(page.getByRole("textbox", { name: "Название", exact: true })).toHaveAttribute("maxlength", "40");
+    // длина названия — в знаках, которые видит человек: семья 👨‍👩‍👧 — один знак и не распадается (N7 D7)
+    const titleBox = page.getByRole("textbox", { name: "Название", exact: true });
+    const fam = "\u{1F468}\u200d\u{1F469}\u200d\u{1F467}";
+    await titleBox.fill("Мы " + fam);
+    await expect(titleBox).toHaveValue("Мы " + fam);
+    await expect(page.getByText("4 из 40 знаков")).toBeVisible();
+    await titleBox.fill("🍂".repeat(45));
+    await expect(titleBox).toHaveValue("🍂".repeat(40));
+    await expect(page.getByText("40 из 40 знаков")).toBeVisible();
+    await titleBox.fill("Осень у бабушки");
+    await expect(cover.locator(".bk-cover-title")).toHaveText("Осень у бабушки");
   });
 
   await test.step("перезагрузка: шаблон, обложка и вариант — те же", async () => {
@@ -167,7 +233,10 @@ test("prefers-reduced-motion: листается сразу, без анимац
   await page.getByRole("button", { name: "Вперёд: следующий разворот" }).click();
   await expect(inline(page)).toHaveText("Разворот 1 из 10");
   await expect(page.locator(".bk-wrap .bk-leaf")).toHaveCount(0);
-  const running = await page.evaluate(() => document.getAnimations().filter((a) => a.effect?.target?.closest?.(".bk-wrap")).length);
+  // Движение — анимации длиннее 1 мс. Глобальное правило reduce (motion.css) даёт любому изменению стиля переход 0,01 мс
+  // (например, тень у левой страницы, когда она перестаёт быть пустой) — это не движение, но в getAnimations() он виден
+  // один кадр; раньше тест из-за этого иногда падал. Перелистывание (650 мс) и сдвиг книги (650 мс) этот фильтр ловит.
+  const running = await page.evaluate(() => document.getAnimations().filter((a) => a.effect?.target?.closest?.(".bk-wrap") && Number(a.effect.getComputedTiming().duration) > 1).length);
   expect(running).toBe(0);
   const dur = await page.locator(".bk-wrap .bk-book").evaluate((el) => parseFloat(getComputedStyle(el).transitionDuration));
   expect(dur).toBeLessThan(0.01);
