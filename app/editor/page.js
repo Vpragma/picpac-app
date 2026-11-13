@@ -38,11 +38,17 @@ import ModerationNotice, { flaggedCount } from "../../components/ModerationNotic
 import ModerationDemoButton from "../../components/ModerationDemoButton";
 import { ANALYSIS_VERSION, findDuplicates } from "../../lib/photo/analyze";
 import { useStepTimer } from "@/lib/analytics";
-import BookView, { BookDesign } from "../../components/editor/BookView";
 
 // N5: перетаскивание фото (@dnd-kit, ≈ 27 КБ сжатого JS) — отдельный кусок, грузится, только когда в черновике есть фото.
 // Пока он грузится, та же сетка без перетаскивания (кнопки «раньше / позже» работают) — подмена без сдвига вёрстки.
 const SortablePhotos = lazy(() => import("../../components/editor/SortablePhotos"));
+
+// N11: превью книги и выбор оформления (шаг «Автомакет») — отдельный кусок кода, грузится только при открытии шага
+const BookView = dynamic(() => import("../../components/editor/BookView"), {
+  ssr: false,
+  loading: () => <p className="muted">Открываем книгу…</p>,
+});
+const BookDesign = dynamic(() => import("../../components/editor/BookView").then((m) => m.BookDesign), { ssr: false });
 
 // ИИ-редактор (шаг «Правки») — отдельный кусок кода, грузится только при открытии шага
 const PhotoEditor = dynamic(() => import("../../components/editor/PhotoEditor"), {

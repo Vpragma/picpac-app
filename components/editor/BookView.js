@@ -4,7 +4,7 @@
 // и кнопки на компьютере, «Разворот N из M» для экранного диктора. Кнопка с иконкой «180°» — книга на весь экран
 // (<dialog>: фокус внутри, Esc закрывает, фокус возвращается на кнопку).
 // Шаблоны оформления и обложка — lib/book.js; выбор — BookDesign (шаг «Автомакет»). Стили — app/editor/book.css.
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { IconLeft, IconRight } from "../icons";
 import { ART_SVG, Leaf, Maple, Oak } from "../season/SeasonArt";
 import { COVER_LAYOUTS, DATE_MAX, TITLE_MAX, bookTemplate, normBook, templatesInOrder } from "../../lib/book";
@@ -312,6 +312,25 @@ export default function BookView({ layout, thumbs, size, issues, byId, book: raw
     }
   };
 
+  // Фокус не уходит из диалога: Tab с последней кнопки — на первую, Shift+Tab с первой — на последнюю
+  const onDialogKey = (e) => {
+    if (e.key === "Tab") {
+      const els = [...dialog.current.querySelectorAll("button:not([disabled]), [tabindex='0']")];
+      if (!els.length) return;
+      const first = els[0];
+      const lastEl = els[els.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        lastEl.focus();
+      } else if (!e.shiftKey && document.activeElement === lastEl) {
+        e.preventDefault();
+        first.focus();
+      }
+      return;
+    }
+    onKey(e);
+  };
+
   useEffect(() => {
     const d = dialog.current;
     if (!d) return;
@@ -350,7 +369,7 @@ export default function BookView({ layout, thumbs, size, issues, byId, book: raw
           setFull(false);
           opener.current?.focus();
         }}
-        onKeyDown={onKey}
+        onKeyDown={onDialogKey}
       >
         {full && (
           <div className="bk-dialog-body">
@@ -402,6 +421,7 @@ function CoverSample({ layout, tpl }) {
 export function BookDesign({ book: rawBook, readOnly }) {
   const season = useSeason();
   const book = normBook(rawBook);
+  const hintId = useId();
   const title = rawBook?.cover?.title ?? "";
   const date = rawBook?.cover?.date ?? "";
   return (
@@ -422,13 +442,15 @@ export function BookDesign({ book: rawBook, readOnly }) {
       </fieldset>
       <fieldset className="bk-pick" disabled={readOnly}>
         <legend>Обложка</legend>
-        <label className="field">
-          <span>Название</span>
-          <input className="input" name="bk-title" value={title} maxLength={TITLE_MAX} placeholder="Например, Лето у бабушки" autoComplete="off" onChange={(e) => setBook({ cover: { title: e.target.value } })} />
-          <small className="field-hint">
+        <div className="field">
+          <label>
+            <span>Название</span>
+            <input className="input" name="bk-title" value={title} maxLength={TITLE_MAX} placeholder="Например, Лето у бабушки" autoComplete="off" aria-describedby={hintId} onChange={(e) => setBook({ cover: { title: e.target.value } })} />
+          </label>
+          <small className="field-hint" id={hintId}>
             {Array.from(title).length} из {TITLE_MAX} знаков
           </small>
-        </label>
+        </div>
         <label className="field">
           <span>Дата</span>
           <input className="input" name="bk-date" value={date} maxLength={DATE_MAX} placeholder="Например, август 2026" autoComplete="off" onChange={(e) => setBook({ cover: { date: e.target.value } })} />
