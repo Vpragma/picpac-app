@@ -7,7 +7,8 @@
 // Параметры: --device phone|desktop · --target 70 (длина ролика, с; длинные места ускоряются) · --captions off
 //
 // Как пишется: встроенная запись Playwright (recordVideo) требует ffmpeg, а он не ставится на macOS 13. Поэтому кадры
-// берём через CDP (Page.startScreencast), а webm собирает сам Chrome: canvas → captureStream → MediaRecorder (VP8).
+// берём через CDP (Page.startScreencast), а webm кодирует сам Chrome: WebCodecs VP8 (не в реальном времени, точные
+// длительности) + наш упаковщик muxWebm; запасной путь — canvas → captureStream → MediaRecorder в реальном времени.
 // Ожидания (загрузка фото, модели ИИ, оформление) ускоряются, паузы для чтения сохраняются (не длиннее 4 с).
 // В файл дописывается длительность (у webm из MediaRecorder её нет — без неё плееры не показывают длину ролика).
 // Рядом — MP4 (H.264) из тех же кадров для Keynote и PowerPoint: scripts/present-mp4.swift (Swift + AVFoundation).
@@ -362,6 +363,73 @@ try {
     return route.fulfill({ contentType: "text/html", body: "<!doctype html><meta charset=utf-8><body style=margin:0></body>" });
   });
   await rp.goto("https://rec.invalid/");
+  let webm = null;
+  // 1) WebCodecs (VP8) — не в реальном времени: длительности точные при любой загрузке Mac; webm собираем сами (muxWebm)
+  try {
+    const chunks = await rp.evaluate(
+      async ({ n, durs, w, h, total }) => {
+        if (typeof VideoEncoder === "undefined" || typeof OffscreenCanvas === "undefined") return null;
+        const config = { codec: "vp8", width: w, height: h, bitrate: Math.round(w * h * 3), framerate: 30 };
+        const sup = await VideoEncoder.isConfigSupported(config).catch(() => null);
+        if (!sup?.supported) return null;
+        const out = [];
+        let error = null;
+        const encoder = new VideoEncoder({
+          output: (chunk) => {
+            const b = new Uint8Array(chunk.byteLength);
+            chunk.copyTo(b);
+            out.push({ t: chunk.timestamp, key: chunk.type === "key", b });
+          },
+          error: (e) => (error = e),
+        });
+        encoder.configure(config);
+        const c = new OffscreenCanvas(w, h);
+        const g = c.getContext("2d");
+        const load = async (i) => createImageBitmap(await (await fetch(`/f/${i}`)).blob());
+        let t = 0;
+        let lastT = -1;
+        let lastKey = -1e9;
+        let next = load(0);
+        for (let i = 0; i < n; i++) {
+          const bmp = await next;
+          next = i + 1 < n ? load(i + 1) : null;
+          g.drawImage(bmp, 0, 0, w, h);
+          bmp.close();
+          const key = t - lastKey >= 2000;
+          if (key) lastKey = t;
+          const f = new VideoFrame(c, { timestamp: Math.round(t * 1000) });
+          encoder.encode(f, { keyFrame: key });
+          f.close();
+          lastT = t;
+          t += durs[i];
+          while (encoder.encodeQueueSize > 3) await new Promise((r) => setTimeout(r, 5));
+          if (error) throw error;
+        }
+        // последний кадр держится до конца ролика
+        const tail = new VideoFrame(c, { timestamp: Math.round(Math.max(lastT + 1, total - 34) * 1000) });
+        encoder.encode(tail, { keyFrame: false });
+        tail.close();
+        await encoder.flush();
+        encoder.close();
+        if (error) throw error;
+        const b64 = (u8) => {
+          let s = "";
+          for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode(...u8.subarray(i, i + 0x8000));
+          return btoa(s);
+        };
+        return out.map((o) => ({ t: o.t, key: o.key, d: b64(o.b) }));
+      },
+      { n: order.length, durs, w: W, h: H, total },
+    );
+    if (chunks?.length) {
+      webm = muxWebm(chunks.map((c) => ({ ms: c.t / 1000, key: c.key, data: Buffer.from(c.d, "base64") })), W, H, total);
+      log(`webm: WebCodecs VP8, ${chunks.length} кадров (не в реальном времени)`);
+    } else log("WebCodecs VP8 недоступен — пишу webm в реальном времени (MediaRecorder)");
+  } catch (e) {
+    log("WebCodecs не сработал — пишу webm в реальном времени (MediaRecorder): " + e.message.split("\n")[0]);
+  }
+  // 2) запасной путь — MediaRecorder в реальном времени (при сильной загрузке может отставать)
+  if (!webm) {
   const b64 = await rp.evaluate(
     async ({ n, durs, w, h }) => {
       const c = document.createElement("canvas");
@@ -403,8 +471,9 @@ try {
     },
     { n: order.length, durs, w: W, h: H },
   );
+  webm = withDuration(Buffer.from(b64, "base64"), total);
+  }
   await enc.close();
-  const webm = withDuration(Buffer.from(b64, "base64"), total);
   fs.writeFileSync(OUT, webm);
   log(`видео: ${OUT} · ${(webm.length / 1048576).toFixed(1)} МБ · ${(total / 1000).toFixed(1)} с · ${W}×${H}`);
   ok = true;
@@ -454,6 +523,64 @@ function makeMp4(bufs, durs, out) {
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
+}
+
+// ---------- webm из готовых кадров VP8 (EBML: заголовок, Info с длительностью, дорожка, кластеры по ключевым кадрам) ----------
+function muxWebm(chunks, w, h, durationMs) {
+  const id = (n) => {
+    const bytes = [];
+    for (let v = n; v > 0; v = Math.floor(v / 256)) bytes.unshift(v % 256);
+    return Buffer.from(bytes);
+  };
+  const size = (n) => {
+    const b = Buffer.alloc(8);
+    let v = n;
+    for (let i = 7; i >= 1; i--) {
+      b[i] = v % 256;
+      v = Math.floor(v / 256);
+    }
+    b[0] = 0x01;
+    return b;
+  };
+  const el = (i, ...parts) => {
+    const payload = Buffer.concat(parts);
+    return Buffer.concat([id(i), size(payload.length), payload]);
+  };
+  const uint = (i, v) => {
+    const bytes = [];
+    let x = v;
+    do {
+      bytes.unshift(x % 256);
+      x = Math.floor(x / 256);
+    } while (x > 0);
+    return el(i, Buffer.from(bytes));
+  };
+  const flt = (i, v) => {
+    const b = Buffer.alloc(8);
+    b.writeDoubleBE(v);
+    return el(i, b);
+  };
+  const str = (i, s) => el(i, Buffer.from(s, "utf8"));
+  const header = el(0x1a45dfa3, uint(0x4286, 1), uint(0x42f7, 1), uint(0x42f2, 4), uint(0x42f3, 8), str(0x4282, "webm"), uint(0x4287, 4), uint(0x4285, 2));
+  const info = el(0x1549a966, uint(0x2ad7b1, 1_000_000), flt(0x4489, durationMs), str(0x4d80, "picpac-present"), str(0x5741, "picpac-present"));
+  const tracks = el(0x1654ae6b, el(0xae, uint(0xd7, 1), uint(0x73c5, 1), uint(0x83, 1), str(0x86, "V_VP8"), el(0xe0, uint(0xb0, w), uint(0xba, h))));
+  const clusters = [];
+  let cur = null;
+  for (const c of chunks) {
+    const ms = Math.round(c.ms);
+    if (!cur || c.key || ms - cur.start > 30_000) {
+      if (cur) clusters.push(cur);
+      cur = { start: ms, blocks: [] };
+    }
+    const hdr = Buffer.alloc(4);
+    hdr[0] = 0x81; // дорожка 1
+    hdr.writeInt16BE(ms - cur.start, 1);
+    hdr[3] = c.key ? 0x80 : 0x00;
+    cur.blocks.push(el(0xa3, hdr, c.data));
+  }
+  if (cur) clusters.push(cur);
+  const body = clusters.map((cl) => el(0x1f43b675, uint(0xe7, cl.start), ...cl.blocks));
+  return Buffer.concat([header, el(0x18538067, info, tracks, ...body)]);
 }
 
 // ---------- длительность в webm (Segment → Info → Duration) ----------
