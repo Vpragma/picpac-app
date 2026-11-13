@@ -562,6 +562,9 @@ paths:
         дальше каждые 30 с. Смена — условным обновлением, одновременные чтения ленту не задваивают.
         Позиции: `optionsText[]` (опции словами из каталога), `photoCount`, `thumbs[]` — до 8 миниатюр по подписанным ссылкам на 10 минут
         (`{ id, url }`), `snapshot.photos[]` — снимок списка фото на момент заказа. `delivery.name` — способ доставки словами.
+        N11: у книг `snapshot.book` — оформление для производства: `{ template, templateName, margin, gap, cover: { title, date, layout, layoutName } }`
+        (шаблон classic | autumn | wedding | baby | travel с полем и зазором автомакета в долях страницы; обложка photo | full | title).
+        Берётся из `options.settings.book` проекта и чистится сервером: неизвестный шаблон → classic, название до 40 знаков, дата до 24.
       responses:
         "200":
           description: Заказ
@@ -1521,7 +1524,7 @@ components:
         paper: { type: string }
         print: { type: string }
         surface: { type: string }
-        settings: { type: object, description: "Настройки редактора и раскладки (до 50 КБ): quantity, acks (отметки «Продолжить всё равно»), placement {idФото: {fit, focus}}, edits {idФото: {v, auto, autoOff, manual, look?, upscale?, by?, local?}} — общие параметры неразрушающих правок ИИ-редактора (S03), оригинал фото не меняется. N7: маски выделения и координаты местных правок (ops, masks) остаются на устройстве — сервер их не хранит, local — только их число" }
+        settings: { type: object, description: "Настройки редактора и раскладки (до 50 КБ): quantity, acks (отметки «Продолжить всё равно»), placement {idФото: {fit, focus}}, edits {idФото: {v, auto, autoOff, manual, look?, upscale?, by?, local?}} — общие параметры неразрушающих правок ИИ-редактора (S03), оригинал фото не меняется. N7: маски выделения и координаты местных правок (ops, masks) остаются на устройстве — сервер их не хранит, local — только их число. N11: book {template: classic|autumn|wedding|baby|travel, cover: {title ≤ 40, date ≤ 24, layout: photo|full|title}} — оформление книги; попадает в заказ (snapshot.book)" }
     Project:
       type: object
       properties:

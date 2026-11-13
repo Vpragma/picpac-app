@@ -45,6 +45,13 @@ import { warmEditorChunks } from "../../lib/editorWarm";
 // Пока он грузится, та же сетка без перетаскивания (кнопки «раньше / позже» работают) — подмена без сдвига вёрстки.
 const SortablePhotos = lazy(() => import("../../components/editor/SortablePhotos"));
 
+// N11: превью книги и выбор оформления (шаг «Автомакет») — отдельный кусок кода, грузится только при открытии шага
+const BookView = dynamic(() => import("../../components/editor/BookView"), {
+  ssr: false,
+  loading: () => <p className="muted">Открываем книгу…</p>,
+});
+const BookDesign = dynamic(() => import("../../components/editor/BookView").then((m) => m.BookDesign), { ssr: false });
+
 // ИИ-редактор (шаг «Правки») — отдельный кусок кода, грузится только при открытии шага
 const PhotoEditor = dynamic(() => import("../../components/editor/PhotoEditor"), {
   ssr: false,
@@ -666,92 +673,29 @@ function PhotoGrid({ draft, thumbs, readOnly, lowDpi, dups }) {
 }
 
 /* ---------- Шаг 2: автомакет ---------- */
+// N11: книга «как настоящая» (обложка, развороты, перелистывание) и оформление — components/editor/BookView.js
 function LayoutStep({ draft, thumbs, product }) {
   const { layout, issues } = useMemo(() => runChecks(draft, product), [draft, product]);
   const size = product.sizes.find((s) => s.id === draft.sizeId) || product.sizes[0];
   if (product.kind !== "book") return <PrintPreview draft={draft} thumbs={thumbs} size={size} issues={issues} />;
   const byId = Object.fromEntries(draft.photos.map((p) => [p.id, p]));
-  return <BookPreview layout={layout} thumbs={thumbs} size={size} issues={issues} byId={byId} />;
+  const coverPhotoId = layout.pages.find((pg) => pg.slots.length)?.slots[0].photoId || null;
+  return (
+    <div>
+      <p className="muted">Автомакет разложил фото по страницам: 1–3 на страницу, вертикальные и горизонтальные — по своим местам. Листайте книгу пальцем, стрелками или кнопками.</p>
+      <BookView layout={layout} thumbs={thumbs} size={size} issues={issues} byId={byId} book={draft.book} coverPhotoId={coverPhotoId} slotClass={slotClass} placeStyle={placeStyle} />
+      {layout.overflow.length > 0 && <p className="err-text" style={{ marginTop: 12 }}>Не поместились фото: {layout.overflow.length}. Добавьте страницы — подробности в «Проверке».</p>}
+      <p className="muted small" style={{ marginTop: 12 }}>
+        Оранжевая рамка — фото может быть нечётким, красная — будет размыто.
+      </p>
+      <BookDesign book={draft.book} readOnly={draft.status === "ordered"} />
+    </div>
+  );
 }
 
 function slotClass(issues, photoId) {
   const i = issues.find((x) => x.photoId === photoId && x.key.startsWith("dpi:"));
   return i ? (i.level === "err" ? " err" : " warn") : "";
-}
-
-function BookPreview({ layout, thumbs, size, issues, byId }) {
-  const spreads = [];
-  for (let i = 0; i < layout.pages.length; i += 2) spreads.push([i, i + 1]);
-  const [s, setS] = useState(0);
-  const cur = Math.min(s, spreads.length - 1);
-  const touch = useRef(null);
-  const pw = Math.min(170, Math.floor((Math.min(typeof window !== "undefined" ? window.innerWidth : 375, 520) - 40) / 2));
-  const ph = Math.round((pw * size.h) / size.w);
-
-  const page = (idx) => {
-    const pg = layout.pages[idx];
-    if (!pg) return <div className="page blank" style={{ width: pw, height: ph }} />;
-    if (!pg.slots.length)
-      return (
-        <div className="page empty" style={{ width: pw, height: ph }}>
-          Пустая страница
-        </div>
-      );
-    return (
-      <div className="page" style={{ width: pw, height: ph }}>
-        {pg.slots.map((sl) => (
-          <div key={sl.photoId} className={"slot" + slotClass(issues, sl.photoId)} style={{ left: sl.x * 100 + "%", top: sl.y * 100 + "%", width: sl.w * 100 + "%", height: sl.h * 100 + "%" }}>
-            {/* eslint-disable-next-line @next/next/no-img-element -- фото клиента с устройства (blob:/data:): next/image их не оптимизирует, оптимизатор Vercel для фото клиентов не используем */}
-            {thumbs[sl.photoId] && <img src={thumbs[sl.photoId]} alt="" style={placeStyle(byId[sl.photoId])} />}
-          </div>
-        ))}
-      </div>
-    );
-  };
-
-  return (
-    <div>
-      <p className="muted">Автомакет разложил фото по страницам: 1–3 на страницу, вертикальные и горизонтальные — по своим местам. Листайте пальцем или кнопками.</p>
-      <div
-        onTouchStart={(e) => (touch.current = e.touches[0].clientX)}
-        onTouchEnd={(e) => {
-          if (touch.current == null) return;
-          const dx = e.changedTouches[0].clientX - touch.current;
-          if (dx < -40) setS(Math.min(spreads.length - 1, cur + 1));
-          if (dx > 40) setS(Math.max(0, cur - 1));
-          touch.current = null;
-        }}
-      >
-        <div className="spread">
-          {page(spreads[cur][0])}
-          {page(spreads[cur][1])}
-        </div>
-        <div className="row between">
-          <span className="page-num muted" style={{ width: pw }}>
-            стр. {spreads[cur][0] + 1}
-          </span>
-          <span className="page-num muted" style={{ width: pw }}>
-            {layout.pages[spreads[cur][1]] ? "стр. " + (spreads[cur][1] + 1) : ""}
-          </span>
-        </div>
-      </div>
-      <div className="row between" style={{ marginTop: 8 }}>
-        <button className="btn btn-small" onClick={() => setS(Math.max(0, cur - 1))} disabled={cur === 0}>
-          <IconLeft size={18} /> Назад
-        </button>
-        <span className="muted small">
-          разворот {cur + 1} из {spreads.length}
-        </span>
-        <button className="btn btn-small" onClick={() => setS(Math.min(spreads.length - 1, cur + 1))} disabled={cur >= spreads.length - 1}>
-          Вперёд <IconRight size={18} />
-        </button>
-      </div>
-      {layout.overflow.length > 0 && <p className="err-text" style={{ marginTop: 12 }}>Не поместились фото: {layout.overflow.length}. Добавьте страницы — подробности в «Проверке».</p>}
-      <p className="muted small" style={{ marginTop: 12 }}>
-        Оранжевая рамка — фото может быть нечётким, красная — будет размыто.
-      </p>
-    </div>
-  );
 }
 
 function PrintPreview({ draft, thumbs, size, issues }) {
