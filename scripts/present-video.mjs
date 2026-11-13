@@ -10,9 +10,12 @@
 // берём через CDP (Page.startScreencast), а webm собирает сам Chrome: canvas → captureStream → MediaRecorder (VP8).
 // Ожидания (загрузка фото, модели ИИ, оформление) ускоряются, паузы для чтения сохраняются (не длиннее 4 с).
 // В файл дописывается длительность (у webm из MediaRecorder её нет — без неё плееры не показывают длину ролика).
+// Рядом — MP4 (H.264) из тех же кадров для Keynote и PowerPoint: scripts/present-mp4.swift (Swift + AVFoundation).
 // Клиент — тестовый night2-mat-v-…@example.com, удаляется после записи вместе с заказом, файлами и личным промокодом.
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
 import { alignAnswer, applyPromo, cleanupUsers, createUser, ensureAutumn, isLocal, loginContext, makeLog, newContext, parseArgs, stamp, trimBase } from "./present-common.mjs";
 
@@ -405,6 +408,12 @@ try {
   fs.writeFileSync(OUT, webm);
   log(`видео: ${OUT} · ${(webm.length / 1048576).toFixed(1)} МБ · ${(total / 1000).toFixed(1)} с · ${W}×${H}`);
   ok = true;
+  // MP4 рядом (Keynote и PowerPoint не открывают webm): те же кадры и длительности → H.264 через AVFoundation (Swift)
+  try {
+    makeMp4(order.map((i) => frames[i].buf), durs, OUT.replace(/\.webm$/i, "") + ".mp4");
+  } catch (e) {
+    log("MP4 не получился: " + e.message.split("\n")[0]);
+  }
 } catch (e) {
   log("FAIL видео: " + e.message.split("\n").slice(0, 3).join(" "));
 } finally {
@@ -412,6 +421,39 @@ try {
   await cleanupUsers(log);
   log(`время прогона: ${log.elapsed()} с`);
   process.exitCode = ok ? 0 : 1;
+}
+
+// ---------- MP4 через Swift + AVFoundation (без ffmpeg) ----------
+// Нет swiftc (Xcode Command Line Tools) — шаг пропускается строкой в журнале, ролик webm уже записан.
+// Собранная программа кэшируется в .night-logs/present-mp4/ (сборка на этом Mac ≈ 2,5 мин, дальше — сразу).
+function makeMp4(bufs, durs, out) {
+  const dir = path.dirname(fileURLToPath(import.meta.url));
+  const which = spawnSync("/usr/bin/which", ["swiftc"], { encoding: "utf8" });
+  const swiftc = which.status === 0 ? which.stdout.trim() : "";
+  if (!swiftc) return log("MP4 пропущен: нет swiftc (Swift из Xcode Command Line Tools) — есть только webm");
+  const work = path.join(dir, "..", ".night-logs", "present-mp4");
+  fs.mkdirSync(work, { recursive: true });
+  const src = path.join(dir, "present-mp4.swift");
+  const bin = path.join(work, "present-mp4");
+  if (!fs.existsSync(bin) || fs.statSync(bin).mtimeMs < fs.statSync(src).mtimeMs) {
+    log("MP4: собираю present-mp4.swift (один раз, ≈ 2–3 мин)…");
+    const c = spawnSync(swiftc, ["-O", src, "-o", bin], { encoding: "utf8", timeout: 900_000 });
+    if (c.status !== 0) return log("MP4 пропущен: Swift не собрал present-mp4.swift — " + String(c.stderr || c.error?.message || "").split("\n").filter((l) => /error/i.test(l)).slice(0, 2).join(" "));
+  }
+  const tmp = fs.mkdtempSync(path.join(work, "frames-"));
+  try {
+    const lines = bufs.map((b, i) => {
+      const f = path.join(tmp, `f${String(i).padStart(5, "0")}.jpg`);
+      fs.writeFileSync(f, b);
+      return `${f}\t${durs[i].toFixed(1)}`;
+    });
+    fs.writeFileSync(path.join(tmp, "list.tsv"), lines.join("\n") + "\n");
+    const r = spawnSync(bin, [path.join(tmp, "list.tsv"), out, String(W), String(H), "30"], { encoding: "utf8", timeout: 900_000 });
+    if (r.status !== 0) return log("MP4 не получился: " + String(r.stderr || r.error?.message || "").trim().split("\n").slice(-2).join(" "));
+    log(`${r.stdout.trim()} · ${(fs.statSync(out).size / 1048576).toFixed(1)} МБ`);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
 }
 
 // ---------- длительность в webm (Segment → Info → Duration) ----------
