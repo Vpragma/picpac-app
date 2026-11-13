@@ -51,6 +51,47 @@ export const ART = [
   { d: heart(64, 96, 0.6), ink: "ink" },
 ];
 
+// N7: для заказа только с печатью фото — две фотографии-отпечатка вместо книги (ветки, искры и сердце те же).
+// Передний отпечаток залит цветом бумаги (fill) — он закрывает задний, как настоящий снимок сверху.
+function printArt(cx, cy, w, h, deg, front) {
+  const r = (deg * Math.PI) / 180;
+  const cos = Math.cos(r);
+  const sin = Math.sin(r);
+  const p = (x, y) => {
+    const dx = x - cx;
+    const dy = y - cy;
+    return `${(cx + dx * cos - dy * sin).toFixed(1)} ${(cy + dx * sin + dy * cos).toFixed(1)}`;
+  };
+  const rect = (x0, y0, x1, y1) => `M${p(x0, y0)} L${p(x1, y0)} L${p(x1, y1)} L${p(x0, y1)} Z`;
+  const L = cx - w / 2;
+  const T = cy - h / 2;
+  const R = cx + w / 2;
+  const B = cy + h / 2;
+  const iL = L + 7;
+  const iT = T + 7;
+  const iR = R - 7;
+  const iB = B - 18; // внизу поле шире — как у отпечатка
+  const at = (fx, fy) => p(iL + (iR - iL) * fx, iT + (iB - iT) * fy);
+  const [sx, sy] = at(0.74, 0.28).split(" ").map(Number);
+  return [
+    { d: rect(L, T, R, B), ink: "ink", fill: front ? "paper" : undefined },
+    { d: rect(iL, iT, iR, iB), ink: "ink" },
+    { d: `M${at(0.04, 0.94)} L${at(0.36, 0.46)} L${at(0.56, 0.72)} L${at(0.72, 0.5)} L${at(0.96, 0.94)}`, ink: "ink" },
+    { d: `M${sx - 5} ${sy} a5 5 0 1 0 10 0 a5 5 0 1 0 -10 0`, ink: "ink" },
+    ...(front ? [{ d: `M${p(L + 14, B - 9)} L${p(L + 52, B - 9)}`, ink: "ink2" }] : []),
+  ];
+}
+
+export const ART_PRINTS = [
+  ...printArt(170, 128, 112, 92, -8, false),
+  ...printArt(230, 142, 112, 92, 7, true),
+  { d: heart(124, 188, 0.8), ink: "ink" },
+  ...ART.slice(7), // ветки, искры, сердечко — как у открытки с книгой
+];
+
+// Рисунок открытки: «book» — раскрытая книга (есть фотокнига в заказе), «prints» — отпечатки (только печать фото)
+export const artFor = (kind) => (kind === "prints" ? ART_PRINTS : ART);
+
 // Тексты открытки: тёплые, про семью и воспоминания (тон брендбука)
 export function cardText({ code, benefit, validToText, orderNumber }) {
   return {
@@ -115,9 +156,14 @@ export async function drawCard(canvas, data, colors, scale = 3) {
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   ctx.lineWidth = 2.4;
-  for (const a of ART) {
+  for (const a of artFor(data.art)) {
+    const path = new Path2D(a.d);
+    if (a.fill) {
+      ctx.fillStyle = c[a.fill];
+      ctx.fill(path);
+    }
     ctx.strokeStyle = c[a.ink];
-    ctx.stroke(new Path2D(a.d));
+    ctx.stroke(path);
   }
   // тексты
   ctx.textAlign = "center";

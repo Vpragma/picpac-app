@@ -28,7 +28,9 @@ async function getJson(url) {
   }
 }
 
-export default function SeasonPromo({ place = "home", applied = null, onApply = null }) {
+// slugs — продукты корзины: код с ограничением по продуктам показываем, только если он подходит хотя бы к одной
+// позиции (N7: корзина с одной печатью фото не предлагает код «−15 % на фотокниги», который потом «не для этого продукта»)
+export default function SeasonPromo({ place = "home", applied = null, onApply = null, slugs = null }) {
   const [promo, setPromo] = useState(null);
 
   useEffect(() => {
@@ -48,6 +50,7 @@ export default function SeasonPromo({ place = "home", applied = null, onApply = 
   }, []);
 
   if (!promo) return null;
+  if (slugs && promo.productSlugs?.length && !slugs.some((x) => promo.productSlugs.includes(x))) return null;
   const until = promo.validTo ? ` до ${promoDate(promo.validTo)}` : "";
   return (
     <aside className="promo-season" data-season-promo={promo.season} data-testid="promo-season" aria-label="Сезонный промокод">
