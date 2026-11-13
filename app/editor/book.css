@@ -117,29 +117,38 @@
 .bk-cover-photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .cover-photo .bk-cover-photo { left: 11%; right: 11%; top: 10%; height: 58%; }
 .cover-full .bk-cover-photo { inset: 0; }
+/* N7 D1: текст обложки не обрезается. Блок .bk-cover-text — место под текст; .bk-cover-fit — сам текст. Размеры шрифта —
+   доли ширины страницы × --bk-fit: BookView (fitCoverText) уменьшает --bk-fit, пока название и дата не поместятся целиком. */
 .bk-cover-text {
   position: absolute; z-index: 2;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.5cqw;
+  overflow: hidden;
   text-align: center; color: var(--pp-green-900);
+}
+.bk-cover-fit {
+  display: flex; flex-direction: column; align-items: center; flex: none;
+  width: 100%; gap: calc(1.5cqw * var(--bk-fit, 1));
 }
 .tpl-autumn .bk-cover-text { color: var(--season-ink); }
 .cover-photo .bk-cover-text { left: 8%; right: 8%; top: 70%; bottom: 5%; }
 .cover-full .bk-cover-text {
-  left: 9%; right: 9%; bottom: 8%;
+  left: 9%; right: 9%; bottom: 8%; max-height: 54%;
   padding: 3cqw 4cqw; border-radius: var(--ds-radius-sm);
   background: var(--pp-white); color: var(--pp-green-900);
 }
-.cover-title .bk-cover-text { inset: 18% 11%; }
-.cover-title .bk-cover-text::before, .cover-title .bk-cover-text::after {
-  content: ''; width: 22cqw; height: 1px; background: currentColor; opacity: 0.5; margin: 2cqw 0;
+.cover-title .bk-cover-text { inset: 14% 11%; }
+.bk-cover-rule, .bk-sample.cover-title .bk-cover-text::before, .bk-sample.cover-title .bk-cover-text::after {
+  content: ''; flex: none; width: 22cqw; height: 1px; background: currentColor; opacity: 0.5; margin: 2cqw 0;
 }
+.bk-cover-rule { margin: calc(2cqw * var(--bk-fit, 1)) 0; }
 .bk-cover-title {
-  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
-  max-width: 100%; overflow-wrap: anywhere;
-  font-weight: 500; line-height: 1.15; font-size: max(11px, 7.4cqw);
+  display: block; max-width: 100%;
+  font-weight: 500; line-height: 1.15; font-size: calc(7.4cqw * var(--bk-fit, 1));
+  text-wrap: balance;
 }
-.cover-title .bk-cover-title { font-size: max(12px, 9.5cqw); }
-.bk-cover-date { font-size: max(10px, 4.6cqw); letter-spacing: 0.04em; overflow-wrap: anywhere; }
+.cover-title .bk-cover-title { font-size: calc(9.5cqw * var(--bk-fit, 1)); }
+.bk-fit-break .bk-cover-title { overflow-wrap: anywhere; }
+.bk-cover-date { max-width: 100%; font-size: calc(4.6cqw * max(var(--bk-fit, 1), 0.7)); letter-spacing: 0.04em; overflow-wrap: anywhere; }
 
 /* ── 5. Кнопки и подписи ─────────────────────────────────────────────── */
 .bk-controls { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); margin-top: var(--space-3); }
@@ -150,23 +159,58 @@
 .bk-open svg { flex: none; }
 
 /* ── 6. На весь экран ─────────────────────────────────────────────────── */
+/* N7 D2: книга занимает всё место, что осталось от кнопок и подписей: ряд .bk-dialog-main — контейнер размеров,
+   ширина книги = min(ширина ряда, высота ряда × пропорция разворота). Телефон лёжа — кнопки по бокам, подписи в одну строку. */
 .bk-dialog {
-  width: 100%; max-width: 100%; height: 100%; max-height: 100%;
+  width: 100%; max-width: 100%; height: 100%; height: 100dvh; max-height: 100%; max-height: 100dvh;
   margin: 0; padding: 0; border: 0;
   background: var(--ds-color-bg-page); color: var(--ds-color-text);
 }
 .bk-dialog::backdrop { background: var(--ds-color-scrim); }
 .bk-dialog-body {
-  display: flex; flex-direction: column; justify-content: center; gap: var(--space-3);
-  min-height: 100%; max-width: 1200px; margin: 0 auto;
-  padding: max(var(--space-4), env(safe-area-inset-top)) var(--space-4) max(var(--space-4), env(safe-area-inset-bottom));
+  display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto auto; gap: var(--space-3);
+  height: 100%; max-width: 1200px; margin: 0 auto;
+  padding: max(var(--space-4), env(safe-area-inset-top)) max(var(--space-4), env(safe-area-inset-right)) max(var(--space-4), env(safe-area-inset-bottom)) max(var(--space-4), env(safe-area-inset-left));
 }
 .bk-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); color: var(--ds-color-text-strong); }
 .bk-dialog-head b { font-size: var(--ds-text-lg); font-weight: 500; }
-.bk-stage.bk-big { width: 100%; max-width: min(100%, calc((100dvh - 210px) * var(--bk-ar, 2))); }
+.bk-close { gap: var(--space-1); min-width: var(--tap); }
+.bk-dialog-main { container-type: size; min-height: 0; display: grid; place-items: center; }
+.bk-stage.bk-big { width: min(100cqw, 100cqh * var(--bk-ar, 2)); max-width: none; margin: 0; }
+.bk-dialog-hints { display: grid; gap: var(--space-1); }
 .bk-dialog-hint { text-align: center; margin: 0; }
-.bk-rotate-hint { display: none; }
-@media (orientation: portrait) and (max-width: 600px) { .bk-rotate-hint { display: block; } }
+.bk-hint-keys { display: none; }
+@media (hover: hover) and (pointer: fine) {
+  .bk-hint-keys { display: block; }
+  .bk-hint-touch { display: none; }
+}
+@media (max-width: 600px) {
+  .bk-dialog-body {
+    gap: var(--space-2);
+    padding: max(var(--space-2), env(safe-area-inset-top)) max(var(--space-2), env(safe-area-inset-right)) max(var(--space-2), env(safe-area-inset-bottom)) max(var(--space-2), env(safe-area-inset-left));
+  }
+}
+@media (orientation: landscape) and (max-height: 560px) {
+  .bk-dialog-body {
+    max-width: none;
+    grid-template-columns: var(--tap) minmax(0, 1fr) var(--tap);
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: var(--space-1) var(--space-2);
+    padding: max(var(--space-2), env(safe-area-inset-top)) max(var(--space-2), env(safe-area-inset-right)) max(var(--space-1), env(safe-area-inset-bottom)) max(var(--space-2), env(safe-area-inset-left));
+  }
+  .bk-dialog-head { grid-column: 3; grid-row: 1; align-self: start; z-index: 1; }
+  .bk-dialog-head b { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .bk-close { width: var(--tap); padding-inline: 0; }
+  .bk-close-text { display: none; }
+  .bk-dialog-main { grid-column: 2; grid-row: 1; }
+  .bk-dialog-body .bk-controls { display: contents; }
+  .bk-dialog-body .bk-nav { grid-row: 1; align-self: center; width: var(--tap); padding-inline: 0; }
+  .bk-dialog-body .bk-nav[data-dir="prev"] { grid-column: 1; }
+  .bk-dialog-body .bk-nav[data-dir="next"] { grid-column: 3; }
+  .bk-dialog-body .bk-nav > span { display: none; }
+  .bk-dialog-body .bk-count { grid-column: 2; grid-row: 2; flex-direction: row; justify-content: center; gap: var(--space-2); }
+  .bk-dialog-hints { display: none; }
+}
 
 /* ── 7. Выбор шаблона и обложки (шаг «Автомакет») ─────────────────────── */
 .bk-design { display: grid; gap: var(--space-5); margin-top: var(--space-5); }
