@@ -7,8 +7,13 @@
 <title>Нет сети — PicPac</title>
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <style>
-  :root { --bg: #faf5ed; --surface: #ffffff; --text: #38524f; --strong: #2b403d; --muted: #5c615f; --accent: #bd3434; --border: #e9e1d5; color-scheme: light; }
-  /* N1: светлая тема бренда у всех (как в приложении по умолчанию) */
+  :root { --bg: #faf5ed; --surface: #ffffff; --text: #38524f; --strong: #2b403d; --muted: #5c615f; --accent: #bd3434; --focus: #bd3434; --border: #e9e1d5; color-scheme: light; }
+  /* N1: светлая тема бренда по умолчанию. N7: тёмная — по выбору в приложении (атрибут ставит сервис-воркер по cookie
+     pp_theme) или, если выбор неизвестен, по настройке телефона. Цвета — токены тёмной темы N1 (app/picpac.css). */
+  :root[data-color-scheme="dark"] { --bg: #172321; --surface: #20302d; --text: #ebe5da; --strong: #faf5ed; --muted: #a2aca8; --focus: #f0968c; --border: #334a46; color-scheme: dark; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-color-scheme]), :root[data-color-scheme="system"] { --bg: #172321; --surface: #20302d; --text: #ebe5da; --strong: #faf5ed; --muted: #a2aca8; --focus: #f0968c; --border: #334a46; color-scheme: dark; }
+  }
   * { box-sizing: border-box; }
   body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); font: 16px/1.5 Jost, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; display: flex; align-items: center; justify-content: center; padding: 24px 16px; }
   main { max-width: 420px; width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 28px 22px; text-align: center; }
@@ -18,7 +23,7 @@
   .row { display: grid; gap: 10px; }
   a { display: block; padding: 13px 16px; border-radius: 12px; text-decoration: none; font-weight: 500; border: 1px solid var(--border); color: var(--strong); }
   a.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  a:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  a:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 </style>
 </head>
 <body>
